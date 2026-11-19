@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "type": "timing",
+  "title": "Place order timing",
+  "unit": "ms",
+  "tick": 250,
+  "lifelines": [
+    {
+      "ref": "storefront",
+      "form": "value",
+      "states": [],
+      "changes": [
+        {
+          "at": 0,
+          "state": "Cart"
+        },
+        {
+          "at": 50,
+          "state": "Spinner"
+        },
+        {
+          "at": 1750,
+          "state": "Confirmation"
+        }
+      ]
+    },
+    {
+      "ref": "orderService",
+      "states": [
+        "Idle",
+        "Validating",
+        "Waiting for payment",
+        "Confirming"
+      ],
+      "changes": [
+        {
+          "at": 0,
+          "state": "Idle"
+        },
+        {
+          "at": 50,
+          "state": "Validating"
+        },
+        {
+          "at": 300,
+          "state": "Waiting for payment"
+        },
+        {
+          "at": 1550,
+          "state": "Confirming"
+        },
+        {
+          "at": 1750,
+          "state": "Idle"
+        }
+      ]
+    },
+    {
+      "ref": "paymentGateway",
+      "states": [
+        "Idle",
+        "Authorizing"
+      ],
+      "changes": [
+        {
+          "at": 0,
+          "state": "Idle"
+        },
+        {
+          "at": 350,
+          "state": "Authorizing"
+        },
+        {
+          "at": 1500,
+          "state": "Idle"
+        }
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "from": "storefront",
+      "to": "orderService",
+      "at": 50,
+      "label": "placeOrder(cart)",
+      "kind": "sync"
+    },
+    {
+      "from": "orderService",
+      "to": "paymentGateway",
+      "at": 300,
+      "arrive": 350,
+      "label": "charge(amount)",
+      "kind": "sync"
+    },
+    {
+      "from": "paymentGateway",
+      "to": "orderService",
+      "at": 1500,
+      "arrive": 1550,
+      "label": "ok",
+      "kind": "reply"
+    },
+    {
+      "from": "orderService",
+      "to": "storefront",
+      "at": 1750,
+      "label": "confirmation",
+      "kind": "reply"
+    },
+    {
+      "from": "orderService",
+      "to": "orderService",
+      "at": 50,
+      "arrive": 250,
+      "label": "validate()",
+      "kind": "sync"
+    },
+    {
+      "from": "paymentGateway",
+      "at": 1600,
+      "label": "settlement",
+      "kind": "async"
+    }
+  ],
+  "constraints": [
+    {
+      "on": "storefront",
+      "from": 50,
+      "label": "t = now"
+    },
+    {
+      "on": "orderService",
+      "from": 300,
+      "to": 1550,
+      "label": "0..2000"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "type": "context",
+  "title": "Shopping use cases",
+  "nodes": [
+    {
+      "ref": "customer",
+      "x": 40,
+      "y": 110
+    },
+    {
+      "ref": "ucPlaceOrder",
+      "x": 220,
+      "y": 80
+    },
+    {
+      "ref": "ucPay",
+      "x": 560,
+      "y": 30
+    },
+    {
+      "ref": "ucRetryPayment",
+      "x": 560,
+      "y": 220
+    }
+  ],
+  "edges": [
+    {
+      "ref": "customer-ucPlaceOrder",
+      "waypoints": []
+    },
+    {
+      "ref": "ucPlaceOrder-ucPay",
+      "waypoints": []
+    },
+    {
+      "ref": "ucRetryPayment-ucPlaceOrder",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

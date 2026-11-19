@@ -1,0 +1,131 @@
+/* Sequence diagram editor. Toolbar, rail, inspector and menus come from ../diagram/diagram.css. */
+:root,
+:host {
+  --diagram-surface: var(--vscode-editor-background);
+  --diagram-alt: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12));
+  --diagram-ink: var(--vscode-editor-foreground);
+  --diagram-muted: var(--vscode-descriptionForeground);
+  --line: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  --hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+}
+
+.seq-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The diagram: a pan / zoom stage (webview/document/panZoom.tsx). */
+.preview {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.preview.tool-active {
+  cursor: crosshair;
+}
+
+.stage-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.stage-canvas .scene {
+  display: block;
+}
+
+.stage-canvas text {
+  font-family: var(--vscode-font-family);
+}
+
+.seq-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Selection: a full outline (no single-edge accent strips). */
+.seq-overlay .hl {
+  fill: none;
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 1.5;
+}
+
+.seq-overlay .hl.pending {
+  stroke-dasharray: 4 3;
+}
+
+.seq-overlay .hl-line {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+  stroke-opacity: 0.45;
+}
+
+.seq-overlay .hl-line.hover {
+  stroke-opacity: 0.3;
+}
+
+.seq-overlay .guide {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+}
+
+.seq-overlay .pending-dot {
+  fill: var(--vscode-focusBorder);
+}
+
+.inline-edit {
+  position: absolute;
+  z-index: 5;
+  min-width: 140px;
+  padding: 2px 6px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  outline: none;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* Inspector extras: participants a note / ref spans, fragment operators. */
+.chip-toggles,
+.op-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chip.toggle {
+  padding: 1px 8px;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.chip.toggle:hover:not(:disabled) {
+  color: var(--diagram-ink);
+  background: var(--hover);
+}
+
+.chip.toggle.on {
+  background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.22));
+  border-color: var(--diagram-muted);
+  color: var(--diagram-ink);
+}
+
+.inspector select {
+  width: 100%;
+}

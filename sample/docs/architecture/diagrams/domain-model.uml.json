@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "type": "class",
+  "title": "Domain model",
+  "nodes": [
+    {
+      "ref": "order",
+      "x": 40,
+      "y": 40
+    },
+    {
+      "ref": "orderLine",
+      "x": 420,
+      "y": 40
+    },
+    {
+      "ref": "product",
+      "x": 760,
+      "y": 40
+    },
+    {
+      "ref": "orderStatus",
+      "x": 40,
+      "y": 300
+    },
+    {
+      "ref": "repository",
+      "x": 420,
+      "y": 300
+    },
+    {
+      "ref": "catalog",
+      "x": 760,
+      "y": 300
+    },
+    {
+      "ref": "discount",
+      "x": 600,
+      "y": 190,
+      "w": 120,
+      "h": 60
+    }
+  ],
+  "edges": [
+    {
+      "ref": "order-orderLine",
+      "waypoints": []
+    },
+    {
+      "ref": "orderLine-product",
+      "waypoints": []
+    },
+    {
+      "ref": "catalog-product",
+      "waypoints": []
+    },
+    {
+      "ref": "order-orderStatus",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

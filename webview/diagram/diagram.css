@@ -1,0 +1,1102 @@
+/* Canvas diagram editor. Colors come from the VS Code theme. */
+:root,
+:host {
+  --diagram-surface: var(--vscode-editor-background);
+  --diagram-alt: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12));
+  --diagram-ink: var(--vscode-editor-foreground);
+  --diagram-muted: var(--vscode-descriptionForeground);
+  --line: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  --hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.toolbar .title {
+  margin: 0 6px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolbar .meta {
+  display: inline-flex;
+  color: var(--diagram-muted);
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.tb {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.tb.icon {
+  padding: 0;
+  color: var(--diagram-muted);
+}
+
+.tb:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--diagram-ink);
+}
+
+/* Toggled on: a neutral fill and the full ink color (no accent strips). */
+.tb.on {
+  background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.22));
+  color: var(--diagram-ink);
+}
+
+.tb.zoom {
+  min-width: 46px;
+  color: var(--diagram-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 5px;
+  background: var(--line);
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ------------------------------------------------------------------ rail */
+
+/* The palette: as wide as the window allows (or as dragged with the splitter right of it). Narrow:
+   a grid of icons; from 160px on, icon and name in even columns (the container query below). */
+.rail {
+  flex: 0 0 auto;
+  width: var(--rail-width, clamp(76px, 14vw, 210px));
+  overflow-y: auto;
+  padding: 6px 6px 12px;
+  scrollbar-width: thin;
+  container-type: inline-size;
+}
+
+.rail-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 30px);
+  gap: 4px;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.rail-label {
+  display: none;
+}
+
+@container (min-width: 160px) {
+  .rail .rail-group {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    gap: 2px 6px;
+  }
+  .rail .rail-btn {
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 0 8px;
+  }
+  .rail .rail-btn > svg {
+    flex: none;
+  }
+  .rail .rail-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    text-align: left;
+  }
+  .rail .rail-badge {
+    position: static;
+    margin-left: auto;
+  }
+  /* Beside the palette, level with its button (as when narrow). */
+  .rail .rail-flyout {
+    margin-left: calc(var(--rail-width, clamp(76px, 14vw, 210px)) - 8px);
+  }
+}
+
+/* The splitter between the palette and the canvas. */
+.rail-resizer {
+  flex: 0 0 auto;
+  width: 5px;
+  margin: 0 -2px;
+  position: relative;
+  z-index: 5;
+  cursor: col-resize;
+}
+.rail-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--line);
+}
+.rail-resizer:hover::after,
+html.rail-resizing .rail-resizer::after {
+  left: 1px;
+  width: 3px;
+  background: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+html.rail-resizing,
+html.rail-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.rail-group + .rail-group {
+  border-top: 1px solid var(--line);
+}
+
+.rail-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--diagram-muted);
+  cursor: pointer;
+}
+
+.rail-btn[draggable="true"] {
+  cursor: grab;
+}
+
+.rail-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--diagram-ink);
+}
+
+.rail-btn.on {
+  background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.22));
+  border-color: var(--line);
+  color: var(--diagram-ink);
+}
+
+.rail-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rail-badge {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--vscode-badge-background, #4d4d4d);
+  color: var(--vscode-badge-foreground, #fff);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.rail-flyout-host {
+  position: relative;
+}
+
+.rail-flyout {
+  position: fixed;
+  z-index: 60;
+  width: 240px;
+  margin-left: 70px;
+  margin-top: -36px;
+  padding: 6px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, inherit);
+  border: 1px solid var(--vscode-menu-border, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+  font-size: 12px;
+}
+
+.rail-flyout input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-input-border, var(--line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.rail-flyout-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.flyout-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.flyout-item:hover {
+  background: var(--vscode-menu-selectionBackground, var(--hover));
+}
+
+.flyout-empty {
+  padding: 6px;
+  color: var(--diagram-muted);
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.properties {
+  flex: 0 0 290px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.react-flow {
+  --xy-background-color: var(--vscode-editor-background);
+  --xy-background-pattern-color: var(--vscode-editorWhitespace-foreground, rgba(128, 128, 128, 0.5));
+  --xy-controls-button-background-color: var(--vscode-button-secondaryBackground);
+  --xy-controls-button-background-color-hover: var(--vscode-button-secondaryHoverBackground);
+  --xy-controls-button-color: var(--vscode-button-secondaryForeground);
+  --xy-controls-button-border-color: var(--line);
+  --xy-selection-background-color: rgba(0, 120, 212, 0.08);
+  --xy-selection-border: 1px dotted var(--vscode-focusBorder);
+  --xy-connectionline-stroke-default: var(--vscode-focusBorder);
+}
+
+/* ------------------------------------------------------------------ nodes */
+
+.uml-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.uml-shape {
+  display: block;
+  overflow: visible;
+}
+
+.uml-shape text {
+  font-family: var(--vscode-font-family);
+  user-select: none;
+}
+
+/* Selection: a full outline (no single-edge accent strips). */
+.uml-node.selected::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.uml-handle {
+  width: 9px !important;
+  height: 9px !important;
+  background: var(--vscode-focusBorder) !important;
+  border: 1px solid var(--vscode-editor-background) !important;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.uml-node:hover .uml-handle,
+.react-flow__node.selected .uml-handle,
+.react-flow.connecting .uml-handle {
+  opacity: 1;
+}
+
+.rename {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  min-width: 120px;
+  max-width: 260px;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 13px;
+  text-align: center;
+}
+
+textarea.rename {
+  text-align: left;
+  resize: none;
+}
+
+/* ------------------------------------------------------------------ edges */
+
+.uml-edge-highlight {
+  stroke: var(--vscode-focusBorder);
+  stroke-opacity: 0.35;
+}
+
+.waypoint {
+  fill: var(--vscode-editor-background);
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+  cursor: move;
+  pointer-events: all;
+}
+
+.waypoint-add {
+  fill: var(--vscode-focusBorder);
+  fill-opacity: 0.35;
+  stroke: none;
+  cursor: copy;
+  pointer-events: all;
+}
+
+.waypoint-add:hover {
+  fill-opacity: 0.8;
+}
+
+/* Modern: a grip on each straight part of a selected line, dragged across the line. */
+.segment-grip {
+  fill: var(--vscode-editor-background);
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 1.5;
+  pointer-events: all;
+}
+
+.segment-grip.h {
+  cursor: ns-resize;
+}
+
+.segment-grip.v {
+  cursor: ew-resize;
+}
+
+.segment-grip:hover {
+  fill: var(--vscode-focusBorder);
+}
+
+/* Movable labels: grab them anywhere on their text. */
+.label-grip {
+  fill: transparent;
+  stroke: none;
+  cursor: move;
+  pointer-events: all;
+}
+
+.label-grip:hover {
+  fill: var(--vscode-focusBorder);
+  fill-opacity: 0.12;
+}
+
+.connect-menu,
+.ctx-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 210px;
+  padding: 6px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, inherit);
+  border: 1px solid var(--vscode-menu-border, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+  font-size: 12px;
+}
+
+.menu-label {
+  padding: 4px 8px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--vscode-menu-selectionBackground, var(--hover));
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.empty-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-descriptionForeground);
+  pointer-events: none;
+}
+
+
+/* ------------------------------------------------------------------ inspector */
+
+.inspector {
+  padding: 10px 12px 24px;
+}
+
+.ins-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ins-kind-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--diagram-ink);
+}
+
+.ins-kind-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ins-head-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ins-title {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0 -5px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ins-title:hover:not(:disabled) {
+  border-color: var(--line);
+}
+
+.ins-title:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-input-background);
+}
+
+.ins-kind {
+  color: var(--diagram-muted);
+  font-size: 11.5px;
+}
+
+.rel-head {
+  flex-wrap: wrap;
+}
+
+.rel-head .ins-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: none;
+  color: var(--diagram-muted);
+  cursor: pointer;
+}
+
+.segmented button:hover:not(:disabled) {
+  color: var(--diagram-ink);
+  background: var(--hover);
+}
+
+.segmented button.on {
+  background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.22));
+  color: var(--diagram-ink);
+  border-color: var(--diagram-muted);
+}
+
+.ins-section {
+  border-top: 1px solid var(--line);
+  padding: 2px 0 4px;
+}
+
+.ins-section > header {
+  display: flex;
+  align-items: center;
+}
+
+.ins-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ins-toggle svg {
+  color: var(--diagram-muted);
+  transition: transform 150ms ease;
+}
+
+.ins-section.open .ins-toggle svg {
+  transform: rotate(90deg);
+}
+
+.ins-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--diagram-alt);
+  color: var(--diagram-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+}
+
+.ins-body {
+  padding: 0 0 6px;
+}
+
+.ins-group + .ins-group {
+  margin-top: 6px;
+}
+
+.ins-group-title,
+.sub-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 2px;
+  color: var(--diagram-muted);
+  font-size: 11px;
+}
+
+.ins-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 1px 4px;
+  border-radius: 5px;
+}
+
+.ins-row.clickable {
+  cursor: pointer;
+}
+
+.ins-row.clickable:hover {
+  background: var(--hover);
+}
+
+.ins-row.dim {
+  opacity: 0.6;
+}
+
+.ins-icon,
+.ins-rel {
+  flex: none;
+  display: inline-flex;
+  color: var(--diagram-muted);
+}
+
+.ins-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-sub {
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--diagram-muted);
+  font-size: 11px;
+}
+
+.stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--diagram-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 8px;
+}
+
+.field {
+  display: block;
+  min-width: 0;
+  margin-bottom: 7px;
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--diagram-muted);
+  font-size: 11px;
+}
+
+.field input,
+.field textarea,
+.field select,
+.list-row input,
+.inspector > section textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-input-border, var(--line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.field textarea,
+.inspector > section textarea {
+  resize: vertical;
+}
+
+textarea.mono {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11.5px;
+}
+
+.inspector input:focus,
+.inspector textarea:focus,
+.inspector select:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  border-color: var(--vscode-focusBorder);
+}
+
+.list-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.list-row .icon-btn.subtle {
+  opacity: 0;
+}
+
+.list-row:hover .icon-btn.subtle,
+.list-row:focus-within .icon-btn.subtle {
+  opacity: 1;
+}
+
+.list-num {
+  flex: none;
+  min-width: 14px;
+  color: var(--diagram-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tag-row input:first-child {
+  flex: 0 0 38%;
+}
+
+.alt {
+  margin: 2px 0 6px;
+  padding-left: 6px;
+}
+
+.add-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--diagram-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.add-row:hover {
+  color: var(--diagram-ink);
+  background: var(--hover);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--diagram-muted);
+  cursor: pointer;
+}
+
+.icon-btn.subtle {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-btn:hover:not(:disabled) {
+  color: var(--diagram-ink);
+  background: var(--hover);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 28px);
+  gap: 4px;
+}
+
+.icon-grid .icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.keys dt {
+  color: var(--diagram-ink);
+  white-space: nowrap;
+}
+
+.keys dd {
+  margin: 0;
+  color: var(--diagram-muted);
+}
+
+.ins-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.icon-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.icon-text:hover {
+  background: var(--hover);
+}
+
+.icon-text.danger {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+.btn {
+  padding: 4px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 6px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  margin-top: 6px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.muted {
+  color: var(--diagram-muted);
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+  max-width: 420px;
+  padding: 8px 12px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 8px;
+  background: var(--vscode-inputValidation-errorBackground, var(--vscode-editorWidget-background));
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+
+
+.menu-icon {
+  display: inline-flex;
+  width: 16px;
+  color: var(--diagram-muted);
+}
+
+.menu-hint {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--diagram-muted);
+  font-size: 11px;
+}
+
+.menu-item.danger {
+  color: var(--vscode-errorForeground);
+}
+
+/* ------------------------------------------------------------------ connect tool */
+
+.canvas.connecting-tool .react-flow__node {
+  cursor: crosshair;
+}
+
+/* The source picked with a connect tool: a dashed full outline. */
+.react-flow__node.pending .uml-node::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1.5px dashed var(--vscode-focusBorder);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.tool-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 5;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--vscode-editorWidget-background, var(--diagram-surface));
+  color: var(--diagram-muted);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+.react-flow__minimap {
+  background: var(--vscode-editorWidget-background, var(--diagram-surface));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.35);
+}
+
+.react-flow__minimap-node {
+  fill: var(--diagram-muted);
+  stroke: none;
+}
+
+/* Drill-down marker of an element shown in detail on another diagram: click to open it. */
+.scene-link {
+  cursor: pointer;
+  pointer-events: all;
+}
+.scene-link:hover {
+  fill: color-mix(in srgb, var(--diagram-ink) 12%, transparent);
+}
+
+.ins-hint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ins-hint {
+  flex: 1;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* A divider between groups of context menu items. */
+.ctx-menu .menu-item.sep {
+  position: relative;
+  margin-top: 9px;
+}
+.ctx-menu .menu-item.sep::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: -5px;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+/* Align and distribute: shown in the toolbar while two or more shapes are selected. */
+.tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
+
+/* Live view: shapes an agent just changed, outlined briefly. */
+.react-flow__node.live-change .uml-node {
+  animation: live-change 2.2s ease-out;
+  border-radius: 6px;
+}
+@keyframes live-change {
+  0%,
+  45% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--vscode-focusBorder, #3794ff) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 4px transparent;
+  }
+}

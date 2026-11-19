@@ -1,0 +1,2500 @@
+/* architecture document view. Layout follows a published architecture document (contents panel,
+   a measured reading column, numbered sections, tables and figures as cards); every color
+   comes from the VS Code theme, so light, dark and high-contrast themes work. */
+
+:root {
+  --doc-bg: var(--vscode-editor-background);
+  --doc-ink: var(--vscode-editor-foreground);
+  --doc-strong: var(--vscode-foreground, var(--vscode-editor-foreground));
+  --doc-muted: var(--vscode-descriptionForeground);
+  --doc-line: var(--vscode-editorWidget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  --doc-card: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  --doc-well: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.1));
+  --doc-accent: var(--vscode-textLink-foreground);
+  --doc-focus: var(--vscode-focusBorder);
+  --doc-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+  --diagram-surface: var(--vscode-editor-background);
+  --diagram-alt: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12));
+  --diagram-ink: var(--vscode-editor-foreground);
+  --diagram-muted: var(--vscode-descriptionForeground);
+  --radius-card: 8px;
+  --radius-control: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-padding-top: 56px;
+}
+
+body {
+  margin: 0;
+  /* VS Code gives webview bodies a 20px side padding; the layout sets its own gutters. */
+  padding: 0;
+  background: var(--doc-bg);
+  color: var(--doc-ink);
+  font-family: var(--vscode-font-family);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+html[data-resizing='x'],
+html[data-resizing='x'] * {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+html[data-resizing='y'],
+html[data-resizing='y'] * {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+html[data-resizing='xy'],
+html[data-resizing='xy'] * {
+  cursor: nwse-resize !important;
+  user-select: none;
+}
+
+.loading {
+  padding: 48px;
+  color: var(--doc-muted);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+/* Starts at the panel's left edge (no centering gap); the reading column keeps its measure. */
+/* The gutter left of the contents panel equals the gap between its content and its right border. */
+.layout {
+  --toc-gutter: 24px;
+  display: flex;
+  align-items: flex-start;
+  padding: 0 32px 0 var(--toc-gutter);
+}
+
+.toc {
+  position: sticky;
+  top: 0;
+  flex: 0 0 260px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-right: var(--toc-gutter);
+  margin-right: 28px;
+  border-right: 1px solid var(--doc-line);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.toc-head {
+  padding: 24px 0 14px;
+  border-bottom: 1px solid var(--doc-line);
+  margin-bottom: 8px;
+}
+
+.toc-system {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--doc-strong);
+}
+
+.toc-kind {
+  color: var(--doc-muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.toc-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 16px;
+}
+
+/* Attribution at the bottom of the contents panel. */
+.toc-foot {
+  flex: none;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--doc-line);
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.toc-body::-webkit-scrollbar {
+  display: none;
+}
+
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc ol ol {
+  margin: 2px 0 6px 26px;
+}
+
+.toc-row {
+  display: flex;
+  align-items: center;
+}
+
+.toc a {
+  flex: 1;
+  display: block;
+  padding: 4px 8px 4px 0;
+  color: var(--doc-muted);
+  text-decoration: none;
+}
+
+/* No fills in any state: hover and focus only brighten the text. */
+.toc a:hover,
+.toc a:focus-visible,
+.toc a:hover .toc-num {
+  background: none;
+  color: var(--doc-strong);
+}
+
+/* Active section: brighter text and weight only (no fill, no accent strips). */
+.toc li.active > .toc-row > a,
+.toc li.active > .toc-row > a .toc-num {
+  color: var(--vscode-list-activeSelectionForeground, var(--doc-strong));
+  color: var(--doc-strong);
+  font-weight: 600;
+}
+
+/* Section numbers in a two-digit column, right-aligned (1 ... 12 line up on their last digit);
+   "10" starts at the panel's left edge, under the system name. */
+.toc-num {
+  display: inline-block;
+  width: 2ch;
+  margin-right: 0.6em;
+  text-align: right;
+  color: var(--doc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.toc-caret {
+  display: inline-flex;
+  border: 0;
+  background: none;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--doc-muted);
+  cursor: pointer;
+}
+
+.toc-caret:hover,
+.toc-caret:focus-visible {
+  background: none;
+  color: var(--doc-strong);
+}
+
+.content {
+  /* Captions: "Table N", "Diagram N", "Figure N" count through the whole document (all chapters). */
+  counter-reset: archery-table archery-diagram archery-figure;
+  flex: 1;
+  min-width: 0;
+  max-width: 880px;
+  padding-bottom: 30vh;
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  background: var(--doc-bg);
+  border-bottom: 1px solid var(--doc-line);
+}
+
+.tb-btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tb-btn:hover:not(:disabled) {
+  background: var(--doc-hover);
+}
+
+.tb-btn.active {
+  background: var(--vscode-toolbar-activeBackground, var(--doc-hover));
+  border-color: var(--doc-line);
+}
+
+.tb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tb-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--doc-line);
+}
+
+.tb-spacer {
+  flex: 1;
+}
+
+.tb-menu {
+  position: relative;
+}
+
+/* System name with the document's Export menu next to it. */
+.toc-system-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.toc-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 4px;
+  border: 0;
+  background: none;
+  color: var(--doc-muted);
+  cursor: pointer;
+}
+
+.toc-export:hover,
+.toc-export:focus-visible {
+  color: var(--doc-strong);
+}
+
+.toc-export svg {
+  width: 15px;
+  height: 15px;
+}
+
+.popover {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  padding: 6px;
+  background: var(--vscode-menu-background, var(--doc-card));
+  color: var(--vscode-menu-foreground, var(--doc-ink));
+  border: 1px solid var(--vscode-menu-border, var(--doc-line));
+  border-radius: var(--radius-card);
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+}
+
+.menu-label {
+  padding: 6px 8px 2px;
+  font-size: 12px;
+  color: var(--doc-muted);
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.menu-item:hover {
+  background: var(--vscode-menu-selectionBackground, var(--doc-hover));
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.menu-hint {
+  color: var(--doc-muted);
+}
+
+.link-form {
+  display: flex;
+  gap: 6px;
+}
+
+.link-form input {
+  flex: 1;
+  padding: 3px 6px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--doc-line));
+  border-radius: 4px;
+  font: inherit;
+}
+
+.btn,
+.link-form button {
+  padding: 3px 12px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: var(--radius-control);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.btn.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.doc-header {
+  padding: 32px 0 8px;
+}
+
+.doc-title {
+  margin: 0 0 8px;
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 650;
+  color: var(--doc-strong);
+}
+
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version {
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--doc-line);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.doc-footer {
+  margin-top: 48px;
+  padding-top: 12px;
+  border-top: 1px solid var(--doc-line);
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ sections */
+
+.doc-section {
+  counter-reset: sub;
+  margin-top: 40px;
+}
+
+.section-body {
+  outline: none;
+  border-radius: var(--radius-control);
+  cursor: text;
+}
+
+.section-body > * + * {
+  margin-top: 0.8em;
+}
+
+.section-body p {
+  margin: 0;
+}
+
+.section-body h1 {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--doc-line);
+  font-size: 26px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--doc-strong);
+}
+
+/* Section numbers read like the subsection numbers: "1 Introduction and Goals", "1.1 ...". */
+.doc-section[data-numbered='true'] .section-body h1::before {
+  content: var(--num) '\00a0\00a0';
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+
+.section-body h2 {
+  counter-increment: sub;
+  counter-reset: subsub;
+  margin: 1.8em 0 0.4em;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--doc-strong);
+}
+
+.doc-section[data-numbered='true'] .section-body h2::before {
+  content: var(--num) '.' counter(sub) ' ';
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+
+.doc-section[data-numbered='true'] .section-body h3::before {
+  content: var(--num) '.' counter(sub) '.' counter(subsub) ' ';
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+
+.section-body h3 {
+  counter-increment: subsub;
+  margin: 1.4em 0 0.3em;
+  font-size: 16.5px;
+  font-weight: 600;
+  color: var(--doc-strong);
+}
+
+.section-body a {
+  color: var(--doc-accent);
+}
+
+.section-body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, var(--doc-well));
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+}
+
+.section-body pre {
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--vscode-textCodeBlock-background, var(--doc-well));
+  overflow-x: auto;
+}
+
+.section-body pre code {
+  padding: 0;
+  background: none;
+}
+
+.section-body blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--doc-line);
+  background: var(--doc-well);
+  border-radius: var(--radius-card);
+}
+
+.section-body ul,
+.section-body ol {
+  padding-left: 1.4em;
+}
+
+.section-body li + li {
+  margin-top: 0.2em;
+}
+
+.section-body img {
+  max-width: 100%;
+}
+
+.section-body hr {
+  border: 0;
+  border-top: 1px solid var(--doc-line);
+}
+
+/* Empty paragraphs show where to type - only in the section under the mouse or being edited,
+   so a fresh document does not read as a wall of placeholders. */
+.section-body .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--doc-muted);
+  opacity: 0;
+  font-style: italic;
+  transition: opacity 120ms;
+}
+
+.doc-section:hover .section-body .is-empty::before,
+.section-body.ProseMirror-focused .is-empty::before {
+  opacity: 0.55;
+}
+
+/* Figures, generated tables and written tables get room around them. */
+.section-body > .react-renderer,
+.section-body > .tableWrapper {
+  margin-top: 1.1em;
+  margin-bottom: 1.1em;
+}
+
+/* Tables keep room below them for the column delete buttons. */
+.section-body > .tableWrapper,
+.section-body > .node-archeryTable {
+  margin-bottom: 30px;
+}
+
+/* The guidance block itself takes no space: it is shown as an info icon in the heading. */
+.section-body > .react-renderer.node-archeryHelp {
+  display: none;
+}
+
+/* Tables written in the text (editable) and generated tables share one look. */
+.section-body table,
+.generated table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.section-body > .tableWrapper {
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-card);
+  overflow-x: auto;
+}
+
+.section-body th,
+.section-body td,
+.generated th,
+.generated td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--doc-line);
+  border-right: 1px solid var(--doc-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Vertical lines between the columns; the frame draws the outer edge. */
+.section-body th:last-child,
+.section-body td:last-child,
+.generated th:last-child,
+.generated td:last-child {
+  border-right: 0;
+}
+
+.section-body th,
+.generated th {
+  background: var(--doc-well);
+  font-weight: 600;
+  color: var(--doc-strong);
+}
+
+.section-body td p,
+.section-body th p {
+  margin: 0;
+}
+
+.section-body tr:last-child td,
+.generated tr:last-child td {
+  border-bottom: 0;
+}
+
+.section-body .selectedCell {
+  background: var(--vscode-editor-selectionBackground);
+}
+
+/* Atom nodes (help, tables, diagrams) are not text. */
+.node-diagram,
+.node-help,
+.node-table,
+.node-raw {
+  cursor: default;
+}
+
+.ProseMirror-selectednode > .frame,
+.ProseMirror-selectednode > .diagram-figure > .frame,
+.node-diagram.is-selected > .diagram-figure > .frame {
+  outline: 2px solid var(--doc-focus);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ help */
+
+.help-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45em;
+  vertical-align: middle;
+  color: var(--doc-muted);
+  opacity: 0.6;
+  cursor: help;
+  outline: none;
+}
+
+.help-icon:hover,
+.help-icon:focus,
+.help-icon.open {
+  opacity: 1;
+}
+
+.help-icon:focus-visible {
+  outline: 1px solid var(--doc-focus);
+  border-radius: 50%;
+}
+
+.help-pop {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -12px;
+  z-index: 40;
+  width: min(520px, 70vw);
+  padding: 10px 14px;
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--doc-line));
+  border-radius: var(--radius-card);
+  background: var(--vscode-editorHoverWidget-background, var(--doc-card));
+  color: var(--vscode-editorHoverWidget-foreground, var(--doc-ink));
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+  cursor: default;
+}
+
+/* Opened by pointing at (or focusing, or clicking) the icon; stays until a click outside it or Esc
+   (installHelpPopups in editorTools.ts). */
+.help-icon.open .help-pop {
+  display: block;
+}
+
+.help-pop-title {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.help-pop p {
+  margin: 0;
+}
+
+.help-pop p + p {
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------ generated tables */
+
+.generated {
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-card);
+  background: var(--doc-card);
+  overflow: hidden;
+}
+
+.generated-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 1px solid var(--doc-line);
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.generated-empty {
+  padding: 14px 12px;
+  color: var(--doc-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.generated tr.clickable {
+  cursor: pointer;
+}
+
+.generated tr.clickable:hover td {
+  background: var(--doc-hover);
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--doc-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  background: var(--doc-hover);
+}
+
+.badge {
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--doc-line);
+  font-size: 12px;
+}
+
+.badge.status-accepted {
+  color: var(--vscode-testing-iconPassed, inherit);
+}
+
+.badge.status-rejected,
+.badge.status-deprecated,
+.badge.status-superseded {
+  color: var(--doc-muted);
+}
+
+/* ------------------------------------------------------------------ figures */
+
+.frame {
+  position: relative;
+  max-width: 100%;
+  margin: 0;
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-card);
+  background: var(--diagram-surface);
+}
+
+.frame-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--doc-line);
+  cursor: grab;
+}
+
+.frame.collapsed .frame-head {
+  border-bottom: 0;
+}
+
+.frame-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.frame-tools {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+
+.frame:hover .frame-tools,
+.lightbox .frame-tools {
+  opacity: 1;
+}
+
+/* A diagram: the drawing with its caption centered below. At rest only those show; the border
+   and the floating tools appear while the pointer is over the diagram, or it is selected or focused. */
+.diagram-figure {
+  max-width: 100%;
+  margin: 0;
+}
+
+.frame.diagram-frame {
+  border-color: transparent;
+  background: transparent;
+  transition: border-color 120ms, background-color 120ms;
+}
+
+.frame.diagram-frame > .frame-head {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  min-height: 0;
+  padding: 2px 2px 2px 6px;
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-control);
+  background: var(--diagram-surface);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.18));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+
+.frame.diagram-frame .frame-tools {
+  opacity: 1;
+}
+
+.frame-grip {
+  display: inline-flex;
+  padding: 0 4px 0 0;
+  fill: var(--doc-muted);
+}
+
+/* No box around a diagram, also on hover: the drawing uses the whole column (its tools float over it). */
+.frame.diagram-frame:is(:hover, :focus-within, .selected) {
+  border-color: transparent;
+}
+
+.frame.diagram-frame:is(:hover, :focus-within, .selected) > .frame-head {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.diagram-caption {
+  padding: 6px 12px 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--doc-hover);
+}
+
+.frame-body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.frame-body .scene {
+  display: block;
+}
+
+/* A rendered diagram: pan / zoom stage (see panZoom.tsx). */
+.frame-body.stage {
+  position: relative;
+  display: block;
+  padding: 0;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.frame-body.stage:active {
+  cursor: grabbing;
+}
+
+.stage-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.frame-body.stage .frame-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.frame .zoom,
+.lightbox .zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--doc-muted);
+}
+
+.tool-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  align-self: center;
+  background: var(--doc-line);
+}
+
+.frame-error,
+.frame-empty {
+  padding: 16px;
+  color: var(--vscode-errorForeground);
+  font-size: 13px;
+}
+
+.frame-empty {
+  color: var(--doc-muted);
+  font-style: italic;
+}
+
+.frame figcaption {
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--doc-line);
+  color: var(--doc-muted);
+  font-size: 13px;
+}
+
+.resize-x,
+.resize-y,
+.resize-xy {
+  position: absolute;
+  z-index: 2;
+}
+
+.resize-x {
+  top: 10px;
+  right: -4px;
+  bottom: 10px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.resize-y {
+  left: 10px;
+  right: 10px;
+  bottom: -4px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.resize-xy {
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.frame:hover .resize-xy::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--doc-muted);
+  border-bottom: 2px solid var(--doc-muted);
+  border-radius: 0 0 3px 0;
+}
+
+/* ------------------------------------------------------------------ lightbox */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-bg);
+}
+
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--doc-line);
+}
+
+.lightbox .zoom {
+  min-width: 46px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--doc-muted);
+}
+
+.lightbox-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.lightbox-stage:active {
+  cursor: grabbing;
+}
+
+.lightbox-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.lightbox-canvas .scene {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ narrow panels */
+
+@media (max-width: 860px) {
+  .layout {
+    display: block;
+    padding: 0 16px;
+  }
+  /* Narrow: no contents panel; the Archery sidebar has the chapters. */
+  .toc {
+    display: none;
+  }
+  /* Room beside tables for their row grips and delete buttons. */
+  .section-body > .tableWrapper,
+  .section-body > .node-archeryTable {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
+
+/* ------------------------------------------------------------------ editable data tables */
+
+.data-grid th,
+.data-grid td {
+  position: relative;
+}
+
+.data-grid .th {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.data-grid .th > span {
+  flex: 1;
+  cursor: default;
+}
+
+.data-grid .tools {
+  width: 28px;
+  padding: 4px 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.data-grid .menu-btn {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--doc-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.data-grid tr:hover .menu-btn,
+.data-grid th:hover .menu-btn,
+.data-grid .add-col .menu-btn,
+.data-grid .menu-btn:focus-visible {
+  opacity: 1;
+}
+
+.data-grid .menu-btn:hover {
+  background: var(--doc-hover);
+  color: var(--doc-ink);
+}
+
+.data-grid td.cell {
+  cursor: text;
+}
+
+.data-grid td.cell:hover {
+  background: var(--doc-hover);
+}
+
+.data-grid td.editing {
+  outline: 1px solid var(--doc-focus);
+  outline-offset: -1px;
+}
+
+/* Cell / header editors lie over the cell with the cell's own padding, so opening one changes no size,
+   padding or position; the hidden content underneath keeps (and while typing, sets) the cell's size. */
+.cell-ghost {
+  visibility: hidden;
+}
+
+.cell-raw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cell-input {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: inherit;
+  border: 0;
+  border-radius: 0;
+  background: var(--vscode-input-background, transparent);
+  color: var(--vscode-input-foreground, inherit);
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  white-space: pre-wrap;
+  overflow: hidden;
+  resize: none;
+  outline: none;
+}
+
+.cell-text img {
+  max-width: 220px;
+  max-height: 160px;
+  vertical-align: middle;
+}
+
+.cell-empty {
+  color: var(--doc-muted);
+  opacity: 0.5;
+}
+
+.grid-menu {
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  font-weight: 400;
+}
+
+.add-col-menu {
+  position: absolute;
+  top: auto;
+  right: 8px;
+  left: auto;
+  margin-top: -4px;
+}
+
+.data-grid {
+  position: relative;
+}
+
+.new-col {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+}
+
+.new-col input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-input-border, var(--doc-line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.menu-item.danger {
+  color: var(--vscode-errorForeground);
+}
+
+.grid-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  border-top: 1px solid var(--doc-line);
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--doc-muted);
+}
+
+/* ------------------------------------------------------------------ change history */
+
+.change-history {
+  margin-top: 16px;
+}
+
+.change-history td {
+  font-size: 13.5px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.link-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-wrap: wrap;
+}
+
+.tb-label {
+  margin: 0 4px 0 8px;
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+  max-width: 460px;
+  padding: 8px 12px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  border-radius: var(--radius-card);
+  background: var(--vscode-inputValidation-errorBackground, var(--doc-card));
+  color: var(--doc-ink);
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------ contents: leaders and tree lines */
+
+.toc-row:has(.toc-caret) > a {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Dotted leader from a section title to its expand caret, like a printed table of contents. */
+.toc-leader {
+  flex: 1;
+  min-width: 12px;
+  align-self: flex-start;
+  /* the middle of the first line: link padding + half the 1.45 line height */
+  margin: calc(4px + 0.725em) 4px 0;
+  height: 0;
+  border-bottom: 1px dotted var(--doc-muted);
+  opacity: 0.5;
+}
+
+/* Leader and chevron sit on the title's first line (titles may wrap in a narrow panel);
+   the 20px chevron box is centered on that line, so the 1px leader meets its middle. */
+.toc-row {
+  align-items: flex-start;
+}
+
+.toc-row > .toc-caret {
+  margin-top: calc(4px + 0.725em - 10px);
+}
+
+/* Wrapped titles hang under the title, not under the number. */
+.toc a {
+  display: flex;
+  align-items: baseline;
+}
+
+.toc-num,
+.toc-subnum {
+  flex: none;
+}
+
+.toc-caret svg {
+  display: block;
+  transition: transform 180ms ease;
+}
+
+.toc-caret.open svg {
+  transform: rotate(90deg);
+}
+
+/* Smooth expand / collapse: the row track animates from 0fr to 1fr. */
+.toc-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 200ms ease, opacity 200ms ease;
+}
+
+.toc-sub.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.toc-sub-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-sub,
+  .toc-caret svg {
+    transition: none;
+  }
+}
+
+/* A subsection entry: number + title, hover actions on the right. */
+.toc-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.toc-item > a {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.toc-subnum {
+  margin-right: 0.35em;
+}
+
+/* Active subheading: brighter text and weight, like the active chapter (no fill). */
+.toc-item.active > a {
+  color: var(--doc-strong);
+  font-weight: 600;
+}
+
+/* The whole chapter row is the click target; the chevron only shows the state. */
+.toc-row {
+  cursor: pointer;
+}
+
+.toc-caret {
+  pointer-events: none;
+}
+
+.toc-item.moving > a {
+  opacity: 0.45;
+}
+
+.toc.dragging,
+.toc.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/* Hover actions: no fills, the icons only brighten. The strip takes the page color so it can sit over long titles. */
+.toc-actions {
+  display: none;
+  align-items: center;
+  gap: 1px;
+}
+
+.toc-item > .toc-actions {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  padding-left: 6px;
+  background: var(--doc-bg);
+  transform: translateY(-50%);
+}
+
+.toc-item:hover > .toc-actions,
+.toc-item:focus-within > .toc-actions,
+.toc-row:hover > .toc-actions,
+.toc-row:focus-within > .toc-actions {
+  display: inline-flex;
+}
+
+.toc.dragging .toc-actions {
+  display: none !important;
+}
+
+.toc-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--doc-muted);
+  cursor: pointer;
+}
+
+.toc-actions button:hover:not(:disabled),
+.toc-actions button:focus-visible {
+  background: none;
+  color: var(--doc-strong);
+}
+
+.toc-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.toc-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Drop targets while dragging a subsection: an insertion line, or a dashed outline around a chapter. */
+.toc-drop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 2;
+  background: var(--doc-focus);
+  pointer-events: none;
+}
+
+.toc-drop.before {
+  top: -1px;
+}
+
+.toc-drop.after {
+  bottom: -1px;
+}
+
+.toc-row.drop-into {
+  outline: 1px dashed var(--doc-focus);
+  outline-offset: -1px;
+  border-radius: var(--radius-control);
+}
+
+/* Third level (###): its tree line sits under the first digit of the parent's number. */
+.toc ol ol ol {
+  margin: 0 0 0 calc(2px + 0.5ch);
+}
+
+/* Drag the panel's right edge to resize it. */
+.toc-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -5px;
+  z-index: 3;
+  width: 9px;
+  cursor: col-resize;
+}
+
+.toc-resizer:hover,
+html[data-resizing='x'] .toc-resizer {
+  background: linear-gradient(var(--doc-focus), var(--doc-focus)) center / 2px 100% no-repeat;
+}
+
+.toc a:focus {
+  outline: none;
+}
+
+.toc a:focus-visible {
+  outline: 1px solid var(--doc-focus);
+  outline-offset: -1px;
+}
+
+/* Dotted tree lines for the subsections. */
+/* The tree line runs under the last digit of the section number (its column is 2ch wide,
+   right-aligned); subsection titles start where section titles start (2ch + 0.6em). */
+.toc ol ol {
+  margin: 0 0 6px 1.5ch;
+}
+
+.toc ol ol li {
+  position: relative;
+  padding-left: calc(0.5ch + 0.6em - 2px);
+}
+
+.toc ol ol li::before,
+.toc ol ol li::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Ticks meet the middle of the entry's first line (4px link padding + half the 1.45 line height),
+   not the middle of the item, which may wrap or hold its own subsections. */
+.toc ol ol li::before {
+  top: calc(4px + 0.725em);
+  width: calc(0.5ch + 0.6em - 4px);
+  border-top: 1px dotted var(--doc-muted);
+}
+
+.toc ol ol li::after {
+  top: 0;
+  bottom: 0;
+  border-left: 1px dotted var(--doc-muted);
+}
+
+.toc ol ol li:last-child::after {
+  bottom: auto;
+  height: calc(4px + 0.725em);
+}
+
+.toc ol ol a {
+  padding-left: 2px;
+}
+
+/* The change history is the last part of the document; it is not editable. */
+.history-section .section-body.static {
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ toolbar (icons) */
+
+.toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.tb-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+}
+
+.tb-select {
+  padding: 0 4px 0 8px;
+}
+
+.tb-select > span {
+  min-width: 70px;
+  text-align: left;
+}
+
+.tb-table {
+  padding-top: 4px;
+  border-top: 1px solid var(--doc-line);
+}
+
+.block-menu {
+  min-width: 180px;
+}
+
+.block-menu .menu-item.current {
+  background: var(--doc-hover);
+}
+
+.block-menu .block-2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.block-menu .block-3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.block-menu .block-4 {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ data grid interactions */
+
+.data-grid .table-wrap {
+  position: relative;
+}
+
+.data-grid th {
+  position: relative;
+  cursor: text;
+  user-select: none;
+}
+
+/* Ctrl / Cmd held: headers and cells move their column / row instead of editing. */
+.data-grid.move-mode th,
+.data-grid.move-mode td.cell {
+  cursor: grab;
+}
+
+.data-grid:hover .generated-head .frame-tools {
+  opacity: 1;
+}
+
+.data-grid.dragging,
+.data-grid.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.data-grid th.moving,
+.data-grid tr.moving td {
+  opacity: 0.45;
+}
+
+.data-grid td.selected {
+  background: var(--vscode-editor-selectionBackground, rgba(0, 120, 215, 0.25));
+}
+
+/* Column / row boundaries: the hovered edge lights up and carries a "+" in its middle. */
+.data-grid table.fixed {
+  table-layout: fixed;
+}
+
+.data-grid table.fixed td,
+.data-grid table.fixed th {
+  overflow-wrap: anywhere;
+}
+
+.edge {
+  position: fixed;
+  z-index: 30;
+}
+
+.edge-line {
+  position: absolute;
+  background: var(--doc-focus);
+  pointer-events: none;
+}
+
+.edge-col .edge-line {
+  top: 0;
+  bottom: 0;
+  left: 4.5px;
+  width: 2px;
+}
+
+.edge-row .edge-line {
+  left: 0;
+  right: 0;
+  top: 4.5px;
+  height: 2px;
+}
+
+.edge-col.resizable {
+  cursor: col-resize;
+}
+
+.edge-plus {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid var(--doc-card);
+  border-radius: 50%;
+  background: var(--doc-focus);
+  color: var(--vscode-button-foreground, #fff);
+  cursor: pointer;
+}
+
+.edge-plus svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.edge-plus:hover,
+.edge-plus:focus-visible {
+  outline: 2px solid var(--doc-focus);
+  outline-offset: 1px;
+}
+
+/* Row / column controls outside a table (tableControls.ts). */
+.tc-host,
+.table-figure {
+  position: relative;
+}
+
+.tc-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.tc-btn {
+  position: absolute;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--doc-bg);
+  color: var(--doc-muted);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.tc-btn:hover {
+  background: var(--doc-hover);
+  color: var(--doc-ink);
+}
+
+.tc-grip {
+  cursor: grab;
+}
+
+.tc-del:hover {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.tc-marker {
+  position: absolute;
+  display: none;
+  background: var(--doc-focus);
+  pointer-events: none;
+}
+
+html.tc-dragging,
+html.tc-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.drop-marker {
+  position: absolute;
+  z-index: 5;
+  background: var(--doc-focus);
+  pointer-events: none;
+}
+
+.grid-popover {
+  position: fixed;
+  top: auto;
+  z-index: 200;
+  min-width: 220px;
+}
+
+.head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.help-p {
+  display: block;
+}
+
+.help-p + .help-p {
+  margin-top: 8px;
+}
+
+.generated-head .help-pop {
+  color: var(--doc-ink);
+}
+
+/* ------------------------------------------------------------------ UML editor window */
+
+.dw-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* Resizable from its lower right corner; maximize fills the panel. */
+.dw-window {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  height: 86vh;
+  min-width: 520px;
+  min-height: 360px;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+  resize: both;
+  border: 1px solid var(--vscode-widget-border, var(--doc-line));
+  border-radius: var(--radius-card);
+  background: var(--doc-bg);
+  box-shadow: 0 12px 40px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.5));
+}
+
+.dw-window.maximized {
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  resize: none;
+}
+
+.dw-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--doc-line);
+  user-select: none;
+}
+
+.dw-name {
+  font-weight: 600;
+}
+
+.dw-kind,
+.dw-hint {
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.dw-spacer {
+  flex: 1;
+}
+
+.dw-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ captions */
+
+.cap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cap-num {
+  flex: none;
+  color: var(--doc-strong);
+  font-weight: 600;
+}
+
+.cap-num.cap-table::before {
+  counter-increment: archery-table;
+  content: 'Table ' counter(archery-table) ':';
+}
+
+.cap-num.cap-diagram::before {
+  counter-increment: archery-diagram;
+  content: 'Diagram ' counter(archery-diagram) ':';
+}
+
+.cap-num.cap-figure::before {
+  counter-increment: archery-figure;
+  content: 'Figure ' counter(archery-figure) ':';
+}
+
+.cap.empty .cap-num.cap-table::before {
+  content: 'Table ' counter(archery-table);
+}
+
+.cap.empty .cap-num.cap-diagram::before {
+  content: 'Diagram ' counter(archery-diagram);
+}
+
+.cap.empty .cap-num.cap-figure::before {
+  content: 'Figure ' counter(archery-figure);
+}
+
+.cap-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Editable captions: text cursor and a dotted underline on hover; no fills. */
+.cap-text.editable {
+  cursor: text;
+}
+
+.cap-text.editable:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.cap-placeholder {
+  color: var(--doc-muted);
+  font-style: italic;
+  font-weight: 400;
+  visibility: hidden;
+}
+
+.cap:hover .cap-placeholder {
+  visibility: visible;
+}
+
+.cap-input {
+  min-width: 14em;
+  margin: -1px 0;
+  padding: 0 4px;
+  border: 1px solid var(--doc-focus);
+  border-radius: 2px;
+  outline: none;
+  background: var(--vscode-input-background, transparent);
+  color: var(--vscode-input-foreground, inherit);
+  font: inherit;
+}
+
+/* Tables: the caption centered above the table, apart from it (the column grips show in the gap). */
+.table-caption,
+.cap-block {
+  font-size: 13px;
+  color: var(--doc-ink);
+  text-align: center;
+}
+
+.table-caption {
+  padding: 0 12px 26px;
+}
+
+.cap-block {
+  display: flex;
+  justify-content: center;
+  margin: 1.4em 0 0;
+}
+
+.section-body > .cap-block + .tableWrapper {
+  margin-top: 26px;
+}
+
+.generated-head .cap {
+  color: var(--doc-ink);
+}
+
+/* Diagram: the caption below the drawing. */
+.diagram-caption .cap-num {
+  font-weight: 600;
+}
+
+/* Image: a figure centered in the column with its caption centered below, like a diagram. */
+.doc-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.6em auto;
+}
+
+.doc-figure img {
+  display: block;
+  max-width: 100%;
+}
+
+.doc-figure.is-selected img {
+  outline: 2px solid var(--doc-focus);
+  outline-offset: 2px;
+}
+
+.doc-figure-cap {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--doc-ink);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ export dialog */
+
+.xd {
+  display: flex;
+  flex-direction: column;
+  width: min(940px, 94vw);
+  max-height: 90vh;
+  overflow: hidden;
+  border: 1px solid var(--vscode-widget-border, var(--doc-line));
+  border-radius: var(--radius-card);
+  background: var(--doc-bg);
+  box-shadow: 0 12px 40px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.5));
+}
+
+.xd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 18px;
+  border-bottom: 1px solid var(--doc-line);
+}
+
+.xd-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.xd-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 20px;
+  padding: 14px 18px;
+  overflow: auto;
+}
+
+.xd-form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.xd fieldset {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-control);
+}
+
+.xd legend {
+  padding: 0 6px;
+  color: var(--doc-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.xd-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.xd-field > span {
+  color: var(--doc-muted);
+}
+
+.xd-field.wide {
+  grid-column: 1 / -1;
+}
+
+.xd-field.span2 {
+  grid-column: span 2;
+}
+
+/* Two small sections side by side. */
+.xd-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.xd-pair fieldset {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Dropdowns: the native arrow replaced by a chevron inset from the right edge. */
+.xd-select {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.xd .xd-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+}
+
+.xd-select::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  margin-top: -5px;
+  border-right: 1.5px solid var(--vscode-input-foreground);
+  border-bottom: 1.5px solid var(--vscode-input-foreground);
+  transform: rotate(45deg);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.xd-select:has(select:disabled)::after {
+  opacity: 0.35;
+}
+
+.xd input:not([type='checkbox']),
+.xd select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid var(--vscode-input-border, var(--doc-line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+.xd input:focus-visible,
+.xd select:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.xd input:disabled {
+  opacity: 0.5;
+}
+
+.xd-checks {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 12.5px;
+}
+
+.xd .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.xd-hint {
+  grid-column: 1 / -1;
+}
+
+.xd-hint.span2 {
+  grid-column: span 2;
+  align-self: end;
+  padding-bottom: 6px;
+}
+
+.xd-hint {
+  margin: 0;
+  color: var(--doc-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.xd-hint code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--doc-well);
+  font-size: 11px;
+}
+
+/* A sketch of one page: margins with the header / footer slots, the body as grey lines. */
+.xd-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 8px;
+  align-self: start;
+}
+
+.xd-caption {
+  margin: 0;
+  color: var(--doc-muted);
+  font-size: 11.5px;
+}
+
+.xd-page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: 200px;
+  aspect-ratio: 210 / 297;
+  padding: 6px 12px;
+  border: 1px solid var(--doc-line);
+  border-radius: 3px;
+  background: #ffffff;
+  color: #1f2328;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.xd-page.landscape {
+  width: 236px;
+  aspect-ratio: 297 / 210;
+}
+
+.xd-margin {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 4px;
+  min-height: 12px;
+  color: #59636e;
+  font-size: 6.5px;
+  line-height: 1.3;
+}
+
+.xd-margin span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.xd-margin span:nth-child(2) {
+  text-align: center;
+}
+
+.xd-margin span:nth-child(3) {
+  text-align: right;
+}
+
+.xd-sheet {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding-block: 8px;
+  overflow: hidden;
+}
+
+.xd-h {
+  font-size: 1.75em;
+  font-weight: 600;
+  line-height: 1.2;
+  border-bottom: 1px solid #d1d9e0;
+  padding-bottom: 2px;
+}
+
+.xd-h2 {
+  margin-top: 4px;
+  font-size: 1.33em;
+  font-weight: 600;
+}
+
+.xd-line {
+  height: 0.55em;
+  border-radius: 2px;
+  background: #e3e7eb;
+}
+
+.xd-line.short {
+  width: 60%;
+}
+
+.xd-box {
+  height: 40px;
+  border: 1px solid #d1d9e0;
+  border-radius: 3px;
+}
+
+.xd-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--doc-line);
+}
+
+.xd-note {
+  margin-right: auto;
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.xd-foot .btn {
+  padding: 5px 14px;
+}
+
+@media (max-width: 720px) {
+  .xd-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .xd fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .xd-field.wide,
+  .xd-field.span2,
+  .xd-checks,
+  .xd-hint {
+    grid-column: auto;
+  }
+
+  .xd-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Drill-down marker of an element shown in detail elsewhere: click to go there. */
+.scene-link {
+  cursor: pointer;
+}
+.scene-link:hover {
+  fill: color-mix(in srgb, var(--diagram-ink) 12%, transparent);
+}
+/* The diagram a drill-down marker jumped to. */
+.diagram-figure.flash > .frame {
+  animation: detail-flash 1.6s ease-out;
+}
+@keyframes detail-flash {
+  0%,
+  40% {
+    outline: 2px solid var(--doc-focus);
+    outline-offset: 2px;
+  }
+  100% {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
+/* Live view: what an agent just changed (or is about to) - a short tint over the whole block. */
+.live-change {
+  animation: live-change 2.2s ease-out;
+  border-radius: 4px;
+}
+@keyframes live-change {
+  0%,
+  45% {
+    background-color: color-mix(in srgb, var(--doc-focus) 16%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--doc-focus) 16%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+
+/* Markdown tables: column widths fixed while typing (measured from the content, editorTools.ts). */
+.section-body .tableWrapper[data-cols] > table {
+  table-layout: fixed;
+}
+.section-body .tableWrapper.tc-measuring > table {
+  table-layout: auto !important;
+}
+.section-body .tableWrapper.tc-measuring col {
+  width: auto !important;
+}
+.section-body .tableWrapper[data-cols] td,
+.section-body .tableWrapper[data-cols] th {
+  overflow-wrap: anywhere;
+}
+.section-body .tableWrapper[data-cols] col:nth-child(1) {
+  width: var(--tc-col-1);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(2) {
+  width: var(--tc-col-2);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(3) {
+  width: var(--tc-col-3);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(4) {
+  width: var(--tc-col-4);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(5) {
+  width: var(--tc-col-5);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(6) {
+  width: var(--tc-col-6);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(7) {
+  width: var(--tc-col-7);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(8) {
+  width: var(--tc-col-8);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(9) {
+  width: var(--tc-col-9);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(10) {
+  width: var(--tc-col-10);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(11) {
+  width: var(--tc-col-11);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(12) {
+  width: var(--tc-col-12);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(13) {
+  width: var(--tc-col-13);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(14) {
+  width: var(--tc-col-14);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(15) {
+  width: var(--tc-col-15);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(16) {
+  width: var(--tc-col-16);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(17) {
+  width: var(--tc-col-17);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(18) {
+  width: var(--tc-col-18);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(19) {
+  width: var(--tc-col-19);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(20) {
+  width: var(--tc-col-20);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(21) {
+  width: var(--tc-col-21);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(22) {
+  width: var(--tc-col-22);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(23) {
+  width: var(--tc-col-23);
+}
+.section-body .tableWrapper[data-cols] col:nth-child(24) {
+  width: var(--tc-col-24);
+}
+
+/* Hovering a line between rows / columns: it lights up with a "+" that inserts there. */
+.tc-edge {
+  position: absolute;
+  display: none;
+  background: var(--doc-focus);
+  pointer-events: none;
+}
+.tc-btn.tc-plus {
+  border: 2px solid var(--doc-card, var(--doc-bg));
+  border-radius: 50%;
+  background: var(--doc-focus);
+  color: var(--vscode-button-foreground, #fff);
+}
+.tc-btn.tc-plus:hover {
+  background: var(--doc-focus);
+  color: var(--vscode-button-foreground, #fff);
+  outline: 2px solid var(--doc-focus);
+  outline-offset: 1px;
+}

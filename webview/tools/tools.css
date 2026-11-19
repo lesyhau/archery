@@ -1,0 +1,78 @@
+/* The sidebar's Diagram Tools view: the editor's palette across the top, its inspector below. */
+:root {
+  --diagram-surface: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+body {
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  color: var(--vscode-sideBar-foreground, var(--vscode-foreground));
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tools-empty {
+  padding: 12px 20px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* The palette: rows of icons, or icon and name in even columns when the view is wide enough
+   (the container query in diagram.css); left-aligned with the properties below. */
+.tools .rail {
+  width: auto;
+  overflow: visible;
+  padding: 2px 16px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tools .rail-group {
+  justify-content: start;
+  padding: 4px 0;
+}
+
+.tools .rail-flyout {
+  position: absolute;
+  left: 0;
+  top: 34px;
+  width: min(260px, calc(100vw - 24px));
+  margin: 0;
+}
+
+.tools .properties {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-left: 0;
+}
+
+.tools .inspector {
+  padding: 10px 16px 24px;
+}
+
+/* In the sidebar the names show once two columns fit (one long column would push the properties down). */
+@container (min-width: 160px) {
+  .tools .rail .rail-group {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  }
+}
+@container (max-width: 249px) {
+  .tools .rail .rail-group {
+    grid-template-columns: repeat(auto-fill, 30px);
+    gap: 4px;
+  }
+  .tools .rail .rail-btn {
+    justify-content: center;
+    width: 30px;
+    padding: 0;
+  }
+  .tools .rail .rail-label {
+    display: none;
+  }
+  .tools .rail .rail-badge {
+    position: absolute;
+  }
+}

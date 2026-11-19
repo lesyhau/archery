@@ -1,0 +1,11 @@
+**
+!dist/**
+!media/**
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
+dist/**/*.map
+dist/gen-tools.js
+dist/make-sample.js
+media/icon.svg

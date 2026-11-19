@@ -1,0 +1,1525 @@
+// Tool definitions shared by the MCP server (Claude Code & other MCP clients) and the
+// VS Code language model tools (GitHub Copilot). One definition = one zod input schema,
+// an agent-facing description, and a pure `run` against an ArcherySession.
+import { isMap, isSeq, parseDocument } from 'yaml';
+import { z } from 'zod';
+import { forEachMessage } from '../model/checks';
+import type { WorkspaceReader } from '../model/load';
+import {
+  AdrFrontMatterSchema,
+  AttributeSchema,
+  ExportSettingsSchema,
+  CanvasDiagramTypeSchema,
+  ConstraintsSchema,
+  ElementKindSchema,
+  GlossarySchema,
+  IdSchema,
+  LocalEdgeKindSchema,
+  LocalNodeKinds,
+  LocalNodeKindSchema,
+  OperationSchema,
+  QualityGoalsSchema,
+  ScenarioSchema,
+  QualityRequirementsSchema,
+  RelationshipKindSchema,
+  RisksSchema,
+  SequenceStepSchema,
+  StakeholdersSchema,
+  TimingConstraintSchema,
+  TimingLifelineSchema,
+  TimingMessageSchema,
+  type CanvasDiagram,
+  type DiagramNode,
+  type LocalEdge,
+  type LocalNode,
+  type Model,
+  type SequenceDiagram,
+  type SequenceStep,
+  type TimingDiagram,
+} from '../model/schema';
+import { validateWorkspace } from '../model/validate';
+import { findSection, SECTIONS } from '../template/template';
+import { camelSlug, kebabSlug, uniqueId } from './ids';
+import { defaultColumns, listByName, parseCell } from '../doc/dataLists';
+import { autoLayout } from './autoLayout';
+import { appendItem, OpError, type ArcherySession, type ToolHost } from './session';
+import { alignBoxes, ALIGN_MODES, type AlignMode } from './align';
+import { layoutNodes } from '../render/canvasLayout';
+import { parseProject } from '../model/load';
+
+export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
+  /** snake_case; MCP clients namespace it (mcp__archery__add_element), Copilot gets an `archery_` prefix. */
+  name: string;
+  title: string;
+  description: string;
+  input: S;
+  readOnly: boolean;
+  run(session: ArcherySession, input: z.infer<S>): unknown | Promise<unknown>;
+  /** Short confirmation text shown by Copilot before a write. */
+  confirm?(input: z.infer<S>): string;
+}
+
+const tool = <S extends z.ZodObject>(def: ToolDef<S>): ToolDef<S> => def;
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+export function sessionReader(session: ArcherySession): WorkspaceReader {
+  return {
+    readText: async (path) => session.read(path),
+    list: async (dir) => session.files(dir).map((p) => p.slice(dir.length + 1)),
+  };
+}
+
+function seqIndex(doc: ReturnType<ArcherySession['modelDocument']>, key: string, field: string, value: unknown): number {
+  const seq = doc.get(key, true);
+  if (!isSeq(seq)) return -1;
+  return seq.items.findIndex((item) => isMap(item) && item.get(field) === value);
+}
+
+/** Drops undefined values so they are not written as `key: null`. */
+function compact<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+function requireElement(model: Model, id: string): Model['elements'][number] {
+  const element = model.elements.find((e) => e.id === id);
+  if (!element) throw new OpError(`Unknown element "${id}". Call get_model to see the existing ids.`);
+  return element;
+}
+
+const NODE_W = 180;
+const NODE_H = 80;
+
+function placeNodes(existing: { y: number; h?: number }[], refs: string[]): DiagramNode[] {
+  const cols = 4;
+  const startY = existing.length > 0 ? Math.max(...existing.map((n) => n.y + (n.h ?? NODE_H))) + 60 : 40;
+  // No w/h: the renderer uses the default size of each element kind (actor, port, lollipop, ...).
+  return refs.map((ref, i) => ({
+    ref,
+    x: 40 + (i % cols) * (NODE_W + 60),
+    y: startY + Math.floor(i / cols) * (NODE_H + 60),
+  }));
+}
+
+/** Adds edges for all model relationships whose both ends are on the diagram. Returns the added ids. */
+function addMissingEdges(diagram: CanvasDiagram, model: Model): string[] {
+  const on = new Set(diagram.nodes.map((n) => n.ref));
+  const present = new Set(diagram.edges.map((e) => e.ref));
+  const added: string[] = [];
+  for (const r of model.relationships) {
+    if (on.has(r.from) && on.has(r.to) && !present.has(r.id)) {
+      diagram.edges.push({ ref: r.id, waypoints: [] });
+      added.push(r.id);
+    }
+  }
+  return added;
+}
+
+function canvasDiagrams(session: ArcherySession): { path: string; diagram: CanvasDiagram }[] {
+  return session
+    .files('diagrams')
+    .filter((p) => p.endsWith('.uml.json'))
+    .flatMap((path) => {
+      try {
+        return [{ path, diagram: session.canvasDiagram(path) }];
+      } catch {
+        return []; // invalid diagrams are reported by validate
+      }
+    });
+}
+
+function sequenceDiagrams(session: ArcherySession): { path: string; diagram: SequenceDiagram }[] {
+  return session
+    .files('diagrams')
+    .filter((p) => p.endsWith('.seq.json'))
+    .flatMap((path) => {
+      try {
+        return [{ path, diagram: session.sequenceDiagram(path) }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function timingDiagrams(session: ArcherySession): { path: string; diagram: TimingDiagram }[] {
+  return session
+    .files('diagrams')
+    .filter((p) => p.endsWith('.timing.json'))
+    .flatMap((path) => {
+      try {
+        return [{ path, diagram: session.timingDiagram(path) }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** A timing diagram without the lifeline `id`, its messages and its constraints. */
+function withoutTimingLifeline(d: TimingDiagram, id: string): TimingDiagram {
+  return {
+    ...d,
+    lifelines: d.lifelines.filter((l) => l.ref !== id),
+    messages: d.messages.filter((m) => m.from !== id && m.to !== id),
+    constraints: d.constraints.filter((c) => c.on !== id),
+  };
+}
+
+function removeMessages(steps: SequenceStep[], involves: (id: string) => boolean): SequenceStep[] {
+  return steps.flatMap((step): SequenceStep[] => {
+    if ('msg' in step) return (step.msg.from && involves(step.msg.from)) || (step.msg.to && involves(step.msg.to)) ? [] : [step];
+    if ('branches' in step) {
+      return [{ ...step, branches: step.branches.map((b) => ({ ...b, steps: removeMessages(b.steps, involves) })) }];
+    }
+    if ('over' in step) {
+      const over = step.over.filter((id) => !involves(id));
+      return over.length > 0 ? [{ ...step, over }] : [];
+    }
+    return [step];
+  });
+}
+
+const Ends = <T extends z.ZodType>(t: T) => z.object({ from: t.optional(), to: t.optional() });
+
+function canvasPath(session: ArcherySession, name: string): string {
+  const path = session.resolveDiagram(name);
+  if (!path.endsWith('.uml.json')) throw new OpError(`${session.display(path)} is a sequence diagram; use write_sequence_diagram.`);
+  return path;
+}
+
+/** A chapter by number ("5"), id ("building-block-view") or title. */
+function resolveSection(session: ArcherySession, ref: string): { id: string; number?: number; title: string; file: string } {
+  const project = parseProject(session.read('archery.yaml') ?? '').value;
+  const q = ref.trim().toLowerCase().replace(/\.$/, '');
+  const all = (project?.sections ?? []).map((s) => {
+    const def = findSection(s.id);
+    return { id: s.id, number: def?.number, title: s.title ?? def?.title ?? s.id, file: s.file };
+  });
+  const found = all.find((s) => String(s.number) === q || s.id.toLowerCase() === q || s.title.toLowerCase() === q);
+  if (!found) throw new OpError(`Unknown chapter "${ref}". Chapters: ${all.map((s) => `${s.number ?? ''} ${s.title}`.trim()).join(', ')}.`);
+  return found;
+}
+
+/** Versions and export run in VS Code. */
+function needHost(session: ArcherySession): ToolHost {
+  if (!session.host) throw new OpError('This needs VS Code with the Archery extension open on this folder (open the folder in VS Code, then try again).');
+  return session.host;
+}
+
+// ---------------------------------------------------------------------------
+// data lists (structured sections)
+// ---------------------------------------------------------------------------
+
+const DATA_LISTS = {
+  'quality-goals': { file: 'data/quality-goals.yaml', key: 'goals', idField: 'id', schema: QualityGoalsSchema, section: '1.2', fields: 'id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation' },
+  stakeholders: { file: 'data/stakeholders.yaml', key: 'stakeholders', idField: 'role', schema: StakeholdersSchema, section: '1.3', fields: 'role, contact, expectations (towards the architecture documentation)' },
+  constraints: { file: 'data/constraints.yaml', key: 'constraints', idField: 'id', schema: ConstraintsSchema, section: '2', fields: 'id, category (technical | organizational | convention), constraint, explanation' },
+  'quality-overview': { file: 'data/quality-requirements.yaml', key: 'overview', idField: 'category', schema: QualityRequirementsSchema, section: '10.1', fields: 'category, description' },
+  'quality-scenarios': { file: 'data/quality-requirements.yaml', key: 'scenarios', idField: 'id', schema: QualityRequirementsSchema, section: '10.2', fields: 'id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure' },
+  risks: { file: 'data/risks.yaml', key: 'risks', idField: 'id', schema: RisksSchema, section: '11', fields: 'id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation' },
+  glossary: { file: 'data/glossary.yaml', key: 'terms', idField: 'term', schema: GlossarySchema, section: '12', fields: 'term, definition, translations (map language -> term), synonyms (list)' },
+} as const;
+type DataListName = keyof typeof DATA_LISTS;
+const DataListSchema = z.enum(Object.keys(DATA_LISTS) as [DataListName, ...DataListName[]]);
+const DATA_LIST_HELP = Object.entries(DATA_LISTS)
+  .map(([name, l]) => `- ${name} (section ${l.section}, key field "${l.idField}"): ${l.fields}`)
+  .join('\n');
+
+function dataDocument(session: ArcherySession, list: DataListName) {
+  const def = DATA_LISTS[list];
+  const doc = parseDocument(session.read(def.file) ?? `${def.key}: []\n`);
+  if (doc.errors.length > 0) throw new OpError(`${def.file} has syntax errors: ${doc.errors[0]!.message}`);
+  if (!isSeq(doc.get(def.key, true))) doc.set(def.key, doc.createNode([]));
+  return { def, doc };
+}
+
+// ---------------------------------------------------------------------------
+// tools
+// ---------------------------------------------------------------------------
+
+const ElementFields = {
+  stereotype: z.string().describe('Optional UML stereotype without guillemets, e.g. "service"').optional(),
+  description: z.string().describe('Responsibility / short description (used in black box tables)').optional(),
+  abstract: z.boolean().optional(),
+  attributes: z.array(AttributeSchema).describe('Class attributes (kind class)').optional(),
+  operations: z.array(OperationSchema).describe('Class operations (kind class/interface)').optional(),
+  literals: z.array(z.string()).describe('Enum literals (kind enum)').optional(),
+  technology: z.string().describe('Technology, platform or protocol, e.g. "Spring Boot", "PostgreSQL 16", "REST/HTTPS"').optional(),
+  version: z.string().describe('Version of a component or artifact').optional(),
+  instances: z.string().describe('Instances of a node / execution environment / component, e.g. "3" or "1..*"').optional(),
+  responsibilities: z.array(z.string()).describe('What it is responsible for, one short point each').optional(),
+  goals: z.array(z.string()).describe('What an actor wants to achieve (kind actor)').optional(),
+  scenario: ScenarioSchema.describe('Use case flow (kind usecase): trigger, preconditions, main steps, alternatives, postconditions').optional(),
+  constraints: z.array(z.string()).describe('Invariants and constraints, without braces').optional(),
+  tags: z.record(z.string(), z.string()).describe('Tagged values, e.g. {"owner": "Team Payments"}').optional(),
+  classifier: IdSchema.describe('Type of an instance, part or collaboration use (element id), e.g. the class of an object or the node of a node instance').optional(),
+  slots: z.array(z.object({ name: z.string().min(1), value: z.string() })).describe('Slot values of an instance (object diagrams)').optional(),
+  multiplicity: z.string().describe('Multiplicity of a part, e.g. "1..*"').optional(),
+  reference: z.boolean().describe('A part that is a reference, not owned (drawn dashed)').optional(),
+  extensionPoints: z.array(z.string()).describe('Extension points of a use case (kind usecase)').optional(),
+  detail: z
+    .string()
+    .describe('The diagram that shows this element in detail, e.g. "order-service-internals" or "diagrams/order-service-internals.uml.json". Other diagrams then mark the element and link to it (drill-down).')
+    .optional(),
+};
+
+/** The same fields for update_element: null clears a field. */
+const nullable = <T extends Record<string, z.ZodOptional<z.ZodTypeAny>>>(fields: T) =>
+  Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.unwrap().nullable().optional()])) as { [K in keyof T]: z.ZodOptional<z.ZodNullable<ReturnType<T[K]['unwrap']>>> };
+
+export const TOOLS: ToolDef<any>[] = [
+  tool({
+    name: 'overview',
+    title: 'Documentation overview',
+    description:
+      'Summary of the architecture documentation: root folder, system name, the sections and their Markdown files, diagrams, data lists, ADRs, model size and the number of validation problems. Call this first.',
+    input: z.object({}),
+    readOnly: true,
+    async run(session) {
+      const { workspace, issues } = await validateWorkspace(sessionReader(session));
+      const byKind: Record<string, number> = {};
+      for (const e of workspace.model.elements) byKind[e.kind] = (byKind[e.kind] ?? 0) + 1;
+      return {
+        root: session.rootLabel || '.',
+        system: workspace.project?.system,
+        title: workspace.project?.title,
+        sections: (workspace.project?.sections ?? []).map((s) => ({
+          number: findSection(s.id)?.number,
+          id: s.id,
+          title: s.title ?? findSection(s.id)?.title ?? s.id,
+          file: session.display(s.file),
+          enabled: s.enabled,
+        })),
+        diagrams: workspace.diagrams.map((d) => ({ file: session.display(d.file), type: d.type, title: d.title })),
+        dataLists: Object.keys(DATA_LISTS),
+        decisions: workspace.decisions.map((f) => session.display(f)),
+        model: { elements: byKind, relationships: workspace.model.relationships.length },
+        problems: {
+          errors: issues.filter((i) => i.severity === 'error').length,
+          warnings: issues.filter((i) => i.severity === 'warning').length,
+        },
+        conventions:
+          'Change chapters with get_section / edit_section / write_section (call get_section_guide first) and place diagrams and tables with insert_into_section: the open document follows these edits live. Change model.yaml, diagrams and data/*.yaml only through these tools. Directives like <!-- archery:diagram ... --> embed generated content; keep them.',
+      };
+    },
+  }),
+
+  tool({
+    name: 'get_section_guide',
+    title: 'arc42 section guide',
+    description:
+      'What belongs in an arc42 section according to the official template (contents, motivation, form) plus its file path. Call before writing or reviewing section prose.',
+    input: z.object({
+      section: z.string().describe('Section number ("5"), id ("building-block-view") or title ("Building Block View")'),
+    }),
+    readOnly: true,
+    run(session, { section }) {
+      const q = section.trim().toLowerCase().replace(/\.$/, '');
+      const def = SECTIONS.find((s) => String(s.number) === q || s.id === q || s.title.toLowerCase() === q);
+      if (!def) throw new OpError(`Unknown section "${section}". Use 1-12, e.g. "5" for the building block view.`);
+      return {
+        number: def.number,
+        id: def.id,
+        title: def.title,
+        file: session.display(`sections/${def.file}`),
+        docs: def.docsUrl,
+        guide: def.help,
+        subsections: def.subsections.map((s, i) => ({ number: `${def.number}.${i + 1}`, title: s.title, guide: s.help })),
+      };
+    },
+  }),
+
+  tool({
+    name: 'get_model',
+    title: 'Get architecture model',
+    description: 'Elements and relationships of the shared architecture model (model.yaml). Diagrams reference these ids.',
+    input: z.object({ kind: ElementKindSchema.describe('Only return elements of this kind').optional() }),
+    readOnly: true,
+    run(session, { kind }) {
+      const model = session.model();
+      const elements = kind ? model.elements.filter((e) => e.kind === kind) : model.elements;
+      const ids = new Set(elements.map((e) => e.id));
+      return {
+        elements,
+        relationships: kind ? model.relationships.filter((r) => ids.has(r.from) || ids.has(r.to)) : model.relationships,
+      };
+    },
+  }),
+
+  tool({
+    name: 'add_element',
+    title: 'Add model element',
+    description:
+      'Add an element (component, actor, external system, use case, node, class, port, ...) to the shared model. The id is derived from the name unless given and never changes later. Use parent for nesting (component in package/component, port on component, artifact or execution environment in node). With `diagram` it is also placed on that canvas diagram (at x/y if given), or added as the last lifeline of that sequence diagram.',
+    input: z.object({
+      name: z.string().min(1),
+      kind: ElementKindSchema,
+      id: IdSchema.describe('Optional stable id; default: camelCase of the name').optional(),
+      parent: IdSchema.describe('Id of the containing element').optional(),
+      ...ElementFields,
+      typeParams: z.array(z.string()).describe('Generic type parameters (classes/interfaces)').optional(),
+      diagram: z.string().describe('Also show it on this canvas diagram').optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().positive().optional(),
+      h: z.number().positive().optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Add ${i.kind} "${i.name}" to the model${i.diagram ? ` and ${i.diagram}` : ''}?`,
+    run(session, input) {
+      const model = session.model();
+      const taken = new Set([...model.elements.map((e) => e.id), ...model.relationships.map((r) => r.id)]);
+      if (input.id && taken.has(input.id)) throw new OpError(`Id "${input.id}" is already used.`);
+      if (input.parent) requireElement(model, input.parent);
+      if (input.classifier) requireElement(model, input.classifier);
+      if (input.detail) input.detail = session.resolveDiagram(input.detail);
+      const id = input.id ?? uniqueId(camelSlug(input.name), taken);
+      const { name, kind, parent, diagram: diagramName, x, y, w, h, ...rest } = input;
+      const path = diagramName ? session.resolveDiagram(diagramName) : undefined;
+      const doc = session.modelDocument();
+      appendItem(doc, ['elements'], compact({ id, kind, name, parent, ...rest }));
+      session.writeDocument('model.yaml', doc);
+      if (path?.endsWith('.seq.json')) {
+        // On a sequence diagram the new element becomes the last lifeline.
+        const seq = session.sequenceDiagram(path);
+        if (!seq.lifelines.some((l) => l.ref === id)) session.writeJson(path, { ...seq, lifelines: [...seq.lifelines, { ref: id }] });
+      } else if (path?.endsWith('.timing.json')) {
+        // On a timing diagram it becomes the last lifeline (no states yet).
+        const timing = session.timingDiagram(path);
+        if (!timing.lifelines.some((l) => l.ref === id)) session.writeJson(path, { ...timing, lifelines: [...timing.lifelines, { ref: id, states: [], changes: [] }] });
+      } else if (path) {
+        const diagram = session.canvasDiagram(path);
+        const [node] = placeNodes(diagram.nodes, [id]);
+        diagram.nodes.push(compact({ ...node!, x: x ?? node!.x, y: y ?? node!.y, w: w ?? node!.w, h: h ?? node!.h }) as DiagramNode);
+        session.writeJson(path, diagram);
+      }
+      return { id, message: `Added ${kind} "${name}" with id "${id}"${path ? ` to ${session.display(path)}` : ''}.` };
+    },
+  }),
+
+  tool({
+    name: 'update_element',
+    title: 'Update model element',
+    description:
+      'Rename or otherwise change an element. Renaming updates every diagram automatically because diagrams reference the id. Pass null to clear an optional field.',
+    input: z.object({
+      id: IdSchema,
+      name: z.string().min(1).optional(),
+      kind: ElementKindSchema.optional(),
+      parent: IdSchema.nullable().optional(),
+      ...nullable(ElementFields),
+      typeParams: z.array(z.string()).describe('Generic type parameters (classes/interfaces)').nullable().optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Update element "${i.id}"${i.name ? ` (rename to "${i.name}")` : ''}?`,
+    run(session, { id, ...changes }) {
+      const model = session.model();
+      requireElement(model, id);
+      if (changes.classifier) requireElement(model, changes.classifier);
+      if (changes.detail) changes.detail = session.resolveDiagram(changes.detail);
+      if (changes.parent) {
+        // Reject cycles: the new parent must not be the element itself or one of its descendants.
+        const parents = new Map(model.elements.map((e) => [e.id, e.parent]));
+        for (let p: string | undefined = changes.parent; p; p = parents.get(p)) {
+          requireElement(model, p);
+          if (p === id) throw new OpError(`"${changes.parent}" is inside "${id}"; nesting would create a cycle.`);
+        }
+      }
+      const doc = session.modelDocument();
+      const index = seqIndex(doc, 'elements', 'id', id);
+      for (const [key, value] of Object.entries(changes)) {
+        if (value === undefined) continue;
+        if (value === null) doc.deleteIn(['elements', index, key]);
+        else doc.setIn(['elements', index, key], doc.createNode(value));
+      }
+      session.writeDocument('model.yaml', doc);
+      return { id, message: `Updated "${id}".` };
+    },
+  }),
+
+  tool({
+    name: 'delete_element',
+    title: 'Delete model element',
+    description:
+      'Delete an element from the model. Fails if it is still used (relationships, diagrams, sequence lifelines, children) unless cascade is true, which also removes those relationships, diagram nodes/edges, lifelines and their messages, and moves children to the deleted element\'s parent.',
+    input: z.object({ id: IdSchema, cascade: z.boolean().default(false) }),
+    readOnly: false,
+    confirm: (i) => `Delete element "${i.id}" from the model${i.cascade ? ' and everything that uses it' : ''}?`,
+    run(session, { id, cascade }) {
+      const model = session.model();
+      const element = requireElement(model, id);
+      const relationships = model.relationships.filter((r) => r.from === id || r.to === id).map((r) => r.id);
+      const children = model.elements.filter((e) => e.parent === id).map((e) => e.id);
+      const canvas = canvasDiagrams(session).filter(({ diagram }) => diagram.nodes.some((n) => n.ref === id));
+      const sequences = sequenceDiagrams(session).filter(({ diagram }) => diagram.lifelines.some((l) => l.ref === id));
+      const timings = timingDiagrams(session).filter(({ diagram }) => diagram.lifelines.some((l) => l.ref === id));
+      const usages = [
+        ...relationships.map((r) => `relationship ${r}`),
+        ...children.map((c) => `child element ${c}`),
+        ...canvas.map((d) => session.display(d.path)),
+        ...sequences.map((d) => session.display(d.path)),
+        ...timings.map((d) => session.display(d.path)),
+      ];
+      if (usages.length > 0 && !cascade) {
+        throw new OpError(`"${id}" is still used by: ${usages.join(', ')}. Pass cascade: true to remove it everywhere.`);
+      }
+
+      const doc = session.modelDocument();
+      for (const child of children) {
+        const i = seqIndex(doc, 'elements', 'id', child);
+        if (element.parent) doc.setIn(['elements', i, 'parent'], element.parent);
+        else doc.deleteIn(['elements', i, 'parent']);
+      }
+      for (const r of relationships) doc.deleteIn(['relationships', seqIndex(doc, 'relationships', 'id', r)]);
+      doc.deleteIn(['elements', seqIndex(doc, 'elements', 'id', id)]);
+      session.writeDocument('model.yaml', doc);
+
+      const removedRels = new Set(relationships);
+      for (const { path, diagram } of canvasDiagrams(session)) {
+        const nodes = diagram.nodes.filter((n) => n.ref !== id);
+        const edges = diagram.edges.filter((e) => !removedRels.has(e.ref));
+        if (nodes.length !== diagram.nodes.length || edges.length !== diagram.edges.length) {
+          session.writeJson(path, { ...diagram, nodes, edges });
+        }
+      }
+      for (const { path, diagram } of sequences) {
+        session.writeJson(path, {
+          ...diagram,
+          lifelines: diagram.lifelines.filter((l) => l.ref !== id),
+          steps: removeMessages(diagram.steps, (x) => x === id),
+        });
+      }
+      for (const { path, diagram } of timings) session.writeJson(path, withoutTimingLifeline(diagram, id));
+      return { message: `Deleted "${id}".`, alsoRemoved: usages };
+    },
+  }),
+
+  tool({
+    name: 'add_relationship',
+    title: 'Add relationship',
+    description:
+      'Add a relationship between two model elements. Kinds: dependency/usage (dashed arrow; use cases: stereotype "include" or "extend", an extend with condition and extensionPoint), association, aggregation, composition, generalization, realization, connector, deploy, manifest, link. By default the edge is also added to every canvas diagram that shows both elements.',
+    input: z.object({
+      kind: RelationshipKindSchema,
+      from: IdSchema,
+      to: IdSchema,
+      label: z.string().describe('E.g. an operation "charge()" or protocol "REST/HTTPS"').optional(),
+      multiplicity: z.object({ from: z.string().optional(), to: z.string().optional() }).describe('Associations only, e.g. {from: "1", to: "*"}').optional(),
+      stereotype: z.string().describe('e.g. "include", "use", "HTTPS"').optional(),
+      roles: Ends(z.string()).describe('Association end (role) names').optional(),
+      qualifier: Ends(z.string()).describe('Qualifier at an association end, e.g. {from: "isbn"}').optional(),
+      navigable: Ends(z.boolean()).describe('Navigable association ends (arrowheads)').optional(),
+      associationClass: IdSchema.describe('Class that is the association class of this association').optional(),
+      condition: z.string().describe('«extend» (dependency with stereotype "extend"): when the extension applies').optional(),
+      extensionPoint: z.string().describe('«extend»: the extension point of the extended use case').optional(),
+      description: z.string().optional(),
+      id: IdSchema.describe('Optional stable id; default: "<from>-<to>"').optional(),
+      addToDiagrams: z.boolean().default(true),
+    }),
+    readOnly: false,
+    confirm: (i) => `Add ${i.kind} ${i.from} → ${i.to}${i.label ? ` "${i.label}"` : ''}?`,
+    run(session, { addToDiagrams, ...input }) {
+      const model = session.model();
+      requireElement(model, input.from);
+      requireElement(model, input.to);
+      if (input.associationClass) requireElement(model, input.associationClass);
+      const taken = new Set([...model.elements.map((e) => e.id), ...model.relationships.map((r) => r.id)]);
+      if (input.id && taken.has(input.id)) throw new OpError(`Id "${input.id}" is already used.`);
+      const id = input.id ?? uniqueId(`${input.from}-${input.to}`, taken);
+      const doc = session.modelDocument();
+      const { id: _requested, ...fields } = input;
+      appendItem(doc, ['relationships'], compact({ id, ...fields }));
+      session.writeDocument('model.yaml', doc);
+
+      const diagrams: string[] = [];
+      if (addToDiagrams) {
+        const updated = session.model();
+        for (const { path, diagram } of canvasDiagrams(session)) {
+          if (addMissingEdges(diagram, { ...updated, relationships: updated.relationships.filter((r) => r.id === id) }).length) {
+            session.writeJson(path, diagram);
+            diagrams.push(session.display(path));
+          }
+        }
+      }
+      return { id, message: `Added ${input.kind} "${id}".`, shownOn: diagrams };
+    },
+  }),
+
+  tool({
+    name: 'delete_relationship',
+    title: 'Delete relationship',
+    description: 'Delete a relationship from the model and remove its edge from all diagrams.',
+    input: z.object({ id: IdSchema }),
+    readOnly: false,
+    confirm: (i) => `Delete relationship "${i.id}"?`,
+    run(session, { id }) {
+      const doc = session.modelDocument();
+      const index = seqIndex(doc, 'relationships', 'id', id);
+      if (index < 0) throw new OpError(`Unknown relationship "${id}".`);
+      doc.deleteIn(['relationships', index]);
+      session.writeDocument('model.yaml', doc);
+      const diagrams: string[] = [];
+      for (const { path, diagram } of canvasDiagrams(session)) {
+        const edges = diagram.edges.filter((e) => e.ref !== id);
+        if (edges.length !== diagram.edges.length) {
+          session.writeJson(path, { ...diagram, edges });
+          diagrams.push(session.display(path));
+        }
+      }
+      return { message: `Deleted relationship "${id}".`, removedFrom: diagrams };
+    },
+  }),
+
+  tool({
+    name: 'get_diagram',
+    title: 'Get diagram',
+    description: 'Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints).',
+    input: z.object({ diagram: z.string().describe('File name with or without extension, e.g. "building-blocks-l1"') }),
+    readOnly: true,
+    run(session, { diagram: name }) {
+      const path = session.resolveDiagram(name);
+      const model = session.model();
+      const elements = new Map(model.elements.map((e) => [e.id, e]));
+      if (path.endsWith('.timing.json')) {
+        const d = session.timingDiagram(path);
+        return { file: session.display(path), ...d, lifelines: d.lifelines.map((l) => ({ ...l, name: elements.get(l.ref)?.name ?? '(missing)' })) };
+      }
+      if (path.endsWith('.seq.json')) {
+        const d = session.sequenceDiagram(path);
+        return {
+          file: session.display(path),
+          ...d,
+          lifelines: d.lifelines.map((l) => ({ ref: l.ref, name: elements.get(l.ref)?.name ?? '(missing)' })),
+        };
+      }
+      const d = session.canvasDiagram(path);
+      const rels = new Map(model.relationships.map((r) => [r.id, r]));
+      return {
+        file: session.display(path),
+        type: d.type,
+        title: d.title,
+        nodes: d.nodes.map((n) => ({ ...n, name: elements.get(n.ref)?.name ?? '(missing)', kind: elements.get(n.ref)?.kind })),
+        edges: d.edges.map((e) => {
+          const r = rels.get(e.ref);
+          return { ref: e.ref, kind: r?.kind, from: r?.from, to: r?.to, label: r?.label };
+        }),
+        local: d.local,
+      };
+    },
+  }),
+
+  tool({
+    name: 'create_diagram',
+    title: 'Create canvas diagram',
+    description:
+      'Create a canvas diagram (diagrams/<name>.uml.json) showing existing model elements. Relationships between the shown elements are added automatically. Types: component, package, deployment, class, object, composite (composite structure), state, activity, interactionOverview, context (use cases). Sequence and communication diagrams: write_sequence_diagram; timing diagrams: write_timing_diagram. Embed it in a section with <!-- archery:diagram diagrams/<name>.uml.json -->.',
+    input: z.object({
+      title: z.string().min(1),
+      type: CanvasDiagramTypeSchema,
+      name: z.string().describe('File name without extension; default: kebab-case of the title').optional(),
+      elements: z.array(IdSchema).default([]),
+      includeRelationships: z.boolean().default(true),
+    }),
+    readOnly: false,
+    confirm: (i) => `Create ${i.type} diagram "${i.title}"?`,
+    run(session, input) {
+      const base = kebabSlug(input.name ?? input.title);
+      if (!base) throw new OpError('Please give the diagram a name.');
+      const path = `diagrams/${base}.uml.json`;
+      if (session.has(path)) throw new OpError(`${session.display(path)} already exists. Use add_to_diagram instead.`);
+      const model = session.model();
+      input.elements.forEach((id) => requireElement(model, id));
+      const diagram: CanvasDiagram = {
+        version: 1,
+        type: input.type,
+        title: input.title,
+        nodes: placeNodes([], [...new Set(input.elements)]),
+        edges: [],
+        local: { nodes: [], edges: [] },
+      };
+      const edges = input.includeRelationships ? addMissingEdges(diagram, model) : [];
+      session.writeJson(path, diagram);
+      return {
+        file: session.display(path),
+        nodes: diagram.nodes.length,
+        edges: edges.length,
+        embed: `<!-- archery:diagram ${path} -->`,
+      };
+    },
+  }),
+
+  tool({
+    name: 'add_to_diagram',
+    title: 'Add elements to diagram',
+    description: 'Show existing model elements on a canvas diagram (placed below the current content) and add the relationships between shown elements.',
+    input: z.object({
+      diagram: z.string(),
+      elements: z.array(IdSchema).min(1),
+      includeRelationships: z.boolean().default(true),
+    }),
+    readOnly: false,
+    confirm: (i) => `Add ${i.elements.join(', ')} to ${i.diagram}?`,
+    run(session, input) {
+      const path = session.resolveDiagram(input.diagram);
+      if (!path.endsWith('.uml.json')) throw new OpError('add_to_diagram works on canvas diagrams; use write_sequence_diagram for sequences.');
+      const model = session.model();
+      input.elements.forEach((id) => requireElement(model, id));
+      const diagram = session.canvasDiagram(path);
+      const present = new Set(diagram.nodes.map((n) => n.ref));
+      const added = [...new Set(input.elements)].filter((id) => !present.has(id));
+      diagram.nodes.push(...placeNodes(diagram.nodes, added));
+      const edges = input.includeRelationships ? addMissingEdges(diagram, model) : [];
+      session.writeJson(path, diagram);
+      return { file: session.display(path), addedNodes: added, addedEdges: edges };
+    },
+  }),
+
+  tool({
+    name: 'remove_from_diagram',
+    title: 'Remove from diagram',
+    description:
+      'Remove items from a canvas diagram only (the model is unchanged): element refs, relationship refs, and diagram-local node/edge ids (notes, states, actions, transitions, flows). Removing a node also removes the edges attached to it; children of a removed local container move to its parent.',
+    input: z.object({ diagram: z.string(), refs: z.array(IdSchema).min(1).describe('Element, relationship, local node or local edge ids') }),
+    readOnly: false,
+    confirm: (i) => `Remove ${i.refs.join(', ')} from ${i.diagram}?`,
+    run(session, input) {
+      const path = session.resolveDiagram(input.diagram);
+      if (!path.endsWith('.uml.json')) throw new OpError('remove_from_diagram works on canvas diagrams.');
+      const model = session.model();
+      const refs = new Set(input.refs);
+      const rels = new Map(model.relationships.map((r) => [r.id, r]));
+      const diagram = session.canvasDiagram(path);
+      const nodes = diagram.nodes.filter((n) => !refs.has(n.ref));
+      const edges = diagram.edges.filter((e) => {
+        const r = rels.get(e.ref);
+        return !refs.has(e.ref) && !(r && (refs.has(r.from) || refs.has(r.to)));
+      });
+      const removedLocal = new Map(diagram.local.nodes.filter((n) => refs.has(n.id)).map((n) => [n.id, n]));
+      const localNodes = diagram.local.nodes
+        .filter((n) => !removedLocal.has(n.id))
+        .map((n) => {
+          let parent = n.parent;
+          while (parent && removedLocal.has(parent)) parent = removedLocal.get(parent)!.parent;
+          return compact({ ...n, parent }) as LocalNode;
+        });
+      const localEdges = diagram.local.edges.filter((e) => !refs.has(e.id) && !refs.has(e.from) && !refs.has(e.to));
+      session.writeJson(path, { ...diagram, nodes, edges, local: { nodes: localNodes, edges: localEdges } });
+      return {
+        file: session.display(path),
+        removedNodes: diagram.nodes.length - nodes.length + diagram.local.nodes.length - localNodes.length,
+        removedEdges: diagram.edges.length - edges.length + diagram.local.edges.length - localEdges.length,
+      };
+    },
+  }),
+
+  tool({
+    name: 'write_sequence_diagram',
+    title: 'Write sequence diagram',
+    description:
+      'Create (or with overwrite: true, replace) a sequence diagram for a runtime scenario (section 6). Lifelines are model element ids (actors, components, external systems); elements used in messages are added as lifelines automatically. Steps: {msg: {from, to, label, kind: sync|async|reply|create|destroy|self|lost|found, async?: true for an asynchronous self/lost/found message, gate?: true when the missing end of a lost/found message is a gate on the frame (from / to outside the interaction)}}, {fragment: alt|opt|loop|par|break|critical|neg|strict|seq|ignore|consider|assert, branches: [{guard, steps}], min?, max? (loop iterations: loop(min,max), max "*" = unlimited)}, {fragment: "ref", label, over: [ids]}, {note, over: [ids]}. Embed with <!-- archery:diagram diagrams/<name>.seq.json -->.',
+    input: z.object({
+      title: z.string().min(1),
+      name: z.string().describe('File name without extension; default: kebab-case of the title').optional(),
+      lifelines: z.array(IdSchema).default([]),
+      roles: z.record(IdSchema, z.string()).describe('Role names per lifeline id, shown as "role : Type" (default ":Type")').optional(),
+      notation: z.enum(['sequence', 'communication']).describe('Draw the interaction as a sequence diagram (default) or a communication diagram (participants with links and numbered messages)').optional(),
+      positions: z.record(IdSchema, z.object({ x: z.number(), y: z.number() })).describe('Communication diagrams: participant box positions').optional(),
+      steps: z.array(SequenceStepSchema),
+      overwrite: z.boolean().default(false),
+    }),
+    readOnly: false,
+    confirm: (i) => `${i.overwrite ? 'Write' : 'Create'} sequence diagram "${i.title}"?`,
+    run(session, input) {
+      const base = kebabSlug(input.name ?? input.title);
+      if (!base) throw new OpError('Please give the diagram a name.');
+      const path = `diagrams/${base}.seq.json`;
+      if (session.has(path) && !input.overwrite) {
+        throw new OpError(`${session.display(path)} already exists. Pass overwrite: true to replace it (read it first with get_diagram).`);
+      }
+      const model = session.model();
+      const lifelines = [...input.lifelines];
+      const addLifeline = (id: string) => {
+        requireElement(model, id);
+        if (!lifelines.includes(id)) lifelines.push(id);
+      };
+      input.lifelines.forEach((id) => requireElement(model, id));
+      forEachMessage(input.steps, (m) => [m.from, m.to].forEach((id) => id && addLifeline(id)));
+      const diagram: SequenceDiagram = {
+        version: 1,
+        type: 'sequence',
+        title: input.title,
+        lifelines: lifelines.map((ref) => (input.roles?.[ref] ? { ref, role: input.roles[ref] } : { ref })),
+        steps: input.steps,
+        ...(input.notation === 'communication' ? { notation: 'communication' as const } : {}),
+        ...(input.positions && Object.keys(input.positions).length ? { positions: input.positions } : {}),
+      };
+      session.writeJson(path, diagram);
+      let messages = 0;
+      forEachMessage(diagram.steps, () => messages++);
+      return { file: session.display(path), lifelines, messages, embed: `<!-- archery:diagram ${path} -->` };
+    },
+  }),
+
+  tool({
+    name: 'write_timing_diagram',
+    title: 'Write timing diagram',
+    description:
+      'Create (or with overwrite: true, replace) a timing diagram: how the state of participants changes over time (section 6 runtime, or section 10 quality scenarios with deadlines). Lifelines: {ref: model element id, role?, form?: "state" (state timeline, default) | "value" (compact value lifeline), states: [top to bottom], changes: [{at, state}]}. Messages: {from, to, at, arrive?, label, kind: sync|async|reply}; leave out from (or to) for a message from (or to) a gate on the frame; from = to is a self message. Constraints: {on: lifeline id, from, to?, label}: a duration constraint from..to such as "0..2s", or a time constraint / observation at `from` (e.g. "t = now") when `to` is missing. Times are numbers in `unit` (e.g. "ms"). Embed with <!-- archery:diagram diagrams/<name>.timing.json -->.',
+    input: z.object({
+      title: z.string().min(1),
+      name: z.string().describe('File name without extension; default: kebab-case of the title').optional(),
+      unit: z.string().describe('Time unit shown on the axis, e.g. "ms"').optional(),
+      end: z.number().positive().describe('End of the time axis (default: after the last event)').optional(),
+      tick: z.number().positive().describe('Distance between axis ticks (default: automatic)').optional(),
+      lifelines: z.array(TimingLifelineSchema),
+      messages: z.array(TimingMessageSchema).default([]),
+      constraints: z.array(TimingConstraintSchema).default([]),
+      overwrite: z.boolean().default(false),
+    }),
+    readOnly: false,
+    confirm: (i) => `${i.overwrite ? 'Write' : 'Create'} timing diagram "${i.title}"?`,
+    run(session, input) {
+      const base = kebabSlug(input.name ?? input.title);
+      if (!base) throw new OpError('Please give the diagram a name.');
+      const path = `diagrams/${base}.timing.json`;
+      if (session.has(path) && !input.overwrite) {
+        throw new OpError(`${session.display(path)} already exists. Pass overwrite: true to replace it (read it first with get_diagram).`);
+      }
+      const model = session.model();
+      const refs = new Set<string>();
+      for (const l of input.lifelines) {
+        requireElement(model, l.ref);
+        if (refs.has(l.ref)) throw new OpError(`"${l.ref}" has two lifelines.`);
+        refs.add(l.ref);
+      }
+      for (const m of input.messages) for (const end of [m.from, m.to]) if (end && !refs.has(end)) throw new OpError(`Message "${m.label}" uses "${end}", which is not a lifeline.`);
+      for (const c of input.constraints) if (!refs.has(c.on)) throw new OpError(`Constraint "${c.label}" is on "${c.on}", which is not a lifeline.`);
+      const diagram: TimingDiagram = {
+        version: 1,
+        type: 'timing',
+        title: input.title,
+        unit: input.unit ?? '',
+        ...(input.end ? { end: input.end } : {}),
+        ...(input.tick ? { tick: input.tick } : {}),
+        lifelines: input.lifelines.map((l) => ({
+          ref: l.ref,
+          ...(l.role ? { role: l.role } : {}),
+          ...(l.form === 'value' ? { form: 'value' as const } : {}),
+          states: l.states,
+          changes: l.changes,
+        })),
+        messages: input.messages,
+        constraints: input.constraints,
+      };
+      session.writeJson(path, diagram);
+      return { file: session.display(path), lifelines: diagram.lifelines.length, messages: diagram.messages.length, embed: `<!-- archery:diagram ${path} -->` };
+    },
+  }),
+
+  tool({
+    name: 'get_data',
+    title: 'Get structured section data',
+    description: `Items of a structured arc42 list stored in data/*.yaml. Lists:\n${DATA_LIST_HELP}`,
+    input: z.object({ list: DataListSchema }),
+    readOnly: true,
+    run(session, { list }) {
+      const { def, doc } = dataDocument(session, list);
+      return { file: session.display(def.file), items: (doc.get(def.key) as { toJSON(): unknown } | undefined)?.toJSON() ?? [] };
+    },
+  }),
+
+  tool({
+    name: 'upsert_data_item',
+    title: 'Add or update structured item',
+    description: `Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field). The result is validated before it is written. Lists:\n${DATA_LIST_HELP}`,
+    input: z.object({
+      list: DataListSchema,
+      item: z.record(z.string(), z.unknown()).describe('Fields of the item, including its key field'),
+    }),
+    readOnly: false,
+    confirm: (i) => `Save item to ${i.list}?`,
+    run(session, { list, item }) {
+      const { def, doc } = dataDocument(session, list);
+      const key = item[def.idField];
+      if (typeof key !== 'string' || !key) throw new OpError(`The item needs its key field "${def.idField}".`);
+      const index = seqIndex(doc, def.key, def.idField, key);
+      if (index >= 0) {
+        for (const [field, value] of Object.entries(item)) {
+          if (value === null) doc.deleteIn([def.key, index, field]);
+          else if (value !== undefined) doc.setIn([def.key, index, field], doc.createNode(value));
+        }
+      } else {
+        appendItem(doc, [def.key], Object.fromEntries(Object.entries(item).filter(([, v]) => v !== null && v !== undefined)));
+      }
+      const check = def.schema.safeParse(doc.toJS());
+      if (!check.success) {
+        const problems = check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+        throw new OpError(`Not saved, the item is invalid: ${problems}. Fields: ${def.fields}`);
+      }
+      session.writeDocument(def.file, doc);
+      return { file: session.display(def.file), message: `${index >= 0 ? 'Updated' : 'Added'} "${key}".` };
+    },
+  }),
+
+  tool({
+    name: 'delete_data_item',
+    title: 'Delete structured item',
+    description: 'Delete an item from a structured arc42 list by its key field value (id, role, category or term).',
+    input: z.object({ list: DataListSchema, key: z.string().min(1) }),
+    readOnly: false,
+    confirm: (i) => `Delete "${i.key}" from ${i.list}?`,
+    run(session, { list, key }) {
+      const { def, doc } = dataDocument(session, list);
+      const index = seqIndex(doc, def.key, def.idField, key);
+      if (index < 0) throw new OpError(`No item with ${def.idField} "${key}" in ${list}.`);
+      doc.deleteIn([def.key, index]);
+      session.writeDocument(def.file, doc);
+      return { file: session.display(def.file), message: `Deleted "${key}".` };
+    },
+  }),
+
+  tool({
+    name: 'validate',
+    title: 'Validate architecture documentation',
+    description: 'Check all documentation files: schemas, and references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals). Call after making changes.',
+    input: z.object({}),
+    readOnly: true,
+    async run(session) {
+      const { issues } = await validateWorkspace(sessionReader(session));
+      return {
+        ok: !issues.some((i) => i.severity === 'error'),
+        problems: issues.map((i) => ({
+          severity: i.severity,
+          file: session.display(i.file),
+          line: i.line,
+          message: i.message,
+        })),
+      };
+    },
+  }),
+  tool({
+    name: 'update_relationship',
+    title: 'Update relationship',
+    description:
+      'Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend». Pass null to clear a field.',
+    input: z.object({
+      id: IdSchema,
+      kind: RelationshipKindSchema.optional(),
+      label: z.string().nullable().optional(),
+      stereotype: z.string().nullable().optional(),
+      multiplicity: Ends(z.string()).nullable().optional(),
+      roles: Ends(z.string()).nullable().optional(),
+      qualifier: Ends(z.string()).nullable().optional(),
+      navigable: Ends(z.boolean()).nullable().optional(),
+      associationClass: IdSchema.nullable().optional(),
+      condition: z.string().nullable().optional(),
+      extensionPoint: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Update relationship "${i.id}"?`,
+    run(session, { id, ...changes }) {
+      const model = session.model();
+      if (!model.relationships.some((r) => r.id === id)) throw new OpError(`Unknown relationship "${id}".`);
+      if (changes.associationClass) requireElement(model, changes.associationClass);
+      const doc = session.modelDocument();
+      const index = seqIndex(doc, 'relationships', 'id', id);
+      for (const [key, value] of Object.entries(changes)) {
+        if (value === undefined) continue;
+        if (value === null || (typeof value === 'object' && Object.values(value).every((v) => v === undefined || v === ''))) doc.deleteIn(['relationships', index, key]);
+        else doc.setIn(['relationships', index, key], doc.createNode(typeof value === 'object' ? compact(value as object) : value));
+      }
+      session.writeDocument('model.yaml', doc);
+      return { id, message: `Updated relationship "${id}".` };
+    },
+  }),
+
+  tool({
+    name: 'update_diagram',
+    title: 'Update diagram',
+    description: 'Change the title of any diagram (the file name stays), or the type of a canvas diagram (its content stays; the type decides what the editor offers to add).',
+    input: z.object({
+      diagram: z.string(),
+      title: z.string().optional(),
+      type: CanvasDiagramTypeSchema.describe('New diagram type (canvas diagrams only)').optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Update diagram ${i.diagram}${i.title !== undefined ? ` (title "${i.title}")` : ''}${i.type ? ` (type ${i.type})` : ''}?`,
+    run(session, { diagram: name, title, type }) {
+      const path = session.resolveDiagram(name);
+      if (type && !path.endsWith('.uml.json')) throw new OpError('Only canvas diagrams can change their type.');
+      const diagram = path.endsWith('.seq.json') ? session.sequenceDiagram(path) : path.endsWith('.timing.json') ? session.timingDiagram(path) : session.canvasDiagram(path);
+      session.writeJson(path, { ...diagram, ...(title !== undefined ? { title } : {}), ...(type ? { type } : {}) });
+      return { file: session.display(path), title: title ?? diagram.title, ...(type ? { type } : {}) };
+    },
+  }),
+
+  tool({
+    name: 'move_nodes',
+    title: 'Move or resize diagram nodes',
+    description:
+      'Set the position (absolute diagram coordinates, top-left corner) and optionally the size of nodes on a canvas diagram. `id` is an element ref or a diagram-local node id.',
+    input: z.object({
+      diagram: z.string(),
+      nodes: z.array(z.object({ id: IdSchema, x: z.number(), y: z.number(), w: z.number().positive().optional(), h: z.number().positive().optional() })).min(1),
+    }),
+    readOnly: false,
+    confirm: (i) => `Move ${i.nodes.length} node(s) on ${i.diagram}?`,
+    run(session, input) {
+      const path = canvasPath(session, input.diagram);
+      const diagram = session.canvasDiagram(path);
+      const moves = new Map(input.nodes.map((n) => [n.id, n]));
+      const round = (v: number) => Math.round(v);
+      const apply = <T extends { x: number; y: number; w?: number; h?: number }>(n: T, id: string): T => {
+        const m = moves.get(id);
+        if (!m) return n;
+        moves.delete(id);
+        return { ...n, x: round(m.x), y: round(m.y), ...(m.w ? { w: round(m.w) } : {}), ...(m.h ? { h: round(m.h) } : {}) };
+      };
+      const nodes = diagram.nodes.map((n) => apply(n, n.ref));
+      const localNodes = diagram.local.nodes.map((n) => apply(n, n.id));
+      if (moves.size > 0) throw new OpError(`Not on ${session.display(path)}: ${[...moves.keys()].join(', ')}`);
+      session.writeJson(path, { ...diagram, nodes, local: { ...diagram.local, nodes: localNodes } });
+      return { file: session.display(path), moved: input.nodes.length };
+    },
+  }),
+
+  tool({
+    name: 'set_node_style',
+    title: 'Set node presentation',
+    description:
+      'Presentation options of an element on one canvas diagram, e.g. { notation: "lollipop" } to draw an interface as a ball (provided via realization, required via usage = socket). Pass null to reset.',
+    input: z.object({ diagram: z.string(), ref: IdSchema, style: z.record(z.string(), z.string()).nullable() }),
+    readOnly: false,
+    confirm: (i) => `Change how ${i.ref} is drawn on ${i.diagram}?`,
+    run(session, { diagram: name, ref, style }) {
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      if (!diagram.nodes.some((n) => n.ref === ref)) throw new OpError(`"${ref}" is not on ${session.display(path)}.`);
+      const nodes = diagram.nodes.map((n) => {
+        if (n.ref !== ref) return n;
+        const { style: _old, ...rest } = n;
+        return style && Object.keys(style).length > 0 ? { ...rest, style } : rest;
+      });
+      session.writeJson(path, { ...diagram, nodes });
+      return { file: session.display(path), ref, style };
+    },
+  }),
+
+  tool({
+    name: 'add_local_node',
+    title: 'Add diagram-local node',
+    description: `Add a node that exists only on this diagram: a note, or a state machine / activity node. Kinds: ${LocalNodeKinds.join(', ')}. States take "text" for internal activities (one per line, e.g. "entry / start timer"); partitions (swimlanes), states, regions and interruptible regions contain other local nodes via parent. Orthogonal regions: "region" nodes with a state as parent (they fill the state, separated by dashed lines). entryPoint / exitPoint sit on the border of their parent state; a "pin" sits on the border of its parent action; acceptTimeEvent is the hourglass (name e.g. "every 5 min").`,
+    input: z.object({
+      diagram: z.string(),
+      kind: LocalNodeKindSchema,
+      name: z.string().optional(),
+      text: z.string().optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().positive().optional(),
+      h: z.number().positive().optional(),
+      parent: IdSchema.optional(),
+      id: IdSchema.optional(),
+      diagram_ref: z.string().describe('interactionUse / interaction nodes: the diagram they stand for, e.g. "diagrams/checkout.seq.json"').optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Add ${i.kind}${i.name ? ` "${i.name}"` : ''} to ${i.diagram}?`,
+    run(session, input) {
+      const path = canvasPath(session, input.diagram);
+      const diagram = session.canvasDiagram(path);
+      const taken = new Set([...diagram.local.nodes.map((n) => n.id), ...diagram.local.edges.map((e) => e.id), ...diagram.nodes.map((n) => n.ref)]);
+      if (input.id && taken.has(input.id)) throw new OpError(`Id "${input.id}" is already used on this diagram.`);
+      if (input.parent && !diagram.local.nodes.some((n) => n.id === input.parent)) throw new OpError(`Unknown parent "${input.parent}".`);
+      const id = input.id ?? uniqueId(camelSlug(input.name || input.kind), taken);
+      const [placed] = placeNodes([...diagram.nodes, ...diagram.local.nodes], [id]);
+      const node = compact({
+        id,
+        kind: input.kind,
+        name: input.name,
+        text: input.text,
+        x: Math.round(input.x ?? placed!.x),
+        y: Math.round(input.y ?? placed!.y),
+        w: input.w,
+        h: input.h,
+        parent: input.parent,
+        diagram: input.diagram_ref,
+      }) as LocalNode;
+      session.writeJson(path, { ...diagram, local: { ...diagram.local, nodes: [...diagram.local.nodes, node] } });
+      return { id, file: session.display(path) };
+    },
+  }),
+
+  tool({
+    name: 'update_local_node',
+    title: 'Update diagram-local node',
+    description: 'Change a note, state or activity node: name, text, kind or parent (null clears).',
+    input: z.object({
+      diagram: z.string(),
+      id: IdSchema,
+      name: z.string().nullable().optional(),
+      text: z.string().nullable().optional(),
+      kind: LocalNodeKindSchema.optional(),
+      parent: IdSchema.nullable().optional(),
+      diagram_ref: z.string().nullable().describe('interactionUse / interaction nodes: the diagram they stand for (null clears)').optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Update ${i.id} on ${i.diagram}?`,
+    run(session, { diagram: name, id, diagram_ref, ...rest }) {
+      const changes: Record<string, unknown> = { ...rest, ...(diagram_ref !== undefined ? { diagram: diagram_ref } : {}) };
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      if (!diagram.local.nodes.some((n) => n.id === id)) throw new OpError(`Unknown local node "${id}".`);
+      if (changes.parent && (changes.parent === id || !diagram.local.nodes.some((n) => n.id === changes.parent))) throw new OpError(`Invalid parent "${changes.parent}".`);
+      const nodes = diagram.local.nodes.map((n) => {
+        if (n.id !== id) return n;
+        const next: Record<string, unknown> = { ...n };
+        for (const [k, v] of Object.entries(changes)) {
+          if (v === null) delete next[k];
+          else if (v !== undefined) next[k] = v;
+        }
+        return next as LocalNode;
+      });
+      session.writeJson(path, { ...diagram, local: { ...diagram.local, nodes } });
+      return { id, file: session.display(path) };
+    },
+  }),
+
+  tool({
+    name: 'add_local_edge',
+    title: 'Add transition / flow / note link',
+    description:
+      'Connect two nodes on a canvas diagram with a diagram-local edge: "transition" (state machines, label "trigger [guard] / effect"), "flow" (activities, label "[guard]"), "interrupt" (an interrupting edge leaving an interruptible region, drawn as a lightning bolt), or "anchor" (dashed line from a note to anything). Ends are local node ids or element refs on the diagram.',
+    input: z.object({ diagram: z.string(), kind: LocalEdgeKindSchema, from: IdSchema, to: IdSchema, label: z.string().optional(), id: IdSchema.optional() }),
+    readOnly: false,
+    confirm: (i) => `Add ${i.kind} ${i.from} → ${i.to}?`,
+    run(session, input) {
+      const path = canvasPath(session, input.diagram);
+      const diagram = session.canvasDiagram(path);
+      const ends = new Set([...diagram.local.nodes.map((n) => n.id), ...diagram.nodes.map((n) => n.ref)]);
+      for (const end of [input.from, input.to]) if (!ends.has(end)) throw new OpError(`"${end}" is not on ${session.display(path)}.`);
+      const taken = new Set([...diagram.local.nodes.map((n) => n.id), ...diagram.local.edges.map((e) => e.id)]);
+      if (input.id && taken.has(input.id)) throw new OpError(`Id "${input.id}" is already used on this diagram.`);
+      const id = input.id ?? uniqueId(`${input.from}-${input.to}`, taken);
+      const edge = compact({ id, kind: input.kind, from: input.from, to: input.to, label: input.label, waypoints: [] }) as LocalEdge;
+      session.writeJson(path, { ...diagram, local: { ...diagram.local, edges: [...diagram.local.edges, edge] } });
+      return { id, file: session.display(path) };
+    },
+  }),
+
+  tool({
+    name: 'update_local_edge',
+    title: 'Update transition / flow',
+    description: 'Change the label or kind of a diagram-local edge (null clears the label).',
+    input: z.object({ diagram: z.string(), id: IdSchema, label: z.string().nullable().optional(), kind: LocalEdgeKindSchema.optional() }),
+    readOnly: false,
+    confirm: (i) => `Update ${i.id} on ${i.diagram}?`,
+    run(session, { diagram: name, id, label, kind }) {
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      if (!diagram.local.edges.some((e) => e.id === id)) throw new OpError(`Unknown local edge "${id}".`);
+      const edges = diagram.local.edges.map((e) => {
+        if (e.id !== id) return e;
+        const next: Record<string, unknown> = { ...e, ...(kind ? { kind } : {}) };
+        if (label === null || label === '') delete next.label;
+        else if (label !== undefined) next.label = label;
+        return next as LocalEdge;
+      });
+      session.writeJson(path, { ...diagram, local: { ...diagram.local, edges } });
+      return { id, file: session.display(path) };
+    },
+  }),
+
+  tool({
+    name: 'set_edge_waypoints',
+    title: 'Route an edge',
+    description: 'Set the bend points of an edge on a canvas diagram (absolute coordinates; [] for a straight line). `id` is a relationship ref or a local edge id.',
+    input: z.object({ diagram: z.string(), id: IdSchema, waypoints: z.array(z.object({ x: z.number(), y: z.number() })) }),
+    readOnly: false,
+    confirm: (i) => `Re-route ${i.id} on ${i.diagram}?`,
+    run(session, { diagram: name, id, waypoints }) {
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      const points = waypoints.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+      let found = false;
+      const edges = diagram.edges.map((e) => (e.ref === id ? ((found = true), { ...e, waypoints: points }) : e));
+      const localEdges = diagram.local.edges.map((e) => (e.id === id ? ((found = true), { ...e, waypoints: points }) : e));
+      if (!found) throw new OpError(`No edge "${id}" on ${session.display(path)}.`);
+      session.writeJson(path, { ...diagram, edges, local: { ...diagram.local, edges: localEdges } });
+      return { id, file: session.display(path), waypoints: points.length };
+    },
+  }),
+
+  tool({
+    name: 'set_label_offset',
+    title: 'Move a label',
+    description:
+      'Move a label on a canvas diagram away from its default place: the label of an edge (`id` is a relationship ref or a local edge id) or the outer name of a local node (entry / exit point, pin, decision, accept time event). `offset` is relative to the default place; null puts the label back. A moved label is tied to its line or shape by a dotted line.',
+    input: z.object({ diagram: z.string(), id: IdSchema, offset: z.object({ x: z.number(), y: z.number() }).nullable() }),
+    readOnly: false,
+    confirm: (i) => `Move the label of ${i.id} on ${i.diagram}?`,
+    run(session, { diagram: name, id, offset }) {
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      const value = offset && (Math.round(offset.x) || Math.round(offset.y)) ? { x: Math.round(offset.x), y: Math.round(offset.y) } : undefined;
+      const apply = <T extends { labelOffset?: { x: number; y: number } }>(e: T): T => {
+        found = true;
+        const { labelOffset: _, ...rest } = e;
+        return (value ? { ...rest, labelOffset: value } : rest) as T;
+      };
+      let found = false;
+      const edges = diagram.edges.map((e) => (e.ref === id ? apply(e) : e));
+      const localEdges = diagram.local.edges.map((e) => (e.id === id ? apply(e) : e));
+      const localNodes = diagram.local.nodes.map((n) => (n.id === id ? apply(n) : n));
+      if (!found) throw new OpError(`No edge or local node "${id}" on ${session.display(path)}.`);
+      session.writeJson(path, { ...diagram, edges, local: { ...diagram.local, nodes: localNodes, edges: localEdges } });
+      return { id, file: session.display(path), moved: value !== undefined };
+    },
+  }),
+
+  tool({
+    name: 'auto_layout',
+    title: 'Auto-layout diagram',
+    description: 'Arrange all nodes of a canvas diagram automatically (ELK layered layout; containers keep their children; edges become straight). direction: DOWN (default), RIGHT, UP, LEFT.',
+    input: z.object({ diagram: z.string(), direction: z.enum(['DOWN', 'RIGHT', 'UP', 'LEFT']).default('DOWN') }),
+    readOnly: false,
+    confirm: (i) => `Re-arrange ${i.diagram} automatically?`,
+    async run(session, { diagram: name, direction }) {
+      const path = canvasPath(session, name);
+      const laid = await autoLayout(session.canvasDiagram(path), session.model(), direction);
+      session.writeJson(path, laid);
+      return { file: session.display(path), nodes: laid.nodes.length + laid.local.nodes.length };
+    },
+  }),
+
+  tool({
+    name: 'write_data_table',
+    title: 'Write structured table',
+    description: `Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items). Rows are objects of field -> text; numbers, comma-separated lists and "key: value" maps are converted per field. Rows without an id get one. Lists:\n${DATA_LIST_HELP}`,
+    input: z.object({
+      list: DataListSchema,
+      rows: z.array(z.record(z.string(), z.string())),
+      columns: z
+        .array(
+          z.object({
+            field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'column fields are identifiers like "owner"'),
+            label: z.string(),
+            width: z.number().positive().max(100).optional().describe('Column width in percent of the table; omit for automatic'),
+          }),
+        )
+        .describe('Visible columns in order; omit to keep the current layout')
+        .optional(),
+      merges: z
+        .array(z.object({ row: z.string().describe('Key of the top row'), field: z.string(), rows: z.number().int().positive(), cols: z.number().int().positive() }))
+        .describe('Merged cells (spreadsheet style); omit to keep the current ones')
+        .optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Save the ${i.list} table (${i.rows.length} rows)?`,
+    run(session, { list, rows, columns, merges }) {
+      const def = listByName(list)!;
+      const schema = DATA_LISTS[list].schema;
+      const doc = parseDocument(session.read(def.file) ?? `${def.key}: []\n`);
+      if (doc.errors.length > 0) throw new OpError(`${def.file} has syntax errors: ${doc.errors[0]!.message}`);
+      const fields = new Map(def.fields.map((f) => [f.field, f]));
+      const label = (field: string) => fields.get(field)?.label ?? columns?.find((c) => c.field === field)?.label ?? field;
+      const taken = new Set(rows.map((r) => r[def.keyField]?.trim()).filter((v): v is string => !!v));
+
+      const items = rows.map((row, i) => {
+        const item: Record<string, unknown> = {};
+        for (const [field, text] of Object.entries(row)) {
+          try {
+            const value = parseCell(text, fields.get(field)?.type);
+            if (value !== undefined) item[field] = value;
+          } catch (e) {
+            throw new OpError(`Row ${i + 1}, ${label(field)}: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+        if (item[def.keyField] === undefined) {
+          if (!def.idPrefix) throw new OpError(`Row ${i + 1} needs a ${label(def.keyField)}.`);
+          const id = uniqueId(`${def.idPrefix}${i + 1}`, taken);
+          taken.add(id);
+          item[def.keyField] = id;
+        }
+        for (const f of def.fields) {
+          if (f.required && item[f.field] === undefined) throw new OpError(`Row ${i + 1}: "${f.label}" is required.`);
+        }
+        // Readable YAML: key field, then the list's fields in catalog order, then custom fields.
+        const order = [def.keyField, ...def.fields.map((f) => f.field)];
+        return Object.fromEntries(Object.entries(item).sort(([a], [b]) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999)));
+      });
+      const keys = items.map((it) => String(it[def.keyField]));
+      const dup = keys.find((k, i) => keys.indexOf(k) !== i);
+      if (dup) throw new OpError(`Two rows have the ${label(def.keyField)} "${dup}".`);
+
+      doc.set(def.key, doc.createNode(items));
+      const seq = doc.get(def.key, true);
+      if (isSeq(seq)) seq.flow = false;
+      if (columns || merges) {
+        // The table layout (custom columns, order, labels, merged cells) lives in `views.<list key>`.
+        const current = ((doc.toJS() as Record<string, any>)?.views?.[def.key] ?? {}) as { columns?: unknown; merges?: unknown };
+        const defaults = defaultColumns(def);
+        const cols = columns ?? (current.columns as typeof columns);
+        const isDefault =
+          !cols || (cols.length === defaults.length && cols.every((c, i) => c.field === defaults[i]!.field && c.label === defaults[i]!.label && c.width === undefined));
+        const mergeList = merges ?? (current.merges as typeof merges) ?? [];
+        const view: Record<string, unknown> = {};
+        if (!isDefault) view.columns = cols;
+        if (mergeList.length > 0) view.merges = mergeList;
+        if (Object.keys(view).length > 0) doc.setIn(['views', def.key], doc.createNode(view));
+        else if (doc.hasIn(['views', def.key])) doc.deleteIn(['views', def.key]);
+        const views = doc.get('views', true);
+        if (isMap(views) && views.items.length === 0) doc.delete('views');
+      }
+
+      const check = schema.safeParse(doc.toJS());
+      if (!check.success) {
+        const problems = check.error.issues.map((issue) => {
+          const [, index, field] = issue.path;
+          return typeof index === 'number' ? `Row ${index + 1}${field ? `, ${label(String(field))}` : ''}: ${issue.message}` : issue.message;
+        });
+        throw new OpError(`Not saved: ${problems.join('; ')}`);
+      }
+      session.writeDocument(def.file, doc);
+      return { file: session.display(def.file), rows: items.length };
+    },
+  }),
+
+
+  // -------------------------------------------------------------------------------------------
+  // chapters (the document's text): read, write, edit, place diagrams / tables in them
+
+  tool({
+    name: 'get_section',
+    title: 'Read a chapter',
+    description:
+      'The Markdown of an arc42 chapter (its file in sections/), with the generated parts as directives: <!-- archery:diagram diagrams/x.uml.json caption="..." -->, <!-- archery:table data/x.yaml caption="..." -->, <!-- archery:caption "..." --> before a Markdown table, <!-- archery:decisions decisions -->, <!-- archery:help ... --> (arc42 guidance, keep it).',
+    input: z.object({ section: z.string().describe('Chapter number ("5"), id ("building-block-view") or title') }),
+    readOnly: true,
+    run(session, { section }) {
+      const s = resolveSection(session, section);
+      return { number: s.number, id: s.id, title: s.title, file: session.display(s.file), markdown: session.read(s.file) ?? '' };
+    },
+  }),
+
+  tool({
+    name: 'write_section',
+    title: 'Write a chapter',
+    description:
+      'Replace the whole Markdown of a chapter (keep its "# Title" line, the archery:help guidance and the directives you do not mean to remove). Prefer edit_section for changes to part of a chapter. The open document shows the chapter while it changes.',
+    input: z.object({ section: z.string(), markdown: z.string() }),
+    readOnly: false,
+    confirm: (i) => `Rewrite chapter ${i.section}?`,
+    run(session, { section, markdown }) {
+      const s = resolveSection(session, section);
+      session.write(s.file, markdown.endsWith('\n') ? markdown : `${markdown}\n`);
+      return { file: session.display(s.file), message: `Wrote chapter ${s.number ?? ''} ${s.title}.`.replace('  ', ' ') };
+    },
+  }),
+
+  tool({
+    name: 'edit_section',
+    title: 'Edit a chapter',
+    description:
+      'Change part of a chapter: replace the exact text `find` with `replace` (once; `all` for every occurrence). `find` must occur in the chapter (get_section shows it). To add text, find the line it goes after and replace it with that line plus the new text. The open document scrolls to the chapter and highlights the change.',
+    input: z.object({
+      section: z.string(),
+      find: z.string().min(1),
+      replace: z.string(),
+      all: z.boolean().default(false),
+    }),
+    readOnly: false,
+    confirm: (i) => `Edit chapter ${i.section}?`,
+    run(session, { section, find, replace, all }) {
+      const s = resolveSection(session, section);
+      const text = session.read(s.file) ?? '';
+      const count = text.split(find).length - 1;
+      if (count === 0) throw new OpError(`The text to replace was not found in chapter ${s.number ?? s.id}. Call get_section and copy it exactly.`);
+      if (count > 1 && !all) throw new OpError(`The text occurs ${count} times in chapter ${s.number ?? s.id}; give more context or set all: true.`);
+      session.write(s.file, all ? text.split(find).join(replace) : text.replace(find, () => replace));
+      return { file: session.display(s.file), replaced: all ? count : 1 };
+    },
+  }),
+
+  tool({
+    name: 'insert_into_section',
+    title: 'Place a diagram or table in a chapter',
+    description:
+      'Show a diagram, a data table or the list of architecture decisions in a chapter, with an optional caption: at the end of the part under `after_heading` (a heading text of the chapter), else at the end of the chapter. To remove one again, use edit_section on its <!-- archery:... --> line.',
+    input: z.object({
+      section: z.string(),
+      kind: z.enum(['diagram', 'table', 'decisions']),
+      src: z.string().optional().describe('diagram: its name or file, e.g. "order-flow"; table: a data list name (quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)'),
+      caption: z.string().optional(),
+      after_heading: z.string().optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Show ${i.kind}${i.src ? ` ${i.src}` : ''} in chapter ${i.section}?`,
+    run(session, input) {
+      const s = resolveSection(session, input.section);
+      let directive: string;
+      if (input.kind === 'diagram') {
+        if (!input.src) throw new OpError('Which diagram? Give its name in src.');
+        const path = session.resolveDiagram(input.src);
+        directive = `<!-- archery:diagram ${path}${input.caption ? ` caption=${JSON.stringify(input.caption.replaceAll('-->', '- ->'))}` : ''} -->`;
+      } else if (input.kind === 'table') {
+        const list = DataListSchema.safeParse(input.src);
+        if (!list.success) throw new OpError(`Unknown data list "${input.src}". Lists: ${Object.keys(DATA_LISTS).join(', ')}.`);
+        const def = DATA_LISTS[list.data];
+        const shared = Object.values(DATA_LISTS).filter((d) => d.file === def.file).length > 1;
+        const src = shared ? `${def.file}#${def.key}` : def.file;
+        directive = `<!-- archery:table ${src}${input.caption ? ` caption=${JSON.stringify(input.caption.replaceAll('-->', '- ->'))}` : ''} -->`;
+      } else directive = '<!-- archery:decisions decisions -->';
+      const lines = (session.read(s.file) ?? '').replace(/\s+$/, '').split('\n');
+      let at = lines.length;
+      if (input.after_heading) {
+        const want = input.after_heading.trim().toLowerCase();
+        const level = (l: string) => /^(#{1,6})\s/.exec(l)?.[1]?.length ?? 0;
+        const start = lines.findIndex((l) => level(l) > 0 && l.replace(/^#+\s*/, '').trim().toLowerCase() === want);
+        if (start < 0) throw new OpError(`No heading "${input.after_heading}" in chapter ${s.number ?? s.id}.`);
+        const end = lines.findIndex((l, i) => i > start && level(l) > 0 && level(l) <= level(lines[start]!));
+        at = end < 0 ? lines.length : end;
+        while (at > start + 1 && lines[at - 1]!.trim() === '') at--;
+      }
+      lines.splice(at, 0, '', directive, ...(at < lines.length ? [''] : []));
+      session.write(s.file, `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`);
+      return { file: session.display(s.file), inserted: directive };
+    },
+  }),
+
+  tool({
+    name: 'create_decision',
+    title: 'Record an architecture decision',
+    description: 'Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.',
+    input: z.object({
+      title: z.string().min(1).describe('What was decided, e.g. "Use PostgreSQL for order data"'),
+      status: AdrFrontMatterSchema.shape.status.optional(),
+      context: z.string().optional(),
+      decision: z.string().optional(),
+      consequences: z.string().optional(),
+      qualityGoals: z.array(IdSchema).optional().describe('Ids of the quality goals it addresses'),
+      constraints: z.array(IdSchema).optional().describe('Ids of the constraints it addresses'),
+    }),
+    readOnly: false,
+    confirm: (i) => `Record decision "${i.title}"?`,
+    run(session, input) {
+      const numbers = session.files('decisions').map((p) => Number(/\/(\d{4})-/.exec(p)?.[1] ?? 0));
+      const number = String(Math.max(0, ...numbers) + 1).padStart(4, '0');
+      const slug = input.title.trim().toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'decision';
+      const file = `decisions/${number}-${slug}.md`;
+      const list = (v?: string[]) => (v?.length ? `[${v.join(', ')}]` : '[]');
+      const text = `---\nstatus: ${input.status ?? 'proposed'}\ndate: ${new Date().toISOString().slice(0, 10)}\nqualityGoals: ${list(input.qualityGoals)}\nconstraints: ${list(input.constraints)}\n---\n\n# ${input.title.trim()}\n\n## Context\n\n${input.context?.trim() ?? ''}\n\n## Decision\n\n${input.decision?.trim() ?? ''}\n\n## Consequences\n\n${input.consequences?.trim() ?? ''}\n`.replace(/\n{3,}/g, '\n\n');
+      session.write(file, text);
+      return { file: session.display(file), number };
+    },
+  }),
+
+  // -------------------------------------------------------------------------------------------
+  // diagrams: arrange
+
+  tool({
+    name: 'align_nodes',
+    title: 'Align or distribute diagram nodes',
+    description:
+      'Line up shapes on a canvas diagram: left / centerH (centers on a vertical line) / right / top / middle (centers on a horizontal line) / bottom edges, or distributeH / distributeV (equal gaps, needs 3 or more). `ids` are element refs or diagram-local node ids; ports, pins and entry / exit points stay on their parent.',
+    input: z.object({ diagram: z.string(), ids: z.array(IdSchema).min(2), mode: z.enum(ALIGN_MODES as [AlignMode, ...AlignMode[]]) }),
+    readOnly: false,
+    confirm: (i) => `Arrange ${i.ids.length} nodes on ${i.diagram} (${i.mode})?`,
+    run(session, { diagram: name, ids, mode }) {
+      const path = canvasPath(session, name);
+      const diagram = session.canvasDiagram(path);
+      const laid = layoutNodes(diagram, session.model());
+      const missing = ids.filter((id) => !laid.has(id));
+      if (missing.length) throw new OpError(`Not on ${session.display(path)}: ${missing.join(', ')}`);
+      const boxes = ids.map((id) => laid.get(id)!).filter((n) => !n.side).map((n) => ({ id: n.id, ...n.box }));
+      if (mode.startsWith('distribute') && boxes.length < 3) throw new OpError('Distributing needs 3 or more shapes.');
+      const moves = new Map(alignBoxes(boxes, mode).map((m) => [m.id, m]));
+      const at = <T extends { x: number; y: number }>(n: T, id: string): T => {
+        const m = moves.get(id);
+        return m ? { ...n, x: m.x, y: m.y } : n;
+      };
+      session.writeJson(path, { ...diagram, nodes: diagram.nodes.map((n) => at(n, n.ref)), local: { ...diagram.local, nodes: diagram.local.nodes.map((n) => at(n, n.id)) } });
+      return { file: session.display(path), moved: moves.size };
+    },
+  }),
+
+  // -------------------------------------------------------------------------------------------
+  // versions and export (need VS Code with Archery: Copilot runs in it; the MCP server reaches it)
+
+  tool({
+    name: 'list_versions',
+    title: 'Versions and releases',
+    description: 'The current version of the documentation and its releases (and backups made before a restore).',
+    input: z.object({}),
+    readOnly: true,
+    run: (session) => needHost(session).versions(),
+  }),
+
+  tool({
+    name: 'release_version',
+    title: 'Release a version',
+    description: 'Release the current state as the next major version (e.g. v3.0) with a change log entry; it is added to the change history at the end of the document. Only when something changed since the last release.',
+    input: z.object({ note: z.string().min(1).describe('Change log entry, e.g. "Added the deployment view"') }),
+    readOnly: false,
+    confirm: (i) => `Release a new version ("${i.note}")?`,
+    run: async (session, { note }) => ({ version: await needHost(session).release(note.trim()) }),
+  }),
+
+  tool({
+    name: 'restore_version',
+    title: 'Restore a release',
+    description: 'Replace all documentation files by an earlier release (list_versions). The current state is kept as a backup version first, so this can be undone by restoring that one.',
+    input: z.object({ version: z.string().describe('e.g. "2.0"') }),
+    readOnly: false,
+    confirm: (i) => `Restore v${i.version}? All documentation files are replaced (the current state is kept as a backup).`,
+    run: async (session, { version }) => ({ version: await needHost(session).restore(version.replace(/^v/, '')) }),
+  }),
+
+  tool({
+    name: 'export_document',
+    title: 'Export the document (PDF or HTML)',
+    description:
+      'Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, ...); they are saved for the next export.',
+    input: z.object({ format: z.enum(['pdf', 'html']), file: z.string().optional(), settings: ExportSettingsSchema.optional() }),
+    readOnly: false,
+    confirm: (i) => `Export the document as ${i.format.toUpperCase()}${i.file ? ` to ${i.file}` : ''}?`,
+    run: async (session, { format, file, settings }) => ({ file: await needHost(session).exportDocument(format, file, settings as Record<string, unknown> | undefined) }),
+  }),
+
+  tool({
+    name: 'export_diagram',
+    title: 'Export a diagram (SVG or PNG)',
+    description: 'Export one diagram as an SVG or PNG image. `file`: where to write it, relative to the workspace (default: next to the diagram file).',
+    input: z.object({ diagram: z.string(), format: z.enum(['svg', 'png']), theme: z.enum(['light', 'dark']).default('light'), file: z.string().optional() }),
+    readOnly: false,
+    confirm: (i) => `Export ${i.diagram} as ${i.format.toUpperCase()}?`,
+    run: async (session, { diagram, format, theme, file }) => ({ file: await needHost(session).exportDiagram(session.resolveDiagram(diagram), format, theme, file) }),
+  }),
+];
+
+/** Not session-based: creates the docs/architecture folder. Each front-end implements it with `scaffold()`. */
+export const INITIALIZE_TOOL = {
+  name: 'initialize',
+  title: 'Initialize architecture documentation',
+  description:
+    'Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet. Existing files are never overwritten.',
+  input: z.object({
+    system: z.string().min(1).describe('Name of the system being documented'),
+    includeHelp: z.boolean().default(true).describe('Embed the arc42 help texts as hidden comments in the section files'),
+  }),
+};
+
+export const ALL_TOOL_NAMES = [INITIALIZE_TOOL.name, ...TOOLS.map((t) => t.name)];
+
+export const SERVER_INSTRUCTIONS = `Tools for architecture documentation (docs-as-code, https://arc42.org).
+- Start with overview. Before writing a chapter, call get_section_guide for it; read and change chapters with get_section, edit_section and write_section (the open document then shows each change live), and place diagrams and tables in them with insert_into_section.
+- Change model.yaml, diagrams/*.json and data/*.yaml only through these tools: they keep ids stable, update references across files and validate the result.
+- Model elements are defined once and referenced by id from diagrams; renaming an element (update_element) renames it everywhere.
+- Section 6 runtime scenarios: write_sequence_diagram (or an activity diagram). Sections 5/7: create_diagram with type component/deployment; place elements with add_element(diagram, x, y) or add_to_diagram, nest with parent, then auto_layout.
+- State machines and activity diagrams are diagram-local: create_diagram(type state|activity), add_local_node, add_local_edge (transition/flow), then auto_layout.
+- Class diagrams: classes with attributes/operations/typeParams via add_element/update_element; associations with multiplicity, roles, qualifier, navigable and associationClass via add_relationship/update_relationship.
+- Call validate after a series of changes and fix reported problems.`;
+
+export type { DataListName };
+export { DATA_LISTS };

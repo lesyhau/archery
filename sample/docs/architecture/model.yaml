@@ -1,0 +1,272 @@
+# Shared architecture model. Diagrams reference elements and relationships by id.
+# Element kinds: actor | externalSystem | component | interface | package | node | executionEnvironment | artifact | class | enum
+# Relationship kinds: association | aggregation | composition | generalization | realization | dependency | usage | connector | deploy
+elements:
+  - id: customer
+    kind: actor
+    name: Customer
+  - id: webshop
+    kind: package
+    name: Webshop
+    description: The system under design.
+  - id: storefront
+    kind: component
+    name: Storefront
+    parent: webshop
+    description: Web UI for browsing and ordering.
+  - id: orderService
+    kind: component
+    name: Order Service
+    parent: webshop
+    stereotype: service
+    description: Accepts and validates orders.
+    detail: diagrams/order-service-internals.uml.json
+  - id: payments
+    kind: interface
+    name: Payments
+  - id: paymentGateway
+    kind: externalSystem
+    name: Payment Gateway
+    description: Third-party payment provider.
+  - id: api
+    kind: port
+    name: api
+    parent: orderService
+  - id: ucPlaceOrder
+    kind: usecase
+    name: Place order
+    extensionPoints:
+      - payment failed
+  - id: ucPay
+    kind: usecase
+    name: Pay
+  - id: ucRetryPayment
+    kind: usecase
+    name: Retry payment
+  - id: kubernetesCluster
+    kind: node
+    name: Kubernetes cluster
+    stereotype: cloud
+  - id: webPod
+    kind: executionEnvironment
+    name: web pod
+    parent: kubernetesCluster
+  - id: ordersPod
+    kind: executionEnvironment
+    name: orders pod
+    parent: kubernetesCluster
+  - id: storefrontJar
+    kind: artifact
+    name: storefront.jar
+    parent: webPod
+  - id: ordersJar
+    kind: artifact
+    name: orders.jar
+    parent: ordersPod
+  - id: postgreSQL
+    kind: node
+    name: PostgreSQL
+    stereotype: database
+  - id: order
+    kind: class
+    name: Order
+    attributes:
+      - name: id
+        type: UUID
+        visibility: "-"
+      - name: total
+        type: Money
+        visibility: +
+        derived: true
+    operations:
+      - name: submit
+        visibility: +
+      - name: cancel
+        params:
+          - name: reason
+            type: String
+        visibility: +
+  - id: orderLine
+    kind: class
+    name: OrderLine
+    attributes:
+      - name: quantity
+        type: int
+        visibility: "-"
+  - id: product
+    kind: class
+    name: Product
+    attributes:
+      - name: sku
+        type: String
+        visibility: "-"
+      - name: price
+        type: Money
+        visibility: "-"
+  - id: orderStatus
+    kind: enum
+    name: OrderStatus
+    literals:
+      - NEW
+      - PAID
+      - SHIPPED
+      - CANCELLED
+  - id: repository
+    kind: interface
+    name: Repository
+    operations:
+      - name: find
+        params:
+          - name: id
+            type: UUID
+        returns: T
+        visibility: +
+      - name: save
+        params:
+          - name: item
+            type: T
+        visibility: +
+    typeParams:
+      - T
+  - id: catalog
+    kind: class
+    name: Catalog
+  - id: discount
+    kind: class
+    name: Discount
+  - id: order42
+    kind: instance
+    name: order42
+    classifier: order
+    slots:
+      - name: id
+        value: "42"
+      - name: total
+        value: 59.90 EUR
+  - id: line1
+    kind: instance
+    name: line1
+    classifier: orderLine
+    slots:
+      - name: quantity
+        value: "2"
+  - id: book
+    kind: instance
+    name: book
+    classifier: product
+    slots:
+      - name: sku
+        value: B-123
+      - name: price
+        value: 29.95 EUR
+  - id: orderValidator
+    kind: class
+    name: OrderValidator
+    description: Checks stock, prices and limits.
+  - id: validator
+    kind: part
+    name: validator
+    parent: orderService
+    classifier: orderValidator
+  - id: store
+    kind: part
+    name: store
+    parent: orderService
+    classifier: repository
+    multiplicity: "1"
+    reference: true
+relationships:
+  - id: r3
+    kind: association
+    from: customer
+    to: storefront
+    label: uses
+  - id: r2
+    kind: dependency
+    from: storefront
+    to: api
+    label: placeOrder()
+  - id: r1
+    kind: usage
+    from: orderService
+    to: payments
+  - id: r4
+    kind: realization
+    from: paymentGateway
+    to: payments
+  - id: customer-ucPlaceOrder
+    kind: association
+    from: customer
+    to: ucPlaceOrder
+  - id: ucPlaceOrder-ucPay
+    kind: dependency
+    from: ucPlaceOrder
+    to: ucPay
+    stereotype: include
+  - id: ucRetryPayment-ucPlaceOrder
+    kind: dependency
+    from: ucRetryPayment
+    to: ucPlaceOrder
+    stereotype: extend
+    condition: card declined
+    extensionPoint: payment failed
+  - id: storefrontJar-storefront
+    kind: deploy
+    from: storefrontJar
+    to: storefront
+  - id: ordersPod-postgreSQL
+    kind: connector
+    from: ordersPod
+    to: postgreSQL
+    label: JDBC/TLS
+  - id: webPod-ordersPod
+    kind: connector
+    from: webPod
+    to: ordersPod
+    label: HTTPS
+  - id: order-orderLine
+    kind: composition
+    from: order
+    to: orderLine
+    multiplicity:
+      from: "1"
+      to: 1..*
+    roles:
+      to: lines
+  - id: orderLine-product
+    kind: association
+    from: orderLine
+    to: product
+    multiplicity:
+      to: "1"
+    navigable:
+      to: true
+    associationClass: discount
+  - id: catalog-product
+    kind: association
+    from: catalog
+    to: product
+    multiplicity:
+      to: 0..1
+    qualifier:
+      from: sku
+  - id: order-orderStatus
+    kind: dependency
+    from: order
+    to: orderStatus
+  - id: order42-line1
+    kind: link
+    from: order42
+    to: line1
+  - id: line1-book
+    kind: link
+    from: line1
+    to: book
+  - id: api-validator
+    kind: connector
+    from: api
+    to: validator
+  - id: validator-store
+    kind: connector
+    from: validator
+    to: store

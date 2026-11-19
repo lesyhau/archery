@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "type": "object",
+  "title": "Example order",
+  "nodes": [
+    {
+      "ref": "order42",
+      "x": 40,
+      "y": 40
+    },
+    {
+      "ref": "line1",
+      "x": 360,
+      "y": 40
+    },
+    {
+      "ref": "book",
+      "x": 660,
+      "y": 40
+    }
+  ],
+  "edges": [
+    {
+      "ref": "order42-line1",
+      "waypoints": []
+    },
+    {
+      "ref": "line1-book",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

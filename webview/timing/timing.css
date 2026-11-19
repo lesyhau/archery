@@ -1,0 +1,19 @@
+/* Timing diagram editor; the rest comes from ../sequence/sequence.css and ../diagram/diagram.css. */
+.seq-overlay .timing-hint {
+  fill: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.seq-overlay .timing-time {
+  fill: var(--vscode-focusBorder);
+  font-family: var(--vscode-font-family);
+  font-size: 11px;
+}
+
+.inspector .field-grid input,
+.inspector .field-grid select {
+  width: 100%;
+  min-width: 0;
+}

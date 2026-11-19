@@ -1,0 +1,3 @@
+# Section 2 - architecture constraints.
+# Fields: id, category (technical | organizational | convention), constraint, explanation
+constraints: []

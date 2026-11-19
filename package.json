@@ -1,0 +1,3531 @@
+{
+  "name": "archery",
+  "displayName": "Archery",
+  "description": "Architecture docs as code in VS Code: an arc42 document with a model-based UML editor for all 13 UML 2 diagram types, PDF/HTML export, and tools for Claude Code and GitHub Copilot that show their edits live.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "lesyhau",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#164E63",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lesyhau/archery.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lesyhau/archery/issues"
+  },
+  "homepage": "https://github.com/lesyhau/archery#readme",
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Visualization",
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/archery.yaml",
+    "onWebviewPanel:archery.diagram"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "archery.diagramEditor",
+        "displayName": "Archery Diagram Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.uml.json"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "archery.sequenceEditor",
+        "displayName": "Archery Sequence Diagram Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.seq.json"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "archery.timingEditor",
+        "displayName": "Archery Timing Diagram Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.timing.json"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "archery.init",
+        "title": "Initialize Architecture Documentation",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.refresh",
+        "title": "Refresh",
+        "category": "Archery",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "archery.setupClaudeCode",
+        "title": "Set up Claude Code (MCP server)",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.openDocument",
+        "title": "Open Document",
+        "category": "Archery",
+        "icon": "$(book)"
+      },
+      {
+        "command": "archery.openSectionSource",
+        "title": "Open Markdown Source",
+        "category": "Archery",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "archery.release",
+        "title": "Release (new major version)",
+        "category": "Archery",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "archery.rollback",
+        "title": "Restore a Release",
+        "category": "Archery",
+        "icon": "$(history)"
+      },
+      {
+        "command": "archery.versionMenu",
+        "title": "Version",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.exportDiagram",
+        "title": "Export Diagram (SVG/PNG)",
+        "category": "Archery",
+        "icon": "$(export)"
+      },
+      {
+        "command": "archery.newDiagram",
+        "title": "New Diagram",
+        "category": "Archery",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "archery.editDiagram",
+        "title": "Edit Diagram",
+        "category": "Archery",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "archery.exportDocument",
+        "title": "Export Document (PDF or HTML)",
+        "category": "Archery",
+        "icon": "$(file-pdf)",
+        "enablement": "archery.hasRoot"
+      },
+      {
+        "command": "archery.openDiagramSource",
+        "title": "Open Source",
+        "category": "Archery",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "archery",
+          "title": "Archery",
+          "icon": "media/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "archery": [
+        {
+          "id": "archery.contents",
+          "name": "Contents"
+        },
+        {
+          "id": "archery.diagrams",
+          "name": "Diagrams"
+        },
+        {
+          "type": "webview",
+          "id": "archery.diagramTools",
+          "name": "Diagram Tools"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "archery.contents",
+        "contents": "No architecture documentation found in this workspace (looking for an archery.yaml file).\n[Initialize architecture documentation](command:archery.init)",
+        "when": "!archery.hasRoot"
+      },
+      {
+        "view": "archery.diagrams",
+        "contents": "No diagrams yet.\n[New diagram](command:archery.newDiagram)",
+        "when": "archery.hasRoot && !archery.hasDiagrams"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "archery.openDocument",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archery.newDiagram",
+          "when": "view == archery.diagrams && archery.hasRoot",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archery.exportDocument",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archery.release",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "versions@1"
+        },
+        {
+          "command": "archery.rollback",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "versions@2"
+        },
+        {
+          "command": "archery.refresh",
+          "when": "view == archery.contents",
+          "group": "z@9"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "archery.exportDiagram",
+          "when": "view == archery.diagrams && viewItem == diagram",
+          "group": "navigation"
+        },
+        {
+          "command": "archery.openSectionSource",
+          "when": "view == archery.contents && viewItem == heading",
+          "group": "inline"
+        },
+        {
+          "command": "archery.openSectionSource",
+          "when": "view == archery.contents && viewItem == heading",
+          "group": "navigation"
+        },
+        {
+          "command": "archery.openDiagramSource",
+          "when": "view == archery.diagrams && viewItem == diagram",
+          "group": "inline"
+        },
+        {
+          "command": "archery.openDiagramSource",
+          "when": "view == archery.diagrams && viewItem == diagram",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "archery.versionMenu",
+          "when": "false"
+        },
+        {
+          "command": "archery.editDiagram",
+          "when": "false"
+        },
+        {
+          "command": "archery.openSectionSource",
+          "when": "false"
+        },
+        {
+          "command": "archery.openDiagramSource",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "archery.exportDiagram",
+          "when": "activeCustomEditorId == archery.diagramEditor || activeCustomEditorId == archery.sequenceEditor || activeCustomEditorId == archery.timingEditor || activeWebviewPanelId == archery.diagram",
+          "group": "navigation"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "archery.assistant",
+        "name": "archery",
+        "fullName": "Archery",
+        "description": "Ask about or edit your architecture documentation",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "check",
+            "description": "Validate the documentation and explain the problems"
+          },
+          {
+            "name": "section",
+            "description": "Review a section against the arc42 template, e.g. /section 5"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Archery",
+      "properties": {
+        "archery.canvas.snapToGrid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Snap nodes, resizing and bend points to the grid in the diagram editor."
+        },
+        "archery.canvas.showGrid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the grid in the diagram editor."
+        },
+        "archery.canvas.gridSize": {
+          "type": "number",
+          "default": 10,
+          "minimum": 2,
+          "maximum": 100,
+          "description": "Grid size in pixels for the diagram editor."
+        },
+        "archery.diagramStyle": {
+          "type": "string",
+          "enum": [
+            "classic",
+            "modern"
+          ],
+          "enumDescriptions": [
+            "The original look: square corners, straight lines, full-size arrowheads.",
+            "Rounded corners, rounded right-angle lines, smaller rounded arrowheads, muted line labels, solid activation bars and thinner outlines."
+          ],
+          "default": "classic",
+          "description": "How diagrams are drawn in the editors, the document and exports. The UML notation is the same in both styles."
+        },
+        "archery.export.browserPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to a Chromium-based browser (Edge, Chrome, Chromium, Brave) used to print the document to PDF. Empty: detect an installed one."
+        },
+        "archery.followAgent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show what AI agents (Copilot, Claude Code) change while they change it: the chapter, diagram or table comes into view first, then the change lands and is highlighted."
+        }
+      }
+    },
+    "icons": {
+      "archery-logo": {
+        "description": "Archery (UML component symbol)",
+        "default": {
+          "fontPath": "media/archery-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
+    "languageModelTools": [
+      {
+        "name": "archery_initialize",
+        "displayName": "Initialize architecture documentation",
+        "toolReferenceName": "archery-initialize",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet.",
+        "modelDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet. Existing files are never overwritten.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "system": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the system being documented"
+            },
+            "includeHelp": {
+              "default": true,
+              "description": "Embed the arc42 help texts as hidden comments in the section files",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "system"
+          ]
+        }
+      },
+      {
+        "name": "archery_overview",
+        "displayName": "Documentation overview",
+        "toolReferenceName": "archery-overview",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Summary of the architecture documentation: root folder, system name, the sections and their Markdown files, diagrams, data lists, ADRs, model size and the number of validation problems.",
+        "modelDescription": "Summary of the architecture documentation: root folder, system name, the sections and their Markdown files, diagrams, data lists, ADRs, model size and the number of validation problems. Call this first.",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "archery_get_section_guide",
+        "displayName": "arc42 section guide",
+        "toolReferenceName": "archery-get-section-guide",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "What belongs in an arc42 section according to the official template (contents, motivation, form) plus its file path.",
+        "modelDescription": "What belongs in an arc42 section according to the official template (contents, motivation, form) plus its file path. Call before writing or reviewing section prose.",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string",
+              "description": "Section number (\"5\"), id (\"building-block-view\") or title (\"Building Block View\")"
+            }
+          },
+          "required": [
+            "section"
+          ]
+        }
+      },
+      {
+        "name": "archery_get_model",
+        "displayName": "Get architecture model",
+        "toolReferenceName": "archery-get-model",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Elements and relationships of the shared architecture model (model.yaml).",
+        "modelDescription": "Elements and relationships of the shared architecture model (model.yaml). Diagrams reference these ids.",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "actor",
+                "externalSystem",
+                "usecase",
+                "component",
+                "interface",
+                "port",
+                "package",
+                "node",
+                "executionEnvironment",
+                "artifact",
+                "class",
+                "datatype",
+                "enum",
+                "naryAssociation",
+                "instance",
+                "part",
+                "collaboration",
+                "collaborationUse"
+              ],
+              "description": "Only return elements of this kind"
+            }
+          }
+        }
+      },
+      {
+        "name": "archery_add_element",
+        "displayName": "Add model element",
+        "toolReferenceName": "archery-add-element",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add an element (component, actor, external system, use case, node, class, port, ...) to the shared model.",
+        "modelDescription": "Add an element (component, actor, external system, use case, node, class, port, ...) to the shared model. The id is derived from the name unless given and never changes later. Use parent for nesting (component in package/component, port on component, artifact or execution environment in node). With `diagram` it is also placed on that canvas diagram (at x/y if given), or added as the last lifeline of that sequence diagram.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "actor",
+                "externalSystem",
+                "usecase",
+                "component",
+                "interface",
+                "port",
+                "package",
+                "node",
+                "executionEnvironment",
+                "artifact",
+                "class",
+                "datatype",
+                "enum",
+                "naryAssociation",
+                "instance",
+                "part",
+                "collaboration",
+                "collaborationUse"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+              "description": "Optional stable id; default: camelCase of the name"
+            },
+            "parent": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+              "description": "Id of the containing element"
+            },
+            "stereotype": {
+              "type": "string",
+              "description": "Optional UML stereotype without guillemets, e.g. \"service\""
+            },
+            "description": {
+              "type": "string",
+              "description": "Responsibility / short description (used in black box tables)"
+            },
+            "abstract": {
+              "type": "boolean"
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "+",
+                      "-",
+                      "#",
+                      "~"
+                    ]
+                  },
+                  "static": {
+                    "type": "boolean"
+                  },
+                  "derived": {
+                    "type": "boolean"
+                  },
+                  "multiplicity": {
+                    "type": "string"
+                  },
+                  "default": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Class attributes (kind class)"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "params": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  },
+                  "returns": {
+                    "type": "string"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "+",
+                      "-",
+                      "#",
+                      "~"
+                    ]
+                  },
+                  "static": {
+                    "type": "boolean"
+                  },
+                  "abstract": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Class operations (kind class/interface)"
+            },
+            "literals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Enum literals (kind enum)"
+            },
+            "technology": {
+              "type": "string",
+              "description": "Technology, platform or protocol, e.g. \"Spring Boot\", \"PostgreSQL 16\", \"REST/HTTPS\""
+            },
+            "version": {
+              "type": "string",
+              "description": "Version of a component or artifact"
+            },
+            "instances": {
+              "type": "string",
+              "description": "Instances of a node / execution environment / component, e.g. \"3\" or \"1..*\""
+            },
+            "responsibilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "What it is responsible for, one short point each"
+            },
+            "goals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "What an actor wants to achieve (kind actor)"
+            },
+            "scenario": {
+              "type": "object",
+              "properties": {
+                "trigger": {
+                  "type": "string"
+                },
+                "preconditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "alternatives": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "when": {
+                        "type": "string"
+                      },
+                      "steps": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "when"
+                    ]
+                  }
+                },
+                "postconditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "description": "Use case flow (kind usecase): trigger, preconditions, main steps, alternatives, postconditions"
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Invariants and constraints, without braces"
+            },
+            "tags": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Tagged values, e.g. {\"owner\": \"Team Payments\"}"
+            },
+            "classifier": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+              "description": "Type of an instance, part or collaboration use (element id), e.g. the class of an object or the node of a node instance"
+            },
+            "slots": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "value"
+                ]
+              },
+              "description": "Slot values of an instance (object diagrams)"
+            },
+            "multiplicity": {
+              "type": "string",
+              "description": "Multiplicity of a part, e.g. \"1..*\""
+            },
+            "reference": {
+              "type": "boolean",
+              "description": "A part that is a reference, not owned (drawn dashed)"
+            },
+            "extensionPoints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Extension points of a use case (kind usecase)"
+            },
+            "detail": {
+              "type": "string",
+              "description": "The diagram that shows this element in detail, e.g. \"order-service-internals\" or \"diagrams/order-service-internals.uml.json\". Other diagrams then mark the element and link to it (drill-down)."
+            },
+            "typeParams": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Generic type parameters (classes/interfaces)"
+            },
+            "diagram": {
+              "type": "string",
+              "description": "Also show it on this canvas diagram"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "h": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "name",
+            "kind"
+          ]
+        }
+      },
+      {
+        "name": "archery_update_element",
+        "displayName": "Update model element",
+        "toolReferenceName": "archery-update-element",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Rename or otherwise change an element.",
+        "modelDescription": "Rename or otherwise change an element. Renaming updates every diagram automatically because diagrams reference the id. Pass null to clear an optional field.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "actor",
+                "externalSystem",
+                "usecase",
+                "component",
+                "interface",
+                "port",
+                "package",
+                "node",
+                "executionEnvironment",
+                "artifact",
+                "class",
+                "datatype",
+                "enum",
+                "naryAssociation",
+                "instance",
+                "part",
+                "collaboration",
+                "collaborationUse"
+              ]
+            },
+            "parent": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stereotype": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Optional UML stereotype without guillemets, e.g. \"service\""
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Responsibility / short description (used in black box tables)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "abstract": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "attributes": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "+",
+                          "-",
+                          "#",
+                          "~"
+                        ]
+                      },
+                      "static": {
+                        "type": "boolean"
+                      },
+                      "derived": {
+                        "type": "boolean"
+                      },
+                      "multiplicity": {
+                        "type": "string"
+                      },
+                      "default": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ]
+                  },
+                  "description": "Class attributes (kind class)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operations": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "params": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ]
+                        }
+                      },
+                      "returns": {
+                        "type": "string"
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "+",
+                          "-",
+                          "#",
+                          "~"
+                        ]
+                      },
+                      "static": {
+                        "type": "boolean"
+                      },
+                      "abstract": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ]
+                  },
+                  "description": "Class operations (kind class/interface)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "literals": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Enum literals (kind enum)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "technology": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Technology, platform or protocol, e.g. \"Spring Boot\", \"PostgreSQL 16\", \"REST/HTTPS\""
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Version of a component or artifact"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "instances": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Instances of a node / execution environment / component, e.g. \"3\" or \"1..*\""
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "responsibilities": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "What it is responsible for, one short point each"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goals": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "What an actor wants to achieve (kind actor)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scenario": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "trigger": {
+                      "type": "string"
+                    },
+                    "preconditions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "alternatives": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "when": {
+                            "type": "string"
+                          },
+                          "steps": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "when"
+                        ]
+                      }
+                    },
+                    "postconditions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "Use case flow (kind usecase): trigger, preconditions, main steps, alternatives, postconditions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "constraints": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Invariants and constraints, without braces"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tags": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Tagged values, e.g. {\"owner\": \"Team Payments\"}"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "classifier": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+                  "description": "Type of an instance, part or collaboration use (element id), e.g. the class of an object or the node of a node instance"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "slots": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ]
+                  },
+                  "description": "Slot values of an instance (object diagrams)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "multiplicity": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Multiplicity of a part, e.g. \"1..*\""
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "A part that is a reference, not owned (drawn dashed)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "extensionPoints": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Extension points of a use case (kind usecase)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "detail": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "The diagram that shows this element in detail, e.g. \"order-service-internals\" or \"diagrams/order-service-internals.uml.json\". Other diagrams then mark the element and link to it (drill-down)."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "typeParams": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Generic type parameters (classes/interfaces)"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_delete_element",
+        "displayName": "Delete model element",
+        "toolReferenceName": "archery-delete-element",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Delete an element from the model.",
+        "modelDescription": "Delete an element from the model. Fails if it is still used (relationships, diagrams, sequence lifelines, children) unless cascade is true, which also removes those relationships, diagram nodes/edges, lifelines and their messages, and moves children to the deleted element's parent.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "cascade": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_add_relationship",
+        "displayName": "Add relationship",
+        "toolReferenceName": "archery-add-relationship",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add a relationship between two model elements.",
+        "modelDescription": "Add a relationship between two model elements. Kinds: dependency/usage (dashed arrow; use cases: stereotype \"include\" or \"extend\", an extend with condition and extensionPoint), association, aggregation, composition, generalization, realization, connector, deploy, manifest, link. By default the edge is also added to every canvas diagram that shows both elements.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "association",
+                "aggregation",
+                "composition",
+                "generalization",
+                "realization",
+                "dependency",
+                "usage",
+                "connector",
+                "deploy",
+                "link",
+                "manifest"
+              ]
+            },
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "label": {
+              "type": "string",
+              "description": "E.g. an operation \"charge()\" or protocol \"REST/HTTPS\""
+            },
+            "multiplicity": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "description": "Associations only, e.g. {from: \"1\", to: \"*\"}"
+            },
+            "stereotype": {
+              "type": "string",
+              "description": "e.g. \"include\", \"use\", \"HTTPS\""
+            },
+            "roles": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "description": "Association end (role) names"
+            },
+            "qualifier": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "description": "Qualifier at an association end, e.g. {from: \"isbn\"}"
+            },
+            "navigable": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "boolean"
+                },
+                "to": {
+                  "type": "boolean"
+                }
+              },
+              "description": "Navigable association ends (arrowheads)"
+            },
+            "associationClass": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+              "description": "Class that is the association class of this association"
+            },
+            "condition": {
+              "type": "string",
+              "description": "«extend» (dependency with stereotype \"extend\"): when the extension applies"
+            },
+            "extensionPoint": {
+              "type": "string",
+              "description": "«extend»: the extension point of the extended use case"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+              "description": "Optional stable id; default: \"<from>-<to>\""
+            },
+            "addToDiagrams": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to"
+          ]
+        }
+      },
+      {
+        "name": "archery_delete_relationship",
+        "displayName": "Delete relationship",
+        "toolReferenceName": "archery-delete-relationship",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Delete a relationship from the model and remove its edge from all diagrams.",
+        "modelDescription": "Delete a relationship from the model and remove its edge from all diagrams.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_get_diagram",
+        "displayName": "Get diagram",
+        "toolReferenceName": "archery-get-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints).",
+        "modelDescription": "Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints).",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string",
+              "description": "File name with or without extension, e.g. \"building-blocks-l1\""
+            }
+          },
+          "required": [
+            "diagram"
+          ]
+        }
+      },
+      {
+        "name": "archery_create_diagram",
+        "displayName": "Create canvas diagram",
+        "toolReferenceName": "archery-create-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create a canvas diagram (diagrams/<name>.uml.json) showing existing model elements.",
+        "modelDescription": "Create a canvas diagram (diagrams/<name>.uml.json) showing existing model elements. Relationships between the shown elements are added automatically. Types: component, package, deployment, class, object, composite (composite structure), state, activity, interactionOverview, context (use cases). Sequence and communication diagrams: write_sequence_diagram; timing diagrams: write_timing_diagram. Embed it in a section with <!-- archery:diagram diagrams/<name>.uml.json -->.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "component",
+                "package",
+                "deployment",
+                "class",
+                "state",
+                "activity",
+                "context",
+                "object",
+                "composite",
+                "interactionOverview"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "description": "File name without extension; default: kebab-case of the title"
+            },
+            "elements": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "includeRelationships": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title",
+            "type"
+          ]
+        }
+      },
+      {
+        "name": "archery_add_to_diagram",
+        "displayName": "Add elements to diagram",
+        "toolReferenceName": "archery-add-to-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Show existing model elements on a canvas diagram (placed below the current content) and add the relationships between shown elements.",
+        "modelDescription": "Show existing model elements on a canvas diagram (placed below the current content) and add the relationships between shown elements.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "elements": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "includeRelationships": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "diagram",
+            "elements"
+          ]
+        }
+      },
+      {
+        "name": "archery_remove_from_diagram",
+        "displayName": "Remove from diagram",
+        "toolReferenceName": "archery-remove-from-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Remove items from a canvas diagram only (the model is unchanged): element refs, relationship refs, and diagram-local node/edge ids (notes, states, actions, transitions, flows).",
+        "modelDescription": "Remove items from a canvas diagram only (the model is unchanged): element refs, relationship refs, and diagram-local node/edge ids (notes, states, actions, transitions, flows). Removing a node also removes the edges attached to it; children of a removed local container move to its parent.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "refs": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              },
+              "description": "Element, relationship, local node or local edge ids"
+            }
+          },
+          "required": [
+            "diagram",
+            "refs"
+          ]
+        }
+      },
+      {
+        "name": "archery_write_sequence_diagram",
+        "displayName": "Write sequence diagram",
+        "toolReferenceName": "archery-write-sequence-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create (or with overwrite: true, replace) a sequence diagram for a runtime scenario (section 6).",
+        "modelDescription": "Create (or with overwrite: true, replace) a sequence diagram for a runtime scenario (section 6). Lifelines are model element ids (actors, components, external systems); elements used in messages are added as lifelines automatically. Steps: {msg: {from, to, label, kind: sync|async|reply|create|destroy|self|lost|found, async?: true for an asynchronous self/lost/found message, gate?: true when the missing end of a lost/found message is a gate on the frame (from / to outside the interaction)}}, {fragment: alt|opt|loop|par|break|critical|neg|strict|seq|ignore|consider|assert, branches: [{guard, steps}], min?, max? (loop iterations: loop(min,max), max \"*\" = unlimited)}, {fragment: \"ref\", label, over: [ids]}, {note, over: [ids]}. Embed with <!-- archery:diagram diagrams/<name>.seq.json -->.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "description": "File name without extension; default: kebab-case of the title"
+            },
+            "lifelines": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "roles": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              },
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Role names per lifeline id, shown as \"role : Type\" (default \":Type\")"
+            },
+            "notation": {
+              "type": "string",
+              "enum": [
+                "sequence",
+                "communication"
+              ],
+              "description": "Draw the interaction as a sequence diagram (default) or a communication diagram (participants with links and numbered messages)"
+            },
+            "positions": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              },
+              "description": "Communication diagrams: participant box positions"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "overwrite": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title",
+            "steps"
+          ],
+          "$defs": {
+            "__schema0": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "msg": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                        },
+                        "to": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                        },
+                        "label": {
+                          "default": "",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "default": "sync",
+                          "type": "string",
+                          "enum": [
+                            "sync",
+                            "async",
+                            "reply",
+                            "create",
+                            "destroy",
+                            "self",
+                            "lost",
+                            "found"
+                          ]
+                        },
+                        "async": {
+                          "type": "boolean"
+                        },
+                        "gate": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "msg"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "fragment": {
+                      "type": "string",
+                      "enum": [
+                        "alt",
+                        "opt",
+                        "loop",
+                        "par",
+                        "break",
+                        "critical",
+                        "neg",
+                        "strict",
+                        "seq",
+                        "ignore",
+                        "consider",
+                        "assert"
+                      ]
+                    },
+                    "branches": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "guard": {
+                            "type": "string"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema0"
+                            }
+                          }
+                        },
+                        "required": [
+                          "steps"
+                        ]
+                      }
+                    },
+                    "min": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "max": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "const": "*"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "fragment",
+                    "branches"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "fragment": {
+                      "type": "string",
+                      "const": "ref"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "over": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "fragment",
+                    "label",
+                    "over"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "note": {
+                      "type": "string"
+                    },
+                    "over": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "note",
+                    "over"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "constraint": {
+                      "type": "string"
+                    },
+                    "over": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "constraint",
+                    "over"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "archery_write_timing_diagram",
+        "displayName": "Write timing diagram",
+        "toolReferenceName": "archery-write-timing-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create (or with overwrite: true, replace) a timing diagram: how the state of participants changes over time (section 6 runtime, or section 10 quality scenarios with deadlines).",
+        "modelDescription": "Create (or with overwrite: true, replace) a timing diagram: how the state of participants changes over time (section 6 runtime, or section 10 quality scenarios with deadlines). Lifelines: {ref: model element id, role?, form?: \"state\" (state timeline, default) | \"value\" (compact value lifeline), states: [top to bottom], changes: [{at, state}]}. Messages: {from, to, at, arrive?, label, kind: sync|async|reply}; leave out from (or to) for a message from (or to) a gate on the frame; from = to is a self message. Constraints: {on: lifeline id, from, to?, label}: a duration constraint from..to such as \"0..2s\", or a time constraint / observation at `from` (e.g. \"t = now\") when `to` is missing. Times are numbers in `unit` (e.g. \"ms\"). Embed with <!-- archery:diagram diagrams/<name>.timing.json -->.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "description": "File name without extension; default: kebab-case of the title"
+            },
+            "unit": {
+              "type": "string",
+              "description": "Time unit shown on the axis, e.g. \"ms\""
+            },
+            "end": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "End of the time axis (default: after the last event)"
+            },
+            "tick": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Distance between axis ticks (default: automatic)"
+            },
+            "lifelines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": "string",
+                    "enum": [
+                      "state",
+                      "value"
+                    ]
+                  },
+                  "states": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "changes": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "state": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "state"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "ref"
+                ]
+              }
+            },
+            "messages": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                  },
+                  "to": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                  },
+                  "at": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "arrive": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "label": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "default": "async",
+                    "type": "string",
+                    "enum": [
+                      "sync",
+                      "async",
+                      "reply"
+                    ]
+                  }
+                },
+                "required": [
+                  "at"
+                ]
+              }
+            },
+            "constraints": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "on": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                  },
+                  "from": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "to": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "label": {
+                    "default": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "on",
+                  "from"
+                ]
+              }
+            },
+            "overwrite": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title",
+            "lifelines"
+          ]
+        }
+      },
+      {
+        "name": "archery_get_data",
+        "displayName": "Get structured section data",
+        "toolReferenceName": "archery-get-data",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Items of a structured arc42 list stored in data/*.yaml.",
+        "modelDescription": "Items of a structured arc42 list stored in data/*.yaml. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            }
+          },
+          "required": [
+            "list"
+          ]
+        }
+      },
+      {
+        "name": "archery_upsert_data_item",
+        "displayName": "Add or update structured item",
+        "toolReferenceName": "archery-upsert-data-item",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field).",
+        "modelDescription": "Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field). The result is validated before it is written. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            },
+            "item": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {},
+              "description": "Fields of the item, including its key field"
+            }
+          },
+          "required": [
+            "list",
+            "item"
+          ]
+        }
+      },
+      {
+        "name": "archery_delete_data_item",
+        "displayName": "Delete structured item",
+        "toolReferenceName": "archery-delete-data-item",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Delete an item from a structured arc42 list by its key field value (id, role, category or term).",
+        "modelDescription": "Delete an item from a structured arc42 list by its key field value (id, role, category or term).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "list",
+            "key"
+          ]
+        }
+      },
+      {
+        "name": "archery_validate",
+        "displayName": "Validate architecture documentation",
+        "toolReferenceName": "archery-validate",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Check all documentation files: schemas, and references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals).",
+        "modelDescription": "Check all documentation files: schemas, and references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals). Call after making changes.",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "archery_update_relationship",
+        "displayName": "Update relationship",
+        "toolReferenceName": "archery-update-relationship",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend».",
+        "modelDescription": "Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend». Pass null to clear a field.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "association",
+                "aggregation",
+                "composition",
+                "generalization",
+                "realization",
+                "dependency",
+                "usage",
+                "connector",
+                "deploy",
+                "link",
+                "manifest"
+              ]
+            },
+            "label": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stereotype": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "multiplicity": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "roles": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "qualifier": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "navigable": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "boolean"
+                    },
+                    "to": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "associationClass": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "condition": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "extensionPoint": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_update_diagram",
+        "displayName": "Update diagram",
+        "toolReferenceName": "archery-update-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change the title of any diagram (the file name stays), or the type of a canvas diagram (its content stays; the type decides what the editor offers to add).",
+        "modelDescription": "Change the title of any diagram (the file name stays), or the type of a canvas diagram (its content stays; the type decides what the editor offers to add).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "component",
+                "package",
+                "deployment",
+                "class",
+                "state",
+                "activity",
+                "context",
+                "object",
+                "composite",
+                "interactionOverview"
+              ],
+              "description": "New diagram type (canvas diagrams only)"
+            }
+          },
+          "required": [
+            "diagram"
+          ]
+        }
+      },
+      {
+        "name": "archery_move_nodes",
+        "displayName": "Move or resize diagram nodes",
+        "toolReferenceName": "archery-move-nodes",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Set the position (absolute diagram coordinates, top-left corner) and optionally the size of nodes on a canvas diagram.",
+        "modelDescription": "Set the position (absolute diagram coordinates, top-left corner) and optionally the size of nodes on a canvas diagram. `id` is an element ref or a diagram-local node id.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "nodes": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                  },
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "h": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "x",
+                  "y"
+                ]
+              }
+            }
+          },
+          "required": [
+            "diagram",
+            "nodes"
+          ]
+        }
+      },
+      {
+        "name": "archery_set_node_style",
+        "displayName": "Set node presentation",
+        "toolReferenceName": "archery-set-node-style",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Presentation options of an element on one canvas diagram, e.g.",
+        "modelDescription": "Presentation options of an element on one canvas diagram, e.g. { notation: \"lollipop\" } to draw an interface as a ball (provided via realization, required via usage = socket). Pass null to reset.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "style": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "ref",
+            "style"
+          ]
+        }
+      },
+      {
+        "name": "archery_add_local_node",
+        "displayName": "Add diagram-local node",
+        "toolReferenceName": "archery-add-local-node",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add a node that exists only on this diagram: a note, or a state machine / activity node.",
+        "modelDescription": "Add a node that exists only on this diagram: a note, or a state machine / activity node. Kinds: note, state, initial, final, choice, junction, fork, join, history, deepHistory, terminate, region, entryPoint, exitPoint, action, activityFinal, flowFinal, decision, merge, object, partition, sendSignal, acceptEvent, acceptTimeEvent, pin, interruptibleRegion, interactionUse, interaction. States take \"text\" for internal activities (one per line, e.g. \"entry / start timer\"); partitions (swimlanes), states, regions and interruptible regions contain other local nodes via parent. Orthogonal regions: \"region\" nodes with a state as parent (they fill the state, separated by dashed lines). entryPoint / exitPoint sit on the border of their parent state; a \"pin\" sits on the border of its parent action; acceptTimeEvent is the hourglass (name e.g. \"every 5 min\").",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "state",
+                "initial",
+                "final",
+                "choice",
+                "junction",
+                "fork",
+                "join",
+                "history",
+                "deepHistory",
+                "terminate",
+                "region",
+                "entryPoint",
+                "exitPoint",
+                "action",
+                "activityFinal",
+                "flowFinal",
+                "decision",
+                "merge",
+                "object",
+                "partition",
+                "sendSignal",
+                "acceptEvent",
+                "acceptTimeEvent",
+                "pin",
+                "interruptibleRegion",
+                "interactionUse",
+                "interaction"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "h": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "parent": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "diagram_ref": {
+              "type": "string",
+              "description": "interactionUse / interaction nodes: the diagram they stand for, e.g. \"diagrams/checkout.seq.json\""
+            }
+          },
+          "required": [
+            "diagram",
+            "kind"
+          ]
+        }
+      },
+      {
+        "name": "archery_update_local_node",
+        "displayName": "Update diagram-local node",
+        "toolReferenceName": "archery-update-local-node",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change a note, state or activity node: name, text, kind or parent (null clears).",
+        "modelDescription": "Change a note, state or activity node: name, text, kind or parent (null clears).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "state",
+                "initial",
+                "final",
+                "choice",
+                "junction",
+                "fork",
+                "join",
+                "history",
+                "deepHistory",
+                "terminate",
+                "region",
+                "entryPoint",
+                "exitPoint",
+                "action",
+                "activityFinal",
+                "flowFinal",
+                "decision",
+                "merge",
+                "object",
+                "partition",
+                "sendSignal",
+                "acceptEvent",
+                "acceptTimeEvent",
+                "pin",
+                "interruptibleRegion",
+                "interactionUse",
+                "interaction"
+              ]
+            },
+            "parent": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "diagram_ref": {
+              "description": "interactionUse / interaction nodes: the diagram they stand for (null clears)",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_add_local_edge",
+        "displayName": "Add transition / flow / note link",
+        "toolReferenceName": "archery-add-local-edge",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Connect two nodes on a canvas diagram with a diagram-local edge: \"transition\" (state machines, label \"trigger [guard] / effect\"), \"flow\" (activities, label \"[guard]\"), \"interrupt\" (an interrupting edge leaving an interruptible region, drawn as a lightning bolt), or \"anchor\" (dashed line from a note to anything).",
+        "modelDescription": "Connect two nodes on a canvas diagram with a diagram-local edge: \"transition\" (state machines, label \"trigger [guard] / effect\"), \"flow\" (activities, label \"[guard]\"), \"interrupt\" (an interrupting edge leaving an interruptible region, drawn as a lightning bolt), or \"anchor\" (dashed line from a note to anything). Ends are local node ids or element refs on the diagram.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "transition",
+                "flow",
+                "anchor",
+                "interrupt"
+              ]
+            },
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "label": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            }
+          },
+          "required": [
+            "diagram",
+            "kind",
+            "from",
+            "to"
+          ]
+        }
+      },
+      {
+        "name": "archery_update_local_edge",
+        "displayName": "Update transition / flow",
+        "toolReferenceName": "archery-update-local-edge",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change the label or kind of a diagram-local edge (null clears the label).",
+        "modelDescription": "Change the label or kind of a diagram-local edge (null clears the label).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "label": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "transition",
+                "flow",
+                "anchor",
+                "interrupt"
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "archery_set_edge_waypoints",
+        "displayName": "Route an edge",
+        "toolReferenceName": "archery-set-edge-waypoints",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Set the bend points of an edge on a canvas diagram (absolute coordinates; [] for a straight line).",
+        "modelDescription": "Set the bend points of an edge on a canvas diagram (absolute coordinates; [] for a straight line). `id` is a relationship ref or a local edge id.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "waypoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            }
+          },
+          "required": [
+            "diagram",
+            "id",
+            "waypoints"
+          ]
+        }
+      },
+      {
+        "name": "archery_set_label_offset",
+        "displayName": "Move a label",
+        "toolReferenceName": "archery-set-label-offset",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Move a label on a canvas diagram away from its default place: the label of an edge (`id` is a relationship ref or a local edge id) or the outer name of a local node (entry / exit point, pin, decision, accept time event).",
+        "modelDescription": "Move a label on a canvas diagram away from its default place: the label of an edge (`id` is a relationship ref or a local edge id) or the outer name of a local node (entry / exit point, pin, decision, accept time event). `offset` is relative to the default place; null puts the label back. A moved label is tied to its line or shape by a dotted line.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "offset": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "id",
+            "offset"
+          ]
+        }
+      },
+      {
+        "name": "archery_auto_layout",
+        "displayName": "Auto-layout diagram",
+        "toolReferenceName": "archery-auto-layout",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout; containers keep their children; edges become straight).",
+        "modelDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout; containers keep their children; edges become straight). direction: DOWN (default), RIGHT, UP, LEFT.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "direction": {
+              "default": "DOWN",
+              "type": "string",
+              "enum": [
+                "DOWN",
+                "RIGHT",
+                "UP",
+                "LEFT"
+              ]
+            }
+          },
+          "required": [
+            "diagram"
+          ]
+        }
+      },
+      {
+        "name": "archery_write_data_table",
+        "displayName": "Write structured table",
+        "toolReferenceName": "archery-write-data-table",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items).",
+        "modelDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items). Rows are objects of field -> text; numbers, comma-separated lists and \"key: value\" maps are converted per field. Rows without an id get one. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "width": {
+                    "description": "Column width in percent of the table; omit for automatic",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "field",
+                  "label"
+                ]
+              },
+              "description": "Visible columns in order; omit to keep the current layout"
+            },
+            "merges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "row": {
+                    "type": "string",
+                    "description": "Key of the top row"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cols": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "row",
+                  "field",
+                  "rows",
+                  "cols"
+                ]
+              },
+              "description": "Merged cells (spreadsheet style); omit to keep the current ones"
+            }
+          },
+          "required": [
+            "list",
+            "rows"
+          ]
+        }
+      },
+      {
+        "name": "archery_get_section",
+        "displayName": "Read a chapter",
+        "toolReferenceName": "archery-get-section",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "The Markdown of an arc42 chapter (its file in sections/), with the generated parts as directives: <!-- archery:diagram diagrams/x.uml.json caption=\"...\" -->, <!-- archery:table data/x.yaml caption=\"...\" -->, <!-- archery:caption \"...\" --> before a Markdown table, <!-- archery:decisions decisions -->, <!-- archery:help ...",
+        "modelDescription": "The Markdown of an arc42 chapter (its file in sections/), with the generated parts as directives: <!-- archery:diagram diagrams/x.uml.json caption=\"...\" -->, <!-- archery:table data/x.yaml caption=\"...\" -->, <!-- archery:caption \"...\" --> before a Markdown table, <!-- archery:decisions decisions -->, <!-- archery:help ... --> (arc42 guidance, keep it).",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string",
+              "description": "Chapter number (\"5\"), id (\"building-block-view\") or title"
+            }
+          },
+          "required": [
+            "section"
+          ]
+        }
+      },
+      {
+        "name": "archery_write_section",
+        "displayName": "Write a chapter",
+        "toolReferenceName": "archery-write-section",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Replace the whole Markdown of a chapter (keep its \"# Title\" line, the archery:help guidance and the directives you do not mean to remove).",
+        "modelDescription": "Replace the whole Markdown of a chapter (keep its \"# Title\" line, the archery:help guidance and the directives you do not mean to remove). Prefer edit_section for changes to part of a chapter. The open document shows the chapter while it changes.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string"
+            },
+            "markdown": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "section",
+            "markdown"
+          ]
+        }
+      },
+      {
+        "name": "archery_edit_section",
+        "displayName": "Edit a chapter",
+        "toolReferenceName": "archery-edit-section",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change part of a chapter: replace the exact text `find` with `replace` (once; `all` for every occurrence).",
+        "modelDescription": "Change part of a chapter: replace the exact text `find` with `replace` (once; `all` for every occurrence). `find` must occur in the chapter (get_section shows it). To add text, find the line it goes after and replace it with that line plus the new text. The open document scrolls to the chapter and highlights the change.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string"
+            },
+            "find": {
+              "type": "string",
+              "minLength": 1
+            },
+            "replace": {
+              "type": "string"
+            },
+            "all": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "section",
+            "find",
+            "replace"
+          ]
+        }
+      },
+      {
+        "name": "archery_insert_into_section",
+        "displayName": "Place a diagram or table in a chapter",
+        "toolReferenceName": "archery-insert-into-section",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Show a diagram, a data table or the list of architecture decisions in a chapter, with an optional caption: at the end of the part under `after_heading` (a heading text of the chapter), else at the end of the chapter.",
+        "modelDescription": "Show a diagram, a data table or the list of architecture decisions in a chapter, with an optional caption: at the end of the part under `after_heading` (a heading text of the chapter), else at the end of the chapter. To remove one again, use edit_section on its <!-- archery:... --> line.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "diagram",
+                "table",
+                "decisions"
+              ]
+            },
+            "src": {
+              "description": "diagram: its name or file, e.g. \"order-flow\"; table: a data list name (quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)",
+              "type": "string"
+            },
+            "caption": {
+              "type": "string"
+            },
+            "after_heading": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "section",
+            "kind"
+          ]
+        }
+      },
+      {
+        "name": "archery_create_decision",
+        "displayName": "Record an architecture decision",
+        "toolReferenceName": "archery-create-decision",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.",
+        "modelDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What was decided, e.g. \"Use PostgreSQL for order data\""
+            },
+            "status": {
+              "default": "proposed",
+              "type": "string",
+              "enum": [
+                "proposed",
+                "accepted",
+                "rejected",
+                "deprecated",
+                "superseded"
+              ]
+            },
+            "context": {
+              "type": "string"
+            },
+            "decision": {
+              "type": "string"
+            },
+            "consequences": {
+              "type": "string"
+            },
+            "qualityGoals": {
+              "description": "Ids of the quality goals it addresses",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "constraints": {
+              "description": "Ids of the constraints it addresses",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      {
+        "name": "archery_align_nodes",
+        "displayName": "Align or distribute diagram nodes",
+        "toolReferenceName": "archery-align-nodes",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Line up shapes on a canvas diagram: left / centerH (centers on a vertical line) / right / top / middle (centers on a horizontal line) / bottom edges, or distributeH / distributeV (equal gaps, needs 3 or more).",
+        "modelDescription": "Line up shapes on a canvas diagram: left / centerH (centers on a vertical line) / right / top / middle (centers on a horizontal line) / bottom edges, or distributeH / distributeV (equal gaps, needs 3 or more). `ids` are element refs or diagram-local node ids; ports, pins and entry / exit points stay on their parent.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "ids": {
+              "minItems": 2,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "left",
+                "centerH",
+                "right",
+                "top",
+                "middle",
+                "bottom",
+                "distributeH",
+                "distributeV"
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "ids",
+            "mode"
+          ]
+        }
+      },
+      {
+        "name": "archery_list_versions",
+        "displayName": "Versions and releases",
+        "toolReferenceName": "archery-list-versions",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "The current version of the documentation and its releases (and backups made before a restore).",
+        "modelDescription": "The current version of the documentation and its releases (and backups made before a restore).",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "archery_release_version",
+        "displayName": "Release a version",
+        "toolReferenceName": "archery-release-version",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Release the current state as the next major version (e.g.",
+        "modelDescription": "Release the current state as the next major version (e.g. v3.0) with a change log entry; it is added to the change history at the end of the document. Only when something changed since the last release.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Change log entry, e.g. \"Added the deployment view\""
+            }
+          },
+          "required": [
+            "note"
+          ]
+        }
+      },
+      {
+        "name": "archery_restore_version",
+        "displayName": "Restore a release",
+        "toolReferenceName": "archery-restore-version",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Replace all documentation files by an earlier release (list_versions).",
+        "modelDescription": "Replace all documentation files by an earlier release (list_versions). The current state is kept as a backup version first, so this can be undone by restoring that one.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "description": "e.g. \"2.0\""
+            }
+          },
+          "required": [
+            "version"
+          ]
+        }
+      },
+      {
+        "name": "archery_export_document",
+        "displayName": "Export the document (PDF or HTML)",
+        "toolReferenceName": "archery-export-document",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file.",
+        "modelDescription": "Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, ...); they are saved for the next export.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": [
+                "pdf",
+                "html"
+              ]
+            },
+            "file": {
+              "type": "string"
+            },
+            "settings": {
+              "type": "object",
+              "properties": {
+                "font": {
+                  "type": "string"
+                },
+                "headingFont": {
+                  "type": "string"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "minimum": 7,
+                  "maximum": 20
+                },
+                "pageSize": {
+                  "type": "string",
+                  "enum": [
+                    "A4",
+                    "Letter",
+                    "Legal",
+                    "A3",
+                    "A5"
+                  ]
+                },
+                "orientation": {
+                  "type": "string",
+                  "enum": [
+                    "portrait",
+                    "landscape"
+                  ]
+                },
+                "margins": {
+                  "type": "string",
+                  "enum": [
+                    "narrow",
+                    "normal",
+                    "wide"
+                  ]
+                },
+                "header": {
+                  "type": "string"
+                },
+                "footer": {
+                  "type": "string"
+                },
+                "pageNumbers": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "bottom-center",
+                    "bottom-right",
+                    "top-right"
+                  ]
+                },
+                "pageNumberFormat": {
+                  "type": "string"
+                },
+                "tocDepth": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4
+                },
+                "cover": {
+                  "type": "boolean"
+                },
+                "numberHeadings": {
+                  "type": "boolean"
+                },
+                "chapterBreaks": {
+                  "type": "boolean"
+                },
+                "changeHistory": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "required": [
+            "format"
+          ]
+        }
+      },
+      {
+        "name": "archery_export_diagram",
+        "displayName": "Export a diagram (SVG or PNG)",
+        "toolReferenceName": "archery-export-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Export one diagram as an SVG or PNG image.",
+        "modelDescription": "Export one diagram as an SVG or PNG image. `file`: where to write it, relative to the workspace (default: next to the diagram file).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "svg",
+                "png"
+              ]
+            },
+            "theme": {
+              "default": "light",
+              "type": "string",
+              "enum": [
+                "light",
+                "dark"
+              ]
+            },
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "diagram",
+            "format"
+          ]
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package --no-dependencies",
+    "sample": "esbuild scripts/make-sample.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=dist/make-sample.js && node dist/make-sample.js",
+    "gen:tools": "esbuild scripts/gen-tools.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=dist/gen-tools.js && node dist/gen-tools.js",
+    "icon": "node scripts/build-icon.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@tiptap/core": "^3.34.0",
+    "@tiptap/extension-image": "^3.34.0",
+    "@tiptap/extension-table": "^3.34.0",
+    "@tiptap/extensions": "^3.34.0",
+    "@tiptap/pm": "^3.34.0",
+    "@tiptap/react": "^3.34.0",
+    "@tiptap/starter-kit": "^3.34.0",
+    "@xyflow/react": "^12.12.1",
+    "elkjs": "^0.12.1",
+    "markdown-it": "^15.0.3",
+    "prosemirror-markdown": "^1.13.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/vscode": "~1.95.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
+    "svg2ttf": "^6.1.0",
+    "svgicons2svgfont": "^16.0.0",
+    "ttf2woff": "^3.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "keywords": [
+    "arc42",
+    "architecture",
+    "software architecture",
+    "documentation",
+    "docs as code",
+    "uml",
+    "diagram",
+    "sequence diagram",
+    "adr",
+    "mcp",
+    "claude",
+    "copilot"
+  ]
+}

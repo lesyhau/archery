@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "type": "interactionOverview",
+  "title": "Order flow",
+  "nodes": [],
+  "edges": [],
+  "local": {
+    "nodes": [
+      {
+        "id": "initial",
+        "kind": "initial",
+        "x": 160,
+        "y": 20
+      },
+      {
+        "id": "placeOrder",
+        "kind": "interactionUse",
+        "name": "Place order",
+        "x": 60,
+        "y": 80,
+        "diagram": "diagrams/place-order.seq.json"
+      },
+      {
+        "id": "decision",
+        "kind": "decision",
+        "x": 156,
+        "y": 180
+      },
+      {
+        "id": "shipOrder",
+        "kind": "interaction",
+        "name": "Ship order",
+        "text": "Warehouse picks and packs\nCarrier collects the parcel",
+        "x": 280,
+        "y": 230
+      },
+      {
+        "id": "activityFinal",
+        "kind": "activityFinal",
+        "x": 158,
+        "y": 420
+      }
+    ],
+    "edges": [
+      {
+        "id": "initial-placeOrder",
+        "kind": "flow",
+        "from": "initial",
+        "to": "placeOrder",
+        "waypoints": []
+      },
+      {
+        "id": "placeOrder-decision",
+        "kind": "flow",
+        "from": "placeOrder",
+        "to": "decision",
+        "waypoints": []
+      },
+      {
+        "id": "decision-shipOrder",
+        "kind": "flow",
+        "from": "decision",
+        "to": "shipOrder",
+        "label": "[paid]",
+        "waypoints": []
+      },
+      {
+        "id": "decision-activityFinal",
+        "kind": "flow",
+        "from": "decision",
+        "to": "activityFinal",
+        "label": "[declined]",
+        "waypoints": []
+      },
+      {
+        "id": "shipOrder-activityFinal",
+        "kind": "flow",
+        "from": "shipOrder",
+        "to": "activityFinal",
+        "waypoints": []
+      }
+    ]
+  }
+}

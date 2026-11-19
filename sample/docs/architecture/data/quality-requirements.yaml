@@ -1,0 +1,7 @@
+# Section 10 - quality requirements.
+# overview (10.1) fields: category, description
+# scenarios (10.2) fields: id, name, kind (usage | change), quality, goals (quality goal ids), priority,
+#   short form: context, stimulus, metric
+#   long form:  source, stimulus, environment, artifact, response, responseMeasure
+overview: []
+scenarios: []

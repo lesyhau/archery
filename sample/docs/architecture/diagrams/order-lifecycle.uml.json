@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "type": "state",
+  "title": "Order lifecycle",
+  "nodes": [],
+  "edges": [],
+  "local": {
+    "nodes": [
+      {
+        "id": "initial",
+        "kind": "initial",
+        "x": 40,
+        "y": 70
+      },
+      {
+        "id": "new",
+        "kind": "state",
+        "name": "New",
+        "text": "entry / reserve stock",
+        "x": 120,
+        "y": 52
+      },
+      {
+        "id": "active",
+        "kind": "state",
+        "name": "Active",
+        "x": 340,
+        "y": 20,
+        "w": 360,
+        "h": 140
+      },
+      {
+        "id": "paid",
+        "kind": "state",
+        "name": "Paid",
+        "x": 370,
+        "y": 70,
+        "parent": "active"
+      },
+      {
+        "id": "shipped",
+        "kind": "state",
+        "name": "Shipped",
+        "x": 550,
+        "y": 70,
+        "parent": "active"
+      },
+      {
+        "id": "history",
+        "kind": "history",
+        "x": 352,
+        "y": 34,
+        "parent": "active"
+      },
+      {
+        "id": "choice",
+        "kind": "choice",
+        "x": 230,
+        "y": 200
+      },
+      {
+        "id": "final",
+        "kind": "final",
+        "x": 760,
+        "y": 76
+      },
+      {
+        "id": "cancelled",
+        "kind": "state",
+        "name": "Cancelled",
+        "text": "entry / release stock",
+        "x": 120,
+        "y": 300
+      },
+      {
+        "id": "fulfilment",
+        "kind": "state",
+        "name": "Fulfilment",
+        "x": 520,
+        "y": 220,
+        "w": 320,
+        "h": 200
+      },
+      {
+        "id": "goods",
+        "kind": "region",
+        "name": "goods",
+        "x": 520,
+        "y": 248,
+        "w": 320,
+        "h": 80,
+        "parent": "fulfilment"
+      },
+      {
+        "id": "billing",
+        "kind": "region",
+        "name": "billing",
+        "x": 520,
+        "y": 330,
+        "w": 320,
+        "h": 90,
+        "parent": "fulfilment"
+      },
+      {
+        "id": "packing",
+        "kind": "state",
+        "name": "Packing",
+        "x": 600,
+        "y": 270,
+        "parent": "goods"
+      },
+      {
+        "id": "invoicing",
+        "kind": "state",
+        "name": "Invoicing",
+        "x": 600,
+        "y": 355,
+        "parent": "billing"
+      },
+      {
+        "id": "express",
+        "kind": "entryPoint",
+        "name": "express",
+        "x": 512,
+        "y": 290,
+        "parent": "fulfilment"
+      },
+      {
+        "id": "aborted",
+        "kind": "exitPoint",
+        "name": "aborted",
+        "x": 512,
+        "y": 380,
+        "parent": "fulfilment"
+      }
+    ],
+    "edges": [
+      {
+        "id": "initial-new",
+        "kind": "transition",
+        "from": "initial",
+        "to": "new",
+        "waypoints": []
+      },
+      {
+        "id": "new-choice",
+        "kind": "transition",
+        "from": "new",
+        "to": "choice",
+        "label": "pay",
+        "waypoints": []
+      },
+      {
+        "id": "choice-paid",
+        "kind": "transition",
+        "from": "choice",
+        "to": "paid",
+        "label": "[payment ok]",
+        "waypoints": []
+      },
+      {
+        "id": "choice-cancelled",
+        "kind": "transition",
+        "from": "choice",
+        "to": "cancelled",
+        "label": "[declined]",
+        "waypoints": []
+      },
+      {
+        "id": "paid-shipped",
+        "kind": "transition",
+        "from": "paid",
+        "to": "shipped",
+        "label": "ship / notify()",
+        "waypoints": []
+      },
+      {
+        "id": "active-final",
+        "kind": "transition",
+        "from": "active",
+        "to": "final",
+        "label": "deliver",
+        "waypoints": []
+      },
+      {
+        "id": "history-paid",
+        "kind": "transition",
+        "from": "history",
+        "to": "paid",
+        "waypoints": []
+      },
+      {
+        "id": "choice-express",
+        "kind": "transition",
+        "from": "choice",
+        "to": "express",
+        "label": "[express]",
+        "waypoints": []
+      },
+      {
+        "id": "express-packing",
+        "kind": "transition",
+        "from": "express",
+        "to": "packing",
+        "waypoints": []
+      },
+      {
+        "id": "aborted-cancelled",
+        "kind": "transition",
+        "from": "aborted",
+        "to": "cancelled",
+        "waypoints": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "type": "deployment",
+  "title": "Deployment - infrastructure level 1",
+  "nodes": [
+    {
+      "ref": "kubernetesCluster",
+      "x": 40,
+      "y": 40
+    },
+    {
+      "ref": "webPod",
+      "x": 70,
+      "y": 110,
+      "w": 200,
+      "h": 100
+    },
+    {
+      "ref": "ordersPod",
+      "x": 320,
+      "y": 110,
+      "w": 200,
+      "h": 100
+    },
+    {
+      "ref": "storefrontJar",
+      "x": 90,
+      "y": 160,
+      "w": 150,
+      "h": 40
+    },
+    {
+      "ref": "ordersJar",
+      "x": 340,
+      "y": 160,
+      "w": 150,
+      "h": 40
+    },
+    {
+      "ref": "postgreSQL",
+      "x": 640,
+      "y": 120,
+      "w": 170,
+      "h": 90
+    }
+  ],
+  "edges": [
+    {
+      "ref": "ordersPod-postgreSQL",
+      "waypoints": []
+    },
+    {
+      "ref": "webPod-ordersPod",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

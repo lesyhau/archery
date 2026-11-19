@@ -1,0 +1,45 @@
+# Archery project file.
+# Section order follows the list below; set `enabled: false` to hide a section from the tree and the export.
+# Structure and help texts based on the arc42 template (https://arc42.org), © Dr. Peter Hruschka, Dr. Gernot Starke and contributors, licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
+version: 1
+system: Webshop
+title: Webshop - Architecture Documentation
+template: arc42 9.1-EN
+authors: []
+sections:
+  - id: introduction-and-goals
+    file: sections/01-introduction-and-goals.md
+    enabled: true
+  - id: architecture-constraints
+    file: sections/02-architecture-constraints.md
+    enabled: true
+  - id: context-and-scope
+    file: sections/03-context-and-scope.md
+    enabled: true
+  - id: solution-strategy
+    file: sections/04-solution-strategy.md
+    enabled: true
+  - id: building-block-view
+    file: sections/05-building-block-view.md
+    enabled: true
+  - id: runtime-view
+    file: sections/06-runtime-view.md
+    enabled: true
+  - id: deployment-view
+    file: sections/07-deployment-view.md
+    enabled: true
+  - id: crosscutting-concepts
+    file: sections/08-crosscutting-concepts.md
+    enabled: true
+  - id: architecture-decisions
+    file: sections/09-architecture-decisions.md
+    enabled: true
+  - id: quality-requirements
+    file: sections/10-quality-requirements.md
+    enabled: true
+  - id: risks-and-technical-debt
+    file: sections/11-risks-and-technical-debt.md
+    enabled: true
+  - id: glossary
+    file: sections/12-glossary.md
+    enabled: true

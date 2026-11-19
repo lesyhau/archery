@@ -1,0 +1,21 @@
+# Section 1.3 - stakeholders and their expectations towards the architecture documentation.
+# Fields: role, contact, expectations
+stakeholders:
+  - role: Product Owner
+    contact: Product Management
+    expectations: Requirements overview and quality goals kept aligned with the product strategy
+  - role: Development Team
+    contact: Engineering
+    expectations: Clear building blocks (section 5) and runtime scenarios (section 6)
+views:
+  stakeholders:
+    columns:
+      - field: role
+        label: Role/Name
+        width: 20.4
+      - field: contact
+        label: Contact
+        width: 21.7
+      - field: expectations
+        label: Expectations
+        width: 57.9

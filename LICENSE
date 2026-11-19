@@ -1,0 +1,36 @@
+MIT License
+
+Copyright (c) 2026 Le Sy Hau
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Third-party content
+
+The chapter structure, headings and guidance texts of the arc42 template that
+Archery ships (src/template/template.ts) and writes into documentation it
+creates (the <!-- archery:help --> comments) are adapted from the arc42
+template, created, maintained and (c) by Dr. Peter Hruschka, Dr. Gernot Starke
+and contributors (https://arc42.org). That content is licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International License
+(CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/), not under the
+MIT License above. The texts were shortened for use as in-editor guidance.
+
+Content you write in your own documentation is yours.

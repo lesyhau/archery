@@ -1,0 +1,29 @@
+# Section 11 - risks and technical debt, ordered by priority.
+# Fields: id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation
+risks:
+  - id: r1
+    title: New risk
+  - id: r2
+    title: New risk
+  - id: r3
+    title: New risk
+  - id: r4
+    title: New risk
+views:
+  risks:
+    columns:
+      - field: priority
+        label: Priority
+        width: 14.2
+      - field: kind
+        label: Kind
+        width: 16.4
+      - field: title
+        label: Risk / debt
+        width: 23
+      - field: description
+        label: Description
+        width: 24
+      - field: mitigation
+        label: Mitigation
+        width: 22.4

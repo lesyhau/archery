@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "type": "activity",
+  "title": "Checkout",
+  "nodes": [],
+  "edges": [],
+  "local": {
+    "nodes": [
+      {
+        "id": "customer",
+        "kind": "partition",
+        "name": "Customer",
+        "x": 20,
+        "y": 20,
+        "w": 240,
+        "h": 520
+      },
+      {
+        "id": "webshop",
+        "kind": "partition",
+        "name": "Webshop",
+        "x": 260,
+        "y": 20,
+        "w": 430,
+        "h": 560
+      },
+      {
+        "id": "initial",
+        "kind": "initial",
+        "x": 130,
+        "y": 70,
+        "parent": "customer"
+      },
+      {
+        "id": "fillInCart",
+        "kind": "action",
+        "name": "Fill in cart",
+        "x": 70,
+        "y": 120,
+        "parent": "customer"
+      },
+      {
+        "id": "placeOrder",
+        "kind": "sendSignal",
+        "name": "Place order",
+        "x": 70,
+        "y": 200,
+        "parent": "customer"
+      },
+      {
+        "id": "orderReceived",
+        "kind": "acceptEvent",
+        "name": "Order received",
+        "x": 340,
+        "y": 200,
+        "parent": "webshop"
+      },
+      {
+        "id": "decision",
+        "kind": "decision",
+        "x": 396,
+        "y": 280,
+        "parent": "webshop"
+      },
+      {
+        "id": "fork",
+        "kind": "fork",
+        "x": 345,
+        "y": 350,
+        "w": 130,
+        "h": 8,
+        "parent": "webshop"
+      },
+      {
+        "id": "payment",
+        "kind": "interruptibleRegion",
+        "name": "payment",
+        "x": 275,
+        "y": 378,
+        "w": 400,
+        "h": 76,
+        "parent": "webshop"
+      },
+      {
+        "id": "charge",
+        "kind": "action",
+        "name": "Charge",
+        "x": 285,
+        "y": 390,
+        "w": 120,
+        "parent": "payment"
+      },
+      {
+        "id": "reserve",
+        "kind": "action",
+        "name": "Reserve",
+        "x": 415,
+        "y": 390,
+        "w": 120,
+        "parent": "payment"
+      },
+      {
+        "id": "amount",
+        "kind": "pin",
+        "name": "amount",
+        "x": 280,
+        "y": 408,
+        "parent": "charge"
+      },
+      {
+        "id": "after30Min",
+        "kind": "acceptTimeEvent",
+        "name": "after 30 min",
+        "x": 610,
+        "y": 388,
+        "parent": "payment"
+      },
+      {
+        "id": "cancelOrder",
+        "kind": "action",
+        "name": "Cancel order",
+        "x": 560,
+        "y": 500,
+        "w": 110,
+        "parent": "webshop"
+      },
+      {
+        "id": "join",
+        "kind": "join",
+        "x": 345,
+        "y": 460,
+        "w": 130,
+        "h": 8,
+        "parent": "webshop"
+      },
+      {
+        "id": "activityFinal",
+        "kind": "activityFinal",
+        "x": 398,
+        "y": 490,
+        "parent": "webshop"
+      },
+      {
+        "id": "flowFinal",
+        "kind": "flowFinal",
+        "x": 500,
+        "y": 284,
+        "parent": "webshop"
+      }
+    ],
+    "edges": [
+      {
+        "id": "initial-fillInCart",
+        "kind": "flow",
+        "from": "initial",
+        "to": "fillInCart",
+        "waypoints": []
+      },
+      {
+        "id": "fillInCart-placeOrder",
+        "kind": "flow",
+        "from": "fillInCart",
+        "to": "placeOrder",
+        "waypoints": []
+      },
+      {
+        "id": "placeOrder-orderReceived",
+        "kind": "flow",
+        "from": "placeOrder",
+        "to": "orderReceived",
+        "waypoints": []
+      },
+      {
+        "id": "orderReceived-decision",
+        "kind": "flow",
+        "from": "orderReceived",
+        "to": "decision",
+        "waypoints": []
+      },
+      {
+        "id": "decision-fork",
+        "kind": "flow",
+        "from": "decision",
+        "to": "fork",
+        "label": "[in stock]",
+        "waypoints": []
+      },
+      {
+        "id": "decision-flowFinal",
+        "kind": "flow",
+        "from": "decision",
+        "to": "flowFinal",
+        "label": "[sold out]",
+        "waypoints": []
+      },
+      {
+        "id": "fork-charge",
+        "kind": "flow",
+        "from": "fork",
+        "to": "charge",
+        "waypoints": []
+      },
+      {
+        "id": "fork-reserve",
+        "kind": "flow",
+        "from": "fork",
+        "to": "reserve",
+        "waypoints": []
+      },
+      {
+        "id": "charge-join",
+        "kind": "flow",
+        "from": "charge",
+        "to": "join",
+        "waypoints": []
+      },
+      {
+        "id": "reserve-join",
+        "kind": "flow",
+        "from": "reserve",
+        "to": "join",
+        "waypoints": []
+      },
+      {
+        "id": "join-activityFinal",
+        "kind": "flow",
+        "from": "join",
+        "to": "activityFinal",
+        "waypoints": []
+      },
+      {
+        "id": "after30Min-cancelOrder",
+        "kind": "interrupt",
+        "from": "after30Min",
+        "to": "cancelOrder",
+        "waypoints": []
+      },
+      {
+        "id": "cancelOrder-activityFinal",
+        "kind": "flow",
+        "from": "cancelOrder",
+        "to": "activityFinal",
+        "waypoints": []
+      }
+    ]
+  }
+}

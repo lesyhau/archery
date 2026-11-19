@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "type": "composite",
+  "title": "Order service internals",
+  "nodes": [
+    {
+      "ref": "orderService",
+      "x": 40,
+      "y": 40
+    },
+    {
+      "ref": "validator",
+      "x": 120,
+      "y": 120,
+      "w": 190,
+      "h": 50
+    },
+    {
+      "ref": "store",
+      "x": 420,
+      "y": 120,
+      "w": 190,
+      "h": 50
+    },
+    {
+      "ref": "api",
+      "x": 40,
+      "y": 230
+    }
+  ],
+  "edges": [
+    {
+      "ref": "api-validator",
+      "waypoints": []
+    },
+    {
+      "ref": "validator-store",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

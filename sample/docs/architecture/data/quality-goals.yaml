@@ -1,0 +1,23 @@
+# Section 1.2 - top 3 (max 5) quality goals for the architecture, ordered by priority.
+# Fields: id, priority (1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation
+goals:
+  - id: availability
+    priority: 1
+    quality: Availability
+    goal: Customers can order 24/7; at most 1 hour of downtime per month.
+  - id: security
+    priority: 2
+    quality: Security
+    goal: Payment data never touches our servers.
+views:
+  goals:
+    columns:
+      - field: priority
+        label: "#"
+        width: 5.8
+      - field: quality
+        label: Quality
+        width: 15.8
+      - field: goal
+        label: Goal
+        width: 78.4

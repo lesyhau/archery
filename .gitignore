@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.vsix
+.vscode-test/
+
+# Local reference copy of the arc42 template (not redistributed)
+arc42-template-EN-withhelp-markdown/

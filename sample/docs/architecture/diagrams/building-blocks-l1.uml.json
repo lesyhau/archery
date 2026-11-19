@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "type": "component",
+  "title": "Building blocks - level 1",
+  "nodes": [
+    {
+      "ref": "customer",
+      "x": 40,
+      "y": 60
+    },
+    {
+      "ref": "webshop",
+      "x": 200,
+      "y": 20
+    },
+    {
+      "ref": "storefront",
+      "x": 240,
+      "y": 90,
+      "w": 170,
+      "h": 80
+    },
+    {
+      "ref": "orderService",
+      "x": 520,
+      "y": 90,
+      "w": 170,
+      "h": 80
+    },
+    {
+      "ref": "payments",
+      "x": 820,
+      "y": 118,
+      "w": 24,
+      "h": 24,
+      "style": {
+        "notation": "lollipop"
+      }
+    },
+    {
+      "ref": "paymentGateway",
+      "x": 940,
+      "y": 90,
+      "w": 170,
+      "h": 80
+    },
+    {
+      "ref": "api",
+      "x": 513,
+      "y": 123
+    }
+  ],
+  "edges": [
+    {
+      "ref": "r3",
+      "waypoints": []
+    },
+    {
+      "ref": "r2",
+      "waypoints": []
+    },
+    {
+      "ref": "r1",
+      "waypoints": []
+    },
+    {
+      "ref": "r4",
+      "waypoints": []
+    }
+  ],
+  "local": {
+    "nodes": [],
+    "edges": []
+  }
+}

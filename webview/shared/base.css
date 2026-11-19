@@ -1,0 +1,63 @@
+/* Base styles for all Archery webviews. Colors come from the VS Code theme. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.toolbar .title {
+  font-weight: 600;
+}
+
+.toolbar .meta {
+  color: var(--vscode-descriptionForeground);
+}
+
+.banner {
+  padding: 6px 12px;
+  white-space: pre-wrap;
+}
+
+.banner.error {
+  background: var(--vscode-inputValidation-errorBackground);
+  border-bottom: 1px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.banner.warning {
+  background: var(--vscode-inputValidation-warningBackground);
+  border-bottom: 1px solid var(--vscode-inputValidation-warningBorder);
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.placeholder {
+  padding: 24px;
+  color: var(--vscode-descriptionForeground);
+}

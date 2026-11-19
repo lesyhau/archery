@@ -1,0 +1,94 @@
+# Archery version history - maintained by the extension, do not edit by hand.
+current: "0.11"
+entries:
+  - version: "0.1"
+    date: 2026-11-19T05:07:02.916Z
+    kind: edit
+    files:
+      - archery.yaml
+      - data
+      - data/constraints.yaml
+      - data/glossary.yaml
+      - data/quality-goals.yaml
+      - data/quality-requirements.yaml
+      - data/risks.yaml
+      - data/stakeholders.yaml
+      - decisions
+      - decisions/README.md
+      - diagrams
+      - diagrams/building-blocks-l1.uml.json
+      - diagrams/checkout.uml.json
+      - diagrams/deployment-l1.uml.json
+      - diagrams/domain-model.uml.json
+      - diagrams/example-order.uml.json
+      - diagrams/order-flow.uml.json
+      - diagrams/order-lifecycle.uml.json
+      - diagrams/order-service-internals.uml.json
+      - diagrams/place-order-communication.seq.json
+      - diagrams/place-order-timing.timing.json
+      - diagrams/place-order.seq.json
+      - diagrams/shopping-use-cases.uml.json
+      - model.yaml
+      - sections
+      - sections/01-introduction-and-goals.md
+      - sections/02-architecture-constraints.md
+      - sections/03-context-and-scope.md
+      - sections/04-solution-strategy.md
+      - sections/05-building-block-view.md
+      - sections/06-runtime-view.md
+      - sections/07-deployment-view.md
+      - sections/08-crosscutting-concepts.md
+      - sections/09-architecture-decisions.md
+      - sections/10-quality-requirements.md
+      - sections/11-risks-and-technical-debt.md
+      - sections/12-glossary.md
+  - version: "0.2"
+    date: 2026-11-19T06:47:06.907Z
+    kind: edit
+    files:
+      - model.yaml
+  - version: "0.3"
+    date: 2026-11-19T07:36:05.093Z
+    kind: edit
+    files:
+      - data/stakeholders.yaml
+  - version: "0.4"
+    date: 2026-11-19T07:36:10.961Z
+    kind: edit
+    files:
+      - data/stakeholders.yaml
+  - version: "0.5"
+    date: 2026-11-19T07:36:14.429Z
+    kind: edit
+    files:
+      - data/stakeholders.yaml
+  - version: "0.6"
+    date: 2026-11-19T08:07:17.125Z
+    kind: edit
+    files:
+      - sections/05-building-block-view.md
+  - version: "0.7"
+    date: 2026-11-19T09:32:45.945Z
+    kind: edit
+    files:
+      - sections/05-building-block-view.md
+  - version: "0.8"
+    date: 2026-11-19T09:33:17.498Z
+    kind: edit
+    files:
+      - data/risks.yaml
+  - version: "0.9"
+    date: 2026-11-19T09:33:19.963Z
+    kind: edit
+    files:
+      - data/risks.yaml
+  - version: "0.10"
+    date: 2026-11-19T09:33:31.205Z
+    kind: edit
+    files:
+      - data/risks.yaml
+  - version: "0.11"
+    date: 2026-11-19T09:47:57.179Z
+    kind: edit
+    files:
+      - data/quality-goals.yaml
