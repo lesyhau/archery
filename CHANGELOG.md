@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4
 
 - **New logo:** a blueprint of three amber cubes, the top one still a wireframe drawing; in the Extensions view, the activity bar, editor tabs and the chat.
 
