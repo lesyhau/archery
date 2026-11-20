@@ -72,7 +72,8 @@ export function checkReferences(input: CheckInput): Issue[] {
     }
     const localIds = new Set(diagram.local.nodes.map((n) => n.id));
     for (const n of diagram.local.nodes) {
-      if (n.parent && !localIds.has(n.parent)) error(file, `Local node "${n.id}" has unknown parent "${n.parent}"`);
+      // A local node can sit in another local node or in an element shown on the diagram (a note in a component).
+      if (n.parent && !localIds.has(n.parent) && !onDiagram.has(n.parent)) error(file, `Local node "${n.id}" has unknown parent "${n.parent}"`);
     }
     for (const e of diagram.local.edges) {
       for (const end of [e.from, e.to]) {

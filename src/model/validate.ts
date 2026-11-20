@@ -3,6 +3,7 @@ import { checkReferences, type CheckInput } from './checks';
 import { loadWorkspace, parseCanvasDiagram, parseSequenceDiagram, parseTimingDiagram, parseYaml, type Issue, type LoadedWorkspace, type WorkspaceReader } from './load';
 import { QualityGoalsSchema, QualityRequirementsSchema } from './schema';
 import { layoutProblems } from '../render/layoutLint';
+import { listForSrc } from '../doc/dataLists';
 
 export async function validateWorkspace(reader: WorkspaceReader): Promise<{ workspace: LoadedWorkspace; issues: Issue[] }> {
   const workspace = await loadWorkspace(reader);
@@ -32,6 +33,7 @@ export async function validateWorkspace(reader: WorkspaceReader): Promise<{ work
   // Reference checks are only meaningful when model.yaml itself parsed.
   const modelBroken = workspace.issues.some((i) => i.file === 'model.yaml' && i.severity === 'error');
   const issues = [...workspace.issues, ...(modelBroken ? [] : checkReferences(input))];
+  issues.push(...(await directiveProblems(reader, workspace)));
   // Layout: what is drawn over something else (with coordinates, for agents that cannot look).
   if (!modelBroken) {
     for (const { file, diagram } of input.canvasDiagrams) {
@@ -39,4 +41,27 @@ export async function validateWorkspace(reader: WorkspaceReader): Promise<{ work
     }
   }
   return { workspace, issues };
+}
+
+/** `<!-- archery:diagram <src> ... -->` / `<!-- archery:table <src> ... -->`, outside code blocks. */
+const DIRECTIVE = /<!--\s*archery:(diagram|table)\s+((?:(?!-->)\S)+)/g;
+const FENCE = /^(```|~~~)[\s\S]*?^\1/gm;
+
+/** Chapter directives that show a diagram or table that does not exist (deleted, renamed, mistyped). */
+async function directiveProblems(reader: WorkspaceReader, workspace: LoadedWorkspace): Promise<Issue[]> {
+  const issues: Issue[] = [];
+  const diagrams = new Set(workspace.diagrams.map((d) => d.file));
+  for (const section of workspace.project?.sections ?? []) {
+    const text = await reader.readText(section.file);
+    if (text === undefined) continue;
+    for (const m of text.replace(FENCE, '').matchAll(DIRECTIVE)) {
+      const [, kind, src = ''] = m;
+      if (kind === 'diagram' && !diagrams.has(src.split('#')[0]!)) {
+        issues.push({ file: section.file, message: `Shows diagram "${src}", which does not exist`, severity: 'error' });
+      } else if (kind === 'table' && !listForSrc(src)) {
+        issues.push({ file: section.file, message: `Shows table "${src}", which is not a data list`, severity: 'error' });
+      }
+    }
+  }
+  return issues;
 }

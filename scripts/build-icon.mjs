@@ -1,6 +1,6 @@
 // Builds the icon assets from media/icon.svg (white on transparent, filled shapes only):
-//   media/icon.png            extension icon (Marketplace, Extensions view): the white symbol on a rounded tile in
-//                             Proxyma's brand colours (a PNG cannot follow the theme)
+//   media/icon.png            extension icon (Marketplace, Extensions view): the symbol in teal and amber on
+//                             transparent, readable on light and dark themes (a PNG cannot follow the theme)
 //   media/logo-light.svg      black symbol, for editor tabs and the chat participant on light themes
 //   media/logo-dark.svg       white symbol, for dark themes
 //   media/archery-icons.woff  icon font, so the status bar / commands can show $(archery-logo) in the theme's colour
@@ -15,25 +15,18 @@ import ttf2woff from 'ttf2woff';
 const svg = readFileSync('media/icon.svg', 'utf8');
 
 const path = /<path[^>]*\/>/.exec(svg)[0];
-// The white symbol on a rounded tile in Proxyma's brand ramp (primary #164E63): a diagonal gradient lit from
-// the top left, plus Proxyma's soft sheen. The tile reads on light and dark backgrounds alike.
-const RAMP = { light: '#42A7CD', mid: '#2A8CB2', deep: '#206F8D' };
-/** The rings' centre in icon.svg (the arrow tip); the tile centres it, the arrow reaches into the lower left. */
-const RINGS = { x: 14, y: 10 };
-const SCALE = 0.75;
-const colored = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <defs>
-    <linearGradient id="ramp" x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0" stop-color="${RAMP.light}"/><stop offset="0.5" stop-color="${RAMP.mid}"/><stop offset="1" stop-color="${RAMP.deep}"/>
-    </linearGradient>
-    <linearGradient id="sheen" x1="0.08" y1="0" x2="0.92" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/><stop offset="0.42" stop-color="#ffffff" stop-opacity="0.03"/>
-      <stop offset="0.58" stop-color="#000000" stop-opacity="0.03"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/>
-    </linearGradient>
-  </defs>
-  <rect width="24" height="24" rx="5" fill="url(#ramp)"/>
-  <rect width="24" height="24" rx="5" fill="url(#sheen)"/>
-  <g transform="translate(${12 - RINGS.x * SCALE} ${12 - RINGS.y * SCALE}) scale(${SCALE})">${path.replace(/fill="[^"]*"/, 'fill="#FFFFFF"')}</g>
+// The symbol itself in colour, without a tile: mid-tone teal rings and an amber arrow, light enough for dark themes
+// and dark enough for light ones. The path holds the outer ring, the inner ring and the arrow, each starting with M.
+const [outer, inner, arrow] = /\sd="([^"]+)"/.exec(path)[1].split(/ (?=M)/);
+const TEAL = { light: '#33B3D0', deep: '#147A94' };
+const AMBER = { light: '#F6A623', deep: '#DB7608' };
+const gradient = (id, { light, deep }) =>
+  `<linearGradient id="${id}" x1="2" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${deep}"/></linearGradient>`;
+const colored = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.5 -0.5 25 25" width="24" height="24">
+  <defs>${gradient('teal', TEAL)}${gradient('amber', AMBER)}</defs>
+  <path fill="url(#teal)" d="${outer}"/>
+  <path fill="url(#teal)" d="${inner}"/>
+  <path fill="url(#amber)" d="${arrow}"/>
 </svg>`;
 const png = new Resvg(colored, { fitTo: { mode: 'width', value: 256 }, background: 'rgba(0,0,0,0)' }).render().asPng();
 writeFileSync('media/icon.png', png);

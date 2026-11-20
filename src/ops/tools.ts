@@ -312,7 +312,9 @@ interface DiagramReference {
 function diagramReferences(session: ArcherySession, path: string): DiagramReference[] {
   const out: DiagramReference[] = [];
   const project = parseProject(session.read('archery.yaml') ?? '').value;
-  const directive = new RegExp(`<!--\\s*archery:diagram\\s+${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(#[^\\s]*)?\\s*-->`, 'g');
+  // `<!-- archery:diagram <path>[#part] [width=… height=… collapsed caption="…"] -->`: the path ends at
+  // a space or at `-->`, and attributes may follow it (comments do not nest, so `[\s\S]*?-->` is the rest).
+  const directive = new RegExp(`<!--\\s*archery:diagram\\s+${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#[^\\s]*)?(?:\\s[\\s\\S]*?)?-->`, 'g');
   for (const s of project?.sections ?? []) {
     const text = session.read(s.file);
     if (!text || !text.match(directive)) continue;

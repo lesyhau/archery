@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { createPortal } from 'react-dom';
 import { headingsOf } from '../../src/template/markdown';
 import type { DocumentData } from '../../src/doc/protocol';
+import { runOp, useDoc } from './context';
 import { IconExpand, IconExport } from './icons';
 import { addHeading, canDemote, canPromote, MAX_LEVEL, moveHeading, outlineNumbers, outlineOf, setLevel, type OutlineItem } from './outline';
 
@@ -31,6 +32,54 @@ interface Props {
 
 type Drop = { sectionId: string; index: number | null; place: 'before' | 'after'; level: number };
 type MenuItem = { label: string; disabled?: boolean; run(): void };
+
+/** The system name; click to rename it (Enter or leaving the field saves, Escape cancels). */
+function SystemName({ system }: { system: string }) {
+  const { showError } = useDoc();
+  const [draft, setDraft] = useState<string | null>(null);
+  // Shown from saving until the reloaded document carries the new name.
+  const [pending, setPending] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setPending(null), [system]);
+  useEffect(() => {
+    if (draft !== null) input.current?.select();
+  }, [draft !== null]);
+
+  const save = () => {
+    if (draft === null) return;
+    const name = draft.trim();
+    setDraft(null);
+    if (!name || name === system) return;
+    setPending(name);
+    runOp('set_project', { system: name }).catch((e: unknown) => {
+      setPending(null);
+      showError(e instanceof Error ? e.message : String(e));
+    });
+  };
+
+  if (draft !== null) {
+    return (
+      <input
+        ref={input}
+        className="toc-system toc-system-input"
+        aria-label="System name"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save();
+          else if (e.key === 'Escape') setDraft(null);
+        }}
+      />
+    );
+  }
+  return (
+    <button type="button" className="toc-system toc-system-name" title="Rename system" onClick={() => setDraft(pending ?? system)}>
+      {pending ?? system}
+    </button>
+  );
+}
 
 /** h2 items with their h3 children, keeping each item's outline index. */
 function tree(items: OutlineItem[]): { item: OutlineItem; children: OutlineItem[] }[] {
@@ -192,7 +241,7 @@ export function Toc({ data, active, activeHeading, editors, historyNumber, width
     <aside className={`toc${drag?.drop ? ' dragging' : ''}`} style={{ flexBasis: width, width }}>
       <div className="toc-head">
         <div className="toc-system-row">
-          <div className="toc-system">{data.system}</div>
+          <SystemName system={data.system} />
           <button
             type="button"
             className="toc-export"

@@ -27,13 +27,19 @@ export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: Diagram
       const a = all[i]!;
       const b = all[j]!;
       if (within(a.id, b.id) || within(b.id, a.id) || !overlaps(a.box, b.box, 1)) continue;
+      // Wholly inside a container: drawn right, but it does not move with the container (auto_layout).
+      const [outer, inner] = a.container && inside(b.box, a.box) ? [a, b] : b.container && inside(a.box, b.box) ? [b, a] : [undefined, undefined];
+      if (outer && inner) {
+        out.push(`${inner.id} ${at(inner.box)} lies inside ${outer.id} ${at(outer.box)} without being part of it, so it does not move with it; make ${outer.id} its parent.`);
+        continue;
+      }
       if (a.parent === b.parent) {
         out.push(`${a.id} ${at(a.box)} and ${b.id} ${at(b.box)} overlap.`);
         continue;
       }
-      // A shape over a container it does not belong to (it looks inside, but does not move with it).
+      // A shape partly over a container it does not belong to.
       const [c, n] = a.container && !inside(a.box, b.box) ? [a, b] : b.container && !inside(b.box, a.box) ? [b, a] : [undefined, undefined];
-      if (c && n && n.parent !== c.id) out.push(`${n.id} ${at(n.box)} lies ${inside(n.box, c.box) ? 'inside' : 'partly over'} ${c.id} ${at(c.box)} without being part of it.`);
+      if (c && n && n.parent !== c.id) out.push(`${n.id} ${at(n.box)} lies partly over ${c.id} ${at(c.box)} without being part of it.`);
     }
   }
 

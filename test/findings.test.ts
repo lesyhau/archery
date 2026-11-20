@@ -193,6 +193,34 @@ describe('diagram files, project, decisions (M-7, L-1, L-2, L-3)', () => {
     expect((await call('validate')).ok).toBe(true);
   });
 
+  it('finds chapter directives with a caption when renaming and deleting (N-1, N-2)', async () => {
+    const { files, call } = await workspace();
+    await call('create_diagram', { title: 'Guard', name: 'tmp-guard', type: 'component' });
+    const inserted = await call('insert_into_section', { section: '12', kind: 'diagram', src: 'tmp-guard', caption: 'temporary' });
+    expect(inserted.inserted).toBe('<!-- archery:diagram diagrams/tmp-guard.uml.json caption="temporary" -->');
+    const chapter = inserted.file.replace('docs/architecture/', '');
+    await expect(call('delete_diagram', { diagram: 'tmp-guard' })).rejects.toThrow(/still used by: chapter 12/);
+    const renamed = await call('rename_diagram', { diagram: 'tmp-guard', name: 'kept' });
+    expect(renamed.updatedReferences).toEqual([expect.stringMatching(/^chapter 12/)]);
+    expect(files.get(chapter)).toContain('<!-- archery:diagram diagrams/kept.uml.json caption="temporary" -->');
+    // A diagram whose name starts the same is a different diagram.
+    await call('create_diagram', { title: 'Kept 2', name: 'kept-2', type: 'component' });
+    expect((await call('delete_diagram', { diagram: 'kept-2' })).removedReferences).toEqual([]);
+    await call('delete_diagram', { diagram: 'kept', force: true });
+    expect(files.get(chapter)).not.toContain('archery:diagram');
+    expect((await call('validate')).ok).toBe(true);
+  });
+
+  it('reports chapters that show a diagram or table that does not exist (N-3)', async () => {
+    const { files, call } = await workspace();
+    const chapter = [...files.keys()].find((f) => f.startsWith('sections/12'))!;
+    files.set(chapter, `${files.get(chapter)}\n<!-- archery:diagram diagrams/gone.uml.json caption="x" -->\n\n<!-- archery:table data/nothing.yaml -->\n\n\`\`\`\n<!-- archery:diagram diagrams/example.uml.json -->\n\`\`\`\n`);
+    const v = await call('validate');
+    expect(v.ok).toBe(false);
+    const messages = v.problems.filter((p: any) => p.severity === 'error').map((p: any) => p.message);
+    expect(messages).toEqual([expect.stringMatching(/diagram "diagrams\/gone\.uml\.json", which does not exist/), expect.stringMatching(/table "data\/nothing\.yaml"/)]);
+  });
+
   it('titles the document with the system name unless it has its own title', async () => {
     expect(documentTitle('ECU Bench', undefined)).toBe('ECU Bench');
     expect(documentTitle('ECU Bench', 'ECU Bench - Architecture Documentation')).toBe('ECU Bench'); // the old generated title
@@ -232,6 +260,21 @@ describe('diagram files, project, decisions (M-7, L-1, L-2, L-3)', () => {
     const n = d.local.nodes.find((x: any) => x.id === note.id);
     expect(n.parent).toBe('sys');
     expect(n.y + n.h).toBeLessThanOrEqual(sys.y + sys.h);
+    // validate agrees with the tool (N-4) and does not call the note an overlap (N-5).
+    const v = await call('validate');
+    expect(v.problems.filter((p: any) => p.message.includes(note.id))).toEqual([]);
+  });
+
+  it('says a shape inside a container it is not part of does not move with it (N-5)', async () => {
+    const { call } = await workspace();
+    await call('add_element', { id: 'sys', name: 'Demo', kind: 'component', diagram: 'building-blocks-l1', x: 0, y: 0 });
+    await call('add_element', { id: 'part', name: 'Part', kind: 'component', parent: 'sys', diagram: 'building-blocks-l1' });
+    await call('move_nodes', { diagram: 'building-blocks-l1', nodes: [{ id: 'sys', x: 0, y: 0, w: 600, h: 400 }, { id: 'part', x: 40, y: 60 }] });
+    const note = await call('add_local_node', { diagram: 'building-blocks-l1', kind: 'note', text: 'Loose', x: 300, y: 200, w: 120, h: 60 });
+    const messages = (await call('validate')).problems.map((p: any) => p.message).filter((m: string) => m.includes(note.id));
+    expect(messages).toEqual([expect.stringMatching(new RegExp(`^${note.id} .* lies inside sys .* does not move with it; make sys its parent\\.$`))]);
+    await call('update_local_node', { diagram: 'building-blocks-l1', id: note.id, parent: 'sys' });
+    expect((await call('validate')).problems.filter((p: any) => p.message.includes(note.id))).toEqual([]);
   });
 });
 
