@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.5
 
 - **Routed lines keep their distance.** A line that automatic layout routes around a shape no longer runs along the border of another box, where it looked like part of that box.
 - **Leader lines stay off boxes.** Automatic layout no longer moves a label to a spot whose dotted leader line would cross a box.

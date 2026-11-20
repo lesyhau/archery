@@ -2,7 +2,7 @@
   "name": "archery",
   "displayName": "Archery",
   "description": "Architecture docs as code in VS Code: an arc42 document with a model-based UML editor for all 13 UML 2 diagram types, PDF/HTML export, and tools for Claude Code and GitHub Copilot that show their edits live.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "publisher": "lesyhau",
   "license": "MIT",
