@@ -10,14 +10,16 @@
 //  - containers fit their children below their own name / keyword / property header;
 //  - orthogonal regions stack inside their state; ports stay where they were on their component;
 //  - unconnected parts are packed into rows instead of one long line;
-//  - a line that would run straight through a shape follows ELK's route around it instead (bend points);
-//  - a label that still covers a shape or another label is moved next to its line;
+//  - a line that would run straight through a shape follows ELK's route around it instead (bend points),
+//    leaving and entering its ends through their border;
+//  - a label that still covers a shape or another label, or that another line runs through, is moved
+//    next to its line;
 //  - running it again gives the same result: nodes keep their current order as a tie-breaker.
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type { CanvasDiagram, CanvasDiagramType, Model, Relationship } from '../model/schema';
 import { containerInset, displayModel, labelBox, layoutNodes, minSize, relationshipLabel, type Box } from '../render/canvasLayout';
-import { drawnEdges, overlaps, shapesCrossed } from '../render/layoutLint';
+import { drawnEdges, endsCrossed, overlaps, segmentCrossesBox, shapesCrossed } from '../render/layoutLint';
 import { textWidth } from '../render/scene';
 
 export type LayoutDirection = 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
@@ -82,7 +84,7 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
     const t = rel && endOf(rel.to);
     if (!rel || !s || !t) continue;
     if (isBorder(rel.from) || isBorder(rel.to)) onPort.add(e.ref);
-    const label = relationshipLabel(rel, diagram.show?.keywords !== false);
+    const label = relationshipLabel(rel, diagram.show?.keywords);
     if (reversed(rel)) {
       against.add(e.ref);
       addEdge(e.ref, t, s, label);
@@ -234,12 +236,37 @@ type Waypoints = { x: number; y: number }[];
 
 /** Room between a detour and the shape it goes around. */
 const DETOUR_GAP = 16;
+/** How far inside a container's border a detour has to stay. */
+const WALL = 8;
+
+const swap = (b: Box): Box => ({ x: b.y, y: b.x, w: b.h, h: b.w });
+const flip = (w: Waypoints): Waypoints => w.map((p) => ({ x: p.y, y: p.x }));
+
+/**
+ * Routes from box a to box b along a vertical lane at `x` beside the shape s in the way. Each end is
+ * left or entered from its side when the lane passes beside it, or through the side facing the lane's
+ * other end with a short step to the lane (a bend point inside an end would make the line cross its
+ * own box: N-8 of the agent report). Every combination is offered; the caller keeps the best.
+ */
+function laneRoutes(a: Box, b: Box, s: Box, x: number): Waypoints[] {
+  const p = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+  const q = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const down = q.y >= p.y;
+  // The step stays clear of the shape in the way: half the room between them when that is less.
+  const room = (gap: number) => (gap > 0 ? Math.min(DETOUR_GAP, gap / 2) : DETOUR_GAP);
+  const ya = down ? a.y + a.h + room(s.y - (a.y + a.h)) : a.y - room(a.y - (s.y + s.h));
+  const yb = down ? b.y - room(b.y - (s.y + s.h)) : b.y + b.h + room(s.y - (b.y + b.h));
+  const starts: Waypoints[] = [[{ x, y: p.y }], [{ x: p.x, y: ya }, { x, y: ya }]];
+  const ends: Waypoints[] = [[{ x, y: q.y }], [{ x, y: yb }, { x: q.x, y: yb }]];
+  return starts.flatMap((st) => ends.map((en) => [...st, ...en]));
+}
 
 /**
  * Lines drawn straight (Classic) or with right angles (Modern) between their shapes may run through a
  * shape in between (N-7 of the agent report). Such a line gets the route that runs through the fewest
- * shapes, then has the fewest bends: ELK's route, one corner, or a lane beside a shape in the way.
- * (ELK has no usable route for a line that ends on a port: it routes it to the port's parent.)
+ * shapes (its own ends included), then has the fewest bends: ELK's route, one corner, or a lane beside
+ * a shape in the way. (ELK has no usable route for a line that ends on a port: it routes it to the
+ * port's parent.)
  */
 function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, Waypoints>): CanvasDiagram {
   const nodes = layoutNodes(diagram, model);
@@ -248,7 +275,7 @@ function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, W
     let n = 0;
     for (const ds of ['classic', 'modern'] as const) {
       const e = drawnEdges(d, model, ds, nodes).find((x) => elkId(x) === id);
-      if (e && e.from !== e.to) n = Math.max(n, shapesCrossed(e, nodes).length);
+      if (e && e.from !== e.to) n = Math.max(n, shapesCrossed(e, nodes).length + endsCrossed(e, nodes).length);
     }
     return n;
   };
@@ -259,16 +286,25 @@ function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, W
     const a = nodes.get(e.from)!.box;
     const b = nodes.get(e.to)!.box;
     const [p, q] = [{ x: a.x + a.w / 2, y: a.y + a.h / 2 }, { x: b.x + b.w / 2, y: b.y + b.h / 2 }];
+    // The containers that hold both ends: a detour on or outside their border would run along the
+    // wall (or out of the box); each one it leaves counts like a shape in the way.
+    const holders: Box[] = [];
+    for (let c = nodes.get(e.from)!.parent; c; c = nodes.get(c)?.parent) {
+      let t = nodes.get(e.to)!.parent;
+      while (t && t !== c) t = nodes.get(t)?.parent;
+      if (t === c) holders.push(nodes.get(c)!.box);
+    }
+    const walls = (w: Waypoints) => holders.filter((h) => w.some((pt) => pt.x < h.x + WALL || pt.x > h.x + h.w - WALL || pt.y < h.y + WALL || pt.y > h.y + h.h - WALL)).length;
     const options: Waypoints[] = [routes.get(id) ?? [], [{ x: p.x, y: q.y }], [{ x: q.x, y: p.y }]];
     for (const s of shapesCrossed(e, nodes)) {
-      for (const x of [s.box.x - DETOUR_GAP, s.box.x + s.box.w + DETOUR_GAP]) options.push([{ x, y: p.y }, { x, y: q.y }]);
-      for (const y of [s.box.y - DETOUR_GAP, s.box.y + s.box.h + DETOUR_GAP]) options.push([{ x: p.x, y }, { x: q.x, y }]);
+      for (const x of [s.box.x - DETOUR_GAP, s.box.x + s.box.w + DETOUR_GAP]) options.push(...laneRoutes(a, b, s.box, x));
+      for (const y of [s.box.y - DETOUR_GAP, s.box.y + s.box.h + DETOUR_GAP]) options.push(...laneRoutes(swap(a), swap(b), swap(s.box), y).map(flip));
     }
     let best: { waypoints: Waypoints; n: number } | undefined;
     for (const option of options) {
       if (!option.length) continue;
       const waypoints = option.map((w) => ({ x: Math.round(w.x), y: Math.round(w.y) }));
-      const n = crossings(withWaypoints(d, (x) => (x === id ? waypoints : undefined)), id);
+      const n = crossings(withWaypoints(d, (x) => (x === id ? waypoints : undefined)), id) + walls(waypoints);
       if (!best || n < best.n || (n === best.n && waypoints.length < best.waypoints.length)) best = { waypoints, n };
     }
     if (best && best.n < crossings(d, id)) d = withWaypoints(d, (x) => (x === id ? best!.waypoints : undefined));
@@ -278,16 +314,19 @@ function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, W
 
 /** Label moves, nearest first: up to LABEL_REACH in every direction, in LABEL_STEP steps. */
 const LABEL_STEP = 6;
-const LABEL_REACH = 96;
+const LABEL_REACH = 120;
 const SHIFTS = (() => {
   const out: [number, number][] = [];
   for (let x = -LABEL_REACH; x <= LABEL_REACH; x += LABEL_STEP) for (let y = -LABEL_REACH; y <= LABEL_REACH; y += LABEL_STEP) if (x || y) out.push([x, y]);
   return out.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 })();
 
+const overlapArea = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+
 /**
- * Labels that still cover a shape or another label (every place along their line was taken) are moved
- * beside it, to the nearest free spot; the renderer ties them to their line with a dotted leader (M-5).
+ * Labels that still cover a shape or another label, or that another line runs through (every place
+ * along their line was taken), are moved beside it: to the nearest free spot, else to the spot where
+ * they are least in the way; the renderer ties them to their line with a dotted leader (M-5, N-9).
  */
 function moveLabels(diagram: CanvasDiagram, model: Model): CanvasDiagram {
   const lanes = new Set(diagram.local.nodes.filter((n) => n.kind === 'partition').map((n) => n.id));
@@ -297,25 +336,39 @@ function moveLabels(diagram: CanvasDiagram, model: Model): CanvasDiagram {
     const nodes = layoutNodes(d, model);
     const shapes = [...nodes.values()].filter((n) => !n.container && !n.side && !lanes.has(n.id)).map((n) => n.box);
     const edges = drawnEdges(d, model, 'classic', nodes);
-    // The first label in the way, in the order validate checks them (shapes, then the labels before it).
+    /** How many other lines run through `box` (the label of edge `i`), within `inset` of it. */
+    const lines = (box: Box, i: number, inset: number) =>
+      edges.filter((o, j) => j !== i && o.from !== o.to && o.points.slice(1).some((q, k) => segmentCrossesBox(o.points[k]!, q, box, inset))).length;
+    // The first label in the way, in the order validate checks them (shapes, the labels before it, lines).
     const clash = edges.findIndex((e, i) => {
       const box = e.labelBox;
       if (!box || tried.has(elkId(e))) return false;
-      return shapes.some((s) => overlaps(box, s, 2)) || edges.slice(0, i).some((o) => o.labelBox && overlaps(box, o.labelBox, 1));
+      return shapes.some((s) => overlaps(box, s, 2)) || edges.slice(0, i).some((o) => o.labelBox && overlaps(box, o.labelBox, 1)) || lines(box, i, 1) > 0;
     });
     if (clash < 0) break;
     const e = edges[clash]!;
     tried.add(elkId(e));
     const box = e.labelBox!;
     const blockers: Box[] = [...shapes, ...edges.filter((o, i) => i !== clash && o.labelBox).map((o) => o.labelBox!)];
-    const free = SHIFTS.find(([x, y]) => {
-      const b = { ...box, x: box.x + x, y: box.y + y };
-      return !blockers.some((o) => overlaps(b, o, -3));
-    });
-    if (!free) continue;
+    // What is in the way at a spot: the area it covers, and half the label's area for each line through it.
+    const cost = (b: Box, margin: number, inset: number) =>
+      blockers.reduce((sum, o) => sum + (overlaps(b, o, margin) ? Math.max(1, overlapArea(b, o)) : 0), 0) + (lines(b, clash, inset) * b.w * b.h) / 2;
+    const now = cost(box, 1, 1);
+    let best: { shift: [number, number]; cost: number } | undefined;
+    for (const shift of SHIFTS) {
+      const b = { ...box, x: box.x + shift[0], y: box.y + shift[1] };
+      // Free with some clearance: take it. Else remember the spot least in the way, if better than staying.
+      if (cost(b, -3, -2) === 0) {
+        best = { shift, cost: 0 };
+        break;
+      }
+      const c = cost(b, 1, 1);
+      if (c < now && (!best || c < best.cost)) best = { shift, cost: c };
+    }
+    if (!best) continue;
     // An offset counts from the label's default place (the middle of the line's middle segment).
     const base = labelBox(e.points, e.label, 'classic');
-    const labelOffset = { x: Math.round(box.x - base.x + free[0]), y: Math.round(box.y - base.y + free[1]) };
+    const labelOffset = { x: Math.round(box.x - base.x + best.shift[0]), y: Math.round(box.y - base.y + best.shift[1]) };
     d = e.local
       ? { ...d, local: { ...d.local, edges: d.local.edges.map((x) => (x.id === e.id ? { ...x, labelOffset } : x)) } }
       : { ...d, edges: d.edges.map((x) => (x.ref === e.id ? { ...x, labelOffset } : x)) };

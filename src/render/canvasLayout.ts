@@ -236,9 +236,9 @@ function stickFigure(cx: number, top: number, s: number, out: Prim[]) {
   out.push({ t: 'line', x1: cx, y1: top + s * 0.65, x2: cx + s * 0.25, y2: top + s });
 }
 
-/** «use» on usages and «deploy» on deployments (7.3.53, 10.3.4), plus the stereotype(s). */
-export function relationshipKeywords(rel: Pick<Relationship, 'kind' | 'stereotype'>): string {
-  const kind = rel.kind === 'usage' ? 'use' : rel.kind === 'deploy' ? 'deploy' : rel.kind === 'manifest' ? 'manifest' : undefined;
+/** «use» on usages (unless `noUse`) and «deploy» on deployments (7.3.53, 10.3.4), plus the stereotype(s). */
+export function relationshipKeywords(rel: Pick<Relationship, 'kind' | 'stereotype'>, noUse = false): string {
+  const kind = rel.kind === 'usage' ? (noUse ? undefined : 'use') : rel.kind === 'deploy' ? 'deploy' : rel.kind === 'manifest' ? 'manifest' : undefined;
   const parts = [kind, ...(rel.stereotype ? rel.stereotype.split(',').map((x) => x.trim()) : [])].filter((x): x is string => !!x);
   return [...new Set(parts)].map((k) => `«${k}»`).join(' ');
 }
@@ -1076,7 +1076,7 @@ export function midpoint(points: [number, number][]): [number, number] {
 /** How to draw one edge: its route, where its label goes, and whether relationship keywords («use», ...) show. */
 export interface EdgeDraw extends Route {
   labelAt?: number;
-  keywords?: boolean;
+  keywords?: Keywords;
 }
 
 /** Corners are rounded in Modern, on lines that have corners. */
@@ -1085,9 +1085,16 @@ const cornerRadius = (ds: DiagramStyle, line: LineShape | undefined) => {
   return ds === 'modern' && shape !== 'straight' && shape !== 'curved' ? MODERN_RADIUS : 0;
 };
 
-/** The label of a relationship: its keywords (unless hidden) and its label. */
-export function relationshipLabel(rel: Relationship, keywords = true): string {
-  return [keywords ? relationshipKeywords(rel) : '', rel.label ?? ''].filter(Boolean).join(' ');
+/** Which relationship keywords a diagram shows (DiagramShow.keywords): undefined is 'auto'. */
+export type Keywords = boolean | 'auto' | undefined;
+
+/**
+ * The label of a relationship: its keywords and its label. Keywords: all (true), none (false), or by
+ * default all but «use» on a line that has a label (the label already says how it is used).
+ */
+export function relationshipLabel(rel: Relationship, keywords: Keywords = 'auto'): string {
+  const words = keywords === false ? '' : relationshipKeywords(rel, keywords !== true && !!rel.label);
+  return [words, rel.label ?? ''].filter(Boolean).join(' ');
 }
 
 /** Primitives for one relationship between two shapes. */
@@ -1156,7 +1163,7 @@ export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, way
   drawHead(style.to, end, unit(points.at(-2)!, end), out, ds);
   drawHead(style.from, start, unit(points[1]!, start), out, ds);
 
-  const label = relationshipLabel(rel, opts.keywords !== false);
+  const label = relationshipLabel(rel, opts.keywords);
   if (label) midLabel(points, label, out, ds, labelOffset, opts.labelAt);
   if (rel.condition || rel.extensionPoint) {
     // «extend» condition and extension point: a note attached to the relationship (16.3.3).
@@ -1350,6 +1357,34 @@ const LABEL_SPOTS = [0.5, 0.35, 0.65, 0.22, 0.78];
 const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const overlapArea = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
 
+/** Whether the segment p-q runs through the inside of a box shrunk by `inset` (Liang-Barsky clipping). */
+export function segmentCrossesBox(p: Pt, q: Pt, b: Box, inset = 3): boolean {
+  const x0 = b.x + inset;
+  const y0 = b.y + inset;
+  const x1 = b.x + b.w - inset;
+  const y1 = b.y + b.h - inset;
+  if (x1 <= x0 || y1 <= y0) return false;
+  const dx = q[0] - p[0];
+  const dy = q[1] - p[1];
+  let t0 = 0;
+  let t1 = 1;
+  for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]] as const) {
+    if (pp === 0) {
+      if (qq < 0) return false;
+      continue;
+    }
+    const r = qq / pp;
+    if (pp < 0) {
+      if (r > t1) return false;
+      t0 = Math.max(t0, r);
+    } else {
+      if (r < t0) return false;
+      t1 = Math.min(t1, r);
+    }
+  }
+  return t1 - t0 > 1e-6;
+}
+
 /** The box a label takes (as labelPrim places it). */
 export function labelBox(points: Pt[], text: string, ds: DiagramStyle, at?: number): Box {
   return textBox(labelPrim(points, text, ds, at));
@@ -1364,7 +1399,7 @@ export function labelBox(points: Pt[], text: string, ds: DiagramStyle, at?: numb
  */
 export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<string, LaidOutNode>, ds: DiagramStyle = 'classic'): Map<string, EdgeDraw> {
   const relationships = new Map(model.relationships.map((r) => [r.id, r]));
-  const keywords = diagram.show?.keywords !== false;
+  const keywords = diagram.show?.keywords;
   type Item = { key: string; from: string; to: string; waypoints: { x: number; y: number }[]; style?: Record<string, string>; label: string; offset?: { x: number; y: number } };
   const items: Item[] = [];
   for (const e of diagram.edges) {
@@ -1440,14 +1475,22 @@ export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<str
     const box = labelBox(pointsOf(it), it.label, ds);
     placed.push({ ...box, x: box.x + it.offset.x, y: box.y + it.offset.y });
   }
+  // Other lines through a label are in the way too (each costs half the label's area).
+  const lines = new Map(items.map((it) => [it.key, pointsOf(it)]));
+  const crossedBy = (box: Box, key: string) => {
+    let n = 0;
+    for (const [k, pts] of lines) if (k !== key && pts.slice(1).some((q, i) => segmentCrossesBox(pts[i]!, q, box, 1))) n++;
+    return n;
+  };
   for (const it of items) {
     if (!it.label || it.offset) continue;
     const draw = out.get(it.key)!;
-    const points = pointsOf(it);
+    const points = lines.get(it.key)!;
     let best: { at: number; cost: number; box: Box } | undefined;
     for (const at of LABEL_SPOTS) {
       const box = labelBox(points, it.label, ds, at);
-      const cost = [...obstacles, ...placed].reduce((sum, o) => sum + (boxesOverlap(box, o) ? overlapArea(box, o) : 0), 0);
+      const cost =
+        [...obstacles, ...placed].reduce((sum, o) => sum + (boxesOverlap(box, o) ? overlapArea(box, o) : 0), 0) + (crossedBy(box, it.key) * box.w * box.h) / 2;
       if (!best || cost < best.cost) best = { at, cost, box };
       if (cost === 0) break;
     }

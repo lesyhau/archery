@@ -2,7 +2,9 @@
 // picture, so it gets the coordinates of what overlaps instead. auto_layout uses the same checks to
 // route lines around shapes and to move labels out of the way.
 import type { CanvasDiagram, Model } from '../model/schema';
-import { edgeKey, edgeLayouts, edgePoints, labelBox, layoutNodes, relationshipLabel, type Box, type LaidOutNode } from './canvasLayout';
+import { edgeKey, edgeLayouts, edgePoints, labelBox, layoutNodes, relationshipLabel, segmentCrossesBox, type Box, type LaidOutNode } from './canvasLayout';
+
+export { segmentCrossesBox };
 import type { DiagramStyle } from './scene';
 
 type Pt = [number, number];
@@ -11,34 +13,6 @@ const at = (b: Box) => `(${Math.round(b.x)}, ${Math.round(b.y)}, ${Math.round(b.
 /** Whether two boxes overlap by more than `margin` (a negative margin: come closer than that). */
 export const overlaps = (a: Box, b: Box, margin = 0) => a.x + margin < b.x + b.w && b.x + margin < a.x + a.w && a.y + margin < b.y + b.h && b.y + margin < a.y + a.h;
 const inside = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
-
-/** Whether the segment p-q runs through the inside of a box shrunk by `inset` (Liang-Barsky clipping). */
-export function segmentCrossesBox(p: Pt, q: Pt, b: Box, inset = 3): boolean {
-  const x0 = b.x + inset;
-  const y0 = b.y + inset;
-  const x1 = b.x + b.w - inset;
-  const y1 = b.y + b.h - inset;
-  if (x1 <= x0 || y1 <= y0) return false;
-  const dx = q[0] - p[0];
-  const dy = q[1] - p[1];
-  let t0 = 0;
-  let t1 = 1;
-  for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]] as const) {
-    if (pp === 0) {
-      if (qq < 0) return false;
-      continue;
-    }
-    const r = qq / pp;
-    if (pp < 0) {
-      if (r > t1) return false;
-      t0 = Math.max(t0, r);
-    } else {
-      if (r < t0) return false;
-      t1 = Math.min(t1, r);
-    }
-  }
-  return t1 - t0 > 1e-6;
-}
 
 /** One drawn line: what it connects, its polyline, and its label's box. */
 export interface DrawnEdge {
@@ -58,7 +32,7 @@ export interface DrawnEdge {
 export function drawnEdges(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic', nodes = layoutNodes(diagram, model)): DrawnEdge[] {
   const draws = edgeLayouts(diagram, model, nodes, ds);
   const relationships = new Map(model.relationships.map((r) => [r.id, r]));
-  const keywords = diagram.show?.keywords !== false;
+  const keywords = diagram.show?.keywords;
   const shape = (id: string) => {
     const n = nodes.get(id);
     return n && { box: n.box, outline: n.outline, lollipop: n.lollipop };
@@ -104,9 +78,38 @@ export function shapesCrossed(edge: Pick<DrawnEdge, 'from' | 'to' | 'points'>, n
 }
 
 /**
+ * The ends of a line it runs back into: a bend point inside its own box makes the line leave the box
+ * and turn back across it (N-8 of the agent report). Not checked for an end that holds the other end
+ * (the line starts inside it), ports, and outside the part of a round or diamond shape that is a box.
+ */
+export function endsCrossed(edge: Pick<DrawnEdge, 'from' | 'to' | 'points'>, nodes: Map<string, LaidOutNode>): LaidOutNode[] {
+  const within = (id: string, ancestor: string) => {
+    for (let p = nodes.get(id)?.parent; p; p = nodes.get(p)?.parent) if (p === ancestor) return true;
+    return false;
+  };
+  const out: LaidOutNode[] = [];
+  for (const [end, other] of [[edge.from, edge.to], [edge.to, edge.from]] as const) {
+    const n = nodes.get(end);
+    if (!n || n.side || n.lollipop || end === other || within(other, end) || out.includes(n)) continue;
+    // The part of the shape inside its outline: the whole box, or the box inside an ellipse / diamond.
+    const f = n.outline === 'ellipse' ? (1 - Math.SQRT1_2) / 2 : n.outline === 'diamond' ? 0.25 : 0;
+    const core = { x: n.box.x + n.box.w * f, y: n.box.y + n.box.h * f, w: n.box.w * (1 - 2 * f), h: n.box.h * (1 - 2 * f) };
+    if (edge.points.slice(1).some((q, i) => segmentCrossesBox(edge.points[i]!, q, core))) out.push(n);
+  }
+  return out;
+}
+
+/** The labels of other lines that a line runs through (N-9). */
+export function labelsCrossed(edge: Pick<DrawnEdge, 'id' | 'local' | 'points'>, edges: DrawnEdge[]): DrawnEdge[] {
+  return edges.filter(
+    (o) => o.labelBox && !(o.id === edge.id && o.local === edge.local) && edge.points.slice(1).some((q, i) => segmentCrossesBox(edge.points[i]!, q, o.labelBox!, 1)),
+  );
+}
+
+/**
  * What is drawn on top of something else: shapes with the same parent that overlap, shapes that lie
- * partly over a container they are not in, lines that run through a shape, and line labels that cover
- * a shape or another label.
+ * partly over a container they are not in, lines that run through a shape (or back through their own
+ * end), and line labels that cover a shape, another label, or are crossed by another line.
  */
 export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic'): string[] {
   const nodes = layoutNodes(diagram, model);
@@ -145,6 +148,12 @@ export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: Diagram
     for (const n of shapesCrossed(e, nodes)) {
       if (lanes.has(n.id)) continue;
       out.push(`The line of ${e.id} runs through ${n.id} ${at(n.box)}; run auto_layout, or route it around with set_edge_waypoints.`);
+    }
+    for (const n of endsCrossed(e, nodes)) {
+      out.push(`The line of ${e.id} runs back across its own end ${n.id} ${at(n.box)}; run auto_layout, or move the bend points of ${e.id} out of ${n.id} with set_edge_waypoints.`);
+    }
+    for (const o of labelsCrossed(e, edges)) {
+      out.push(`The line of ${e.id} runs through the label of ${o.id} ${at(o.labelBox!)}; run auto_layout, or move the label with set_label_offset.`);
     }
   }
   const labels: { id: string; box: Box }[] = [];

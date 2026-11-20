@@ -1529,10 +1529,18 @@
                   "type": "boolean"
                 },
                 "keywords": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "auto"
+                    }
+                  ]
                 }
               },
-              "description": "What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines, default true; false shows only the labels). Change it later with update_diagram"
+              "description": "What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines: true on every line, false on none, \"auto\" (default) on every line except «use» on a line that has a label). Change it later with update_diagram"
             }
           },
           "required": [
@@ -2363,8 +2371,8 @@
         "displayName": "Update diagram",
         "toolReferenceName": "archery-update-diagram",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines, default true).",
-        "modelDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines, default true).",
+        "userDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines: true on every line, false on none, \"auto\" (default) on every line except «use» on a line that has a label).",
+        "modelDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines: true on every line, false on none, \"auto\" (default) on every line except «use» on a line that has a label).",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2403,7 +2411,15 @@
                   "type": "boolean"
                 },
                 "keywords": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "auto"
+                    }
+                  ]
                 }
               },
               "description": "Canvas diagrams only; given fields are changed, the others stay"

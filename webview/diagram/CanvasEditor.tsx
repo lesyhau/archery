@@ -868,7 +868,9 @@ export function CanvasEditor() {
         label: 'Show',
         items: [
           { label: 'Tagged values', checked: !!show.tags, run: () => void op('update_diagram', { show: { tags: !show.tags } }) },
-          { label: 'Keywords on lines', checked: show.keywords !== false, run: () => void op('update_diagram', { show: { keywords: show.keywords === false } }) },
+          { sep: true, label: 'Keywords on all lines', checked: show.keywords === true, run: () => void op('update_diagram', { show: { keywords: true } }) },
+          { label: '«use» only on lines without a label', checked: (show.keywords ?? 'auto') === 'auto', run: () => void op('update_diagram', { show: { keywords: 'auto' } }) },
+          { label: 'No keywords on lines', checked: show.keywords === false, run: () => void op('update_diagram', { show: { keywords: false } }) },
         ],
       });
       const refs = diagram?.nodes.map((n) => n.ref) ?? [];

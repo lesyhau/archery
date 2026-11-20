@@ -714,7 +714,7 @@ export const TOOLS: ToolDef<any>[] = [
         type: d.type,
         title: d.title,
         // With the defaults, so an agent sees what it can switch (update_diagram show).
-        show: { tags: d.show?.tags ?? false, keywords: d.show?.keywords ?? true },
+        show: { tags: d.show?.tags ?? false, keywords: d.show?.keywords ?? 'auto' },
         nodes: d.nodes.map((n) => ({ ...n, ...boxes[n.ref], name: elements.get(n.ref)?.name ?? '(missing)', kind: elements.get(n.ref)?.kind })),
         edges: d.edges.map((e) => {
           const r = rels.get(e.ref);
@@ -746,7 +746,7 @@ export const TOOLS: ToolDef<any>[] = [
       elements: z.array(IdSchema).default([]),
       includeRelationships: z.boolean().default(true),
       relationships: RelationshipPolicySchema.default('mostSpecific').describe('mostSpecific (default): leave out a container\'s relationship when one of its shown parts has the same relationship to the same partner (or a part of it); all: every relationship between shown elements'),
-      show: DiagramShowSchema.describe('What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines, default true; false shows only the labels). Change it later with update_diagram').optional(),
+      show: DiagramShowSchema.describe('What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines: true on every line, false on none, "auto" (default) on every line except «use» on a line that has a label). Change it later with update_diagram').optional(),
     }),
     readOnly: false,
     confirm: (i) => `Create ${i.type} diagram "${i.title}"?`,
@@ -1078,7 +1078,7 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'update_diagram',
     title: 'Update diagram',
     description:
-      'Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines, default true).',
+      'Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines: true on every line, false on none, "auto" (default) on every line except «use» on a line that has a label).',
     input: z.object({
       diagram: z.string(),
       title: z.string().optional(),

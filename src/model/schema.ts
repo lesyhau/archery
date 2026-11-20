@@ -368,8 +368,11 @@ export type LocalEdge = z.infer<typeof LocalEdgeSchema>;
 export const DiagramShowSchema = z.object({
   /** Tagged values ({owner=…, location=…}) in the boxes; default false. */
   tags: z.boolean().optional(),
-  /** Relationship keywords («use», «deploy», «manifest») on the lines; default true. */
-  keywords: z.boolean().optional(),
+  /**
+   * Relationship keywords («use», «deploy», «manifest») on the lines: true on every line, false on none,
+   * 'auto' (the default) on every line except «use» on a line that has a label.
+   */
+  keywords: z.union([z.boolean(), z.literal('auto')]).optional(),
 });
 export type DiagramShow = z.infer<typeof DiagramShowSchema>;
 

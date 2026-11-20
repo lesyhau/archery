@@ -93,7 +93,11 @@ describe('display options and text (M-1, M-2, M-3, H-2, L-7)', () => {
     expect(t).toContain('{technology=Fastify}');
     expect(t.join(' ')).not.toContain('location=');
     expect(t).toContain('«external»'); // not «actor»
-    expect(t).toContain('«use» calls');
+    // By default the label says how it is used: no «use» on a labelled line (L-7).
+    expect(t).toContain('calls');
+    expect(t).not.toContain('«use» calls');
+    await call('update_diagram', { diagram: 'building-blocks-l1', show: { keywords: true } });
+    expect(await render()).toContain('«use» calls');
     await call('update_diagram', { diagram: 'building-blocks-l1', show: { tags: true, keywords: false } });
     t = await render();
     expect(t.join(' ')).toContain('location=packages/a/src/server.ts');
@@ -106,7 +110,7 @@ describe('display options and text (M-1, M-2, M-3, H-2, L-7)', () => {
     await call('add_element', { id: 'a', name: 'Part A', kind: 'component' });
     await call('add_element', { id: 'b', name: 'Part B', kind: 'component' });
     await call('add_relationship', { kind: 'usage', from: 'a', to: 'b', label: 'calls' });
-    expect((await call('get_diagram', { diagram: 'building-blocks-l1' })).show).toEqual({ tags: false, keywords: true });
+    expect((await call('get_diagram', { diagram: 'building-blocks-l1' })).show).toEqual({ tags: false, keywords: 'auto' });
     await call('create_diagram', { title: 'Plain', type: 'component', elements: ['a', 'b'], show: { keywords: false } });
     expect((await call('get_diagram', { diagram: 'plain' })).show).toEqual({ tags: false, keywords: false });
     const session = await ArcherySession.load(memoryReader(files), '');
