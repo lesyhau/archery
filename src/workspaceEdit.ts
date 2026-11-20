@@ -15,11 +15,13 @@ export async function applyChanges(root: vscode.Uri, changes: Map<string, string
   if (changes.size === 0) return;
   const edit = new vscode.WorkspaceEdit();
   const toSave: vscode.Uri[] = [];
+  const toDelete: vscode.Uri[] = [];
   for (const [path, text] of changes) {
     const uri = vscode.Uri.joinPath(root, ...path.split('/'));
     ownWrites.set(uri.toString(), Date.now());
     if (text === DELETED) {
       edit.deleteFile(uri, { ignoreIfNotExists: true });
+      toDelete.push(uri);
       continue;
     }
     let doc: vscode.TextDocument | undefined;
@@ -44,4 +46,15 @@ export async function applyChanges(root: vscode.Uri, changes: Map<string, string
     const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
     await doc?.save();
   }
+  // VS Code can report the edit as applied and still keep a file it was to delete (agent report N-6).
+  for (const uri of toDelete) {
+    if (!(await exists(uri))) continue;
+    await vscode.workspace.fs.delete(uri, { useTrash: false }).then(undefined, () => undefined);
+    if (await exists(uri)) throw new Error(`Could not delete ${vscode.workspace.asRelativePath(uri)}.`);
+  }
 }
+
+const exists = (uri: vscode.Uri) => vscode.workspace.fs.stat(uri).then(
+  () => true,
+  () => false,
+);

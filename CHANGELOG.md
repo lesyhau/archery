@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Automatic layout routes lines around shapes.** A line that would run straight through a shape in between gets bend points that go around it, and a label that still covers a shape or another label is moved next to its line (with a dotted leader).
+- **Deleting a diagram always deletes its file.** Before, a delete could report success and leave the file on disk while the document was open in VS Code.
+- **For agents:** `validate` reports lines that run through a shape, with coordinates; `create_diagram` takes the display options (`show.keywords: false` hides «use» and the other line keywords); `get_diagram` lists the display options with their defaults, and the bend points and moved labels of each line.
+
 ## 0.2.1
 
 - **Rename the system in the document.** Click the system name at the top of the contents to change it.

@@ -10,11 +10,14 @@
 //  - containers fit their children below their own name / keyword / property header;
 //  - orthogonal regions stack inside their state; ports stay where they were on their component;
 //  - unconnected parts are packed into rows instead of one long line;
+//  - a line that would run straight through a shape follows ELK's route around it instead (bend points);
+//  - a label that still covers a shape or another label is moved next to its line;
 //  - running it again gives the same result: nodes keep their current order as a tie-breaker.
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type { CanvasDiagram, CanvasDiagramType, Model, Relationship } from '../model/schema';
-import { containerInset, displayModel, layoutNodes, minSize, relationshipLabel } from '../render/canvasLayout';
+import { containerInset, displayModel, labelBox, layoutNodes, minSize, relationshipLabel, type Box } from '../render/canvasLayout';
+import { drawnEdges, overlaps, shapesCrossed } from '../render/layoutLint';
 import { textWidth } from '../render/scene';
 
 export type LayoutDirection = 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
@@ -61,6 +64,10 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
   const endOf = (id: string) => (isBorder(id) ? nodes.get(id)?.parent : nodes.has(id) ? id : undefined);
   const incoming = new Set<string>();
   const outgoing = new Set<string>();
+  /** Edges laid out against their arrow: ELK's route for them runs backwards. */
+  const against = new Set<string>();
+  /** Edges that end on a port: ELK routes them to its parent, so its route does not fit. */
+  const onPort = new Set<string>();
   let widestLabel = 0;
   const addEdge = (id: string, from: string, to: string, label?: string) => {
     if (from === to) return;
@@ -74,13 +81,17 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
     const s = rel && endOf(rel.from);
     const t = rel && endOf(rel.to);
     if (!rel || !s || !t) continue;
+    if (isBorder(rel.from) || isBorder(rel.to)) onPort.add(e.ref);
     const label = relationshipLabel(rel, diagram.show?.keywords !== false);
-    if (reversed(rel)) addEdge(e.ref, t, s, label);
-    else addEdge(e.ref, s, t, label);
+    if (reversed(rel)) {
+      against.add(e.ref);
+      addEdge(e.ref, t, s, label);
+    } else addEdge(e.ref, s, t, label);
   }
   for (const e of diagram.local.edges) {
     const s = endOf(e.from);
     const t = endOf(e.to);
+    if (isBorder(e.from) || isBorder(e.to)) onPort.add(`local:${e.id}`);
     if (s && t) addEdge(`local:${e.id}`, s, t, e.kind === 'anchor' ? undefined : e.label);
   }
 
@@ -142,6 +153,8 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
       // Unconnected parts are packed in rows of roughly this width-to-height ratio.
       'elk.aspectRatio': '1.6',
       'elk.separateConnectedComponents': 'true',
+      // Edge routes in the coordinates of the whole diagram, like the nodes after walk() below.
+      'elk.json.edgeCoords': 'ROOT',
     },
     children: childrenOf(undefined).map((n) => toElk(n.id)),
     edges,
@@ -160,6 +173,15 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
   };
   walk(result, 0, 0);
 
+  // ELK's route of every edge (its bend points, in the direction of the relationship).
+  const routes = new Map<string, Waypoints>();
+  for (const e of (result.edges ?? []) as ElkExtendedEdge[]) {
+    const section = e.sections?.length === 1 ? e.sections[0] : undefined;
+    if (!section || onPort.has(e.id)) continue;
+    const bends = (section.bendPoints ?? []).map((p) => ({ x: Math.round(p.x + 40), y: Math.round(p.y + 40) }));
+    routes.set(e.id, against.has(e.id) ? bends.reverse() : bends);
+  }
+
   // Border nodes keep their offset relative to their parent.
   const borderPos = (id: string, x: number, y: number) => {
     const parent = nodes.get(id)?.parent;
@@ -175,7 +197,7 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
     return { ...n, x: a.x, y: a.y, ...(nodes.get(id)?.container ? { w: a.w, h: a.h } : {}) };
   };
 
-  return {
+  const laidOut: CanvasDiagram = {
     ...diagram,
     nodes: diagram.nodes.map((n) => placed(n.ref, n)),
     edges: diagram.edges.map((e) => ({ ...e, waypoints: [], labelOffset: undefined })),
@@ -184,4 +206,119 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
       edges: diagram.local.edges.map((e) => ({ ...e, waypoints: [], labelOffset: undefined })),
     },
   };
+  return moveLabels(routeAround(laidOut, model, routes), model);
+}
+
+/** The key of an edge in ELK's graph: the relationship ref, or local:<id>. */
+const elkId = (e: { id: string; local: boolean }) => (e.local ? `local:${e.id}` : e.id);
+
+/** Sets the bend points of the given edges (keyed like ELK's graph); the others keep theirs. */
+function withWaypoints(diagram: CanvasDiagram, waypoints: (id: string) => { x: number; y: number }[] | undefined): CanvasDiagram {
+  return {
+    ...diagram,
+    edges: diagram.edges.map((e) => {
+      const w = waypoints(e.ref);
+      return w ? { ...e, waypoints: w } : e;
+    }),
+    local: {
+      ...diagram.local,
+      edges: diagram.local.edges.map((e) => {
+        const w = waypoints(`local:${e.id}`);
+        return w ? { ...e, waypoints: w } : e;
+      }),
+    },
+  };
+}
+
+type Waypoints = { x: number; y: number }[];
+
+/** Room between a detour and the shape it goes around. */
+const DETOUR_GAP = 16;
+
+/**
+ * Lines drawn straight (Classic) or with right angles (Modern) between their shapes may run through a
+ * shape in between (N-7 of the agent report). Such a line gets the route that runs through the fewest
+ * shapes, then has the fewest bends: ELK's route, one corner, or a lane beside a shape in the way.
+ * (ELK has no usable route for a line that ends on a port: it routes it to the port's parent.)
+ */
+function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, Waypoints>): CanvasDiagram {
+  const nodes = layoutNodes(diagram, model);
+  /** How many shapes the line `id` runs through, in the worse of the two styles. */
+  const crossings = (d: CanvasDiagram, id: string) => {
+    let n = 0;
+    for (const ds of ['classic', 'modern'] as const) {
+      const e = drawnEdges(d, model, ds, nodes).find((x) => elkId(x) === id);
+      if (e && e.from !== e.to) n = Math.max(n, shapesCrossed(e, nodes).length);
+    }
+    return n;
+  };
+  let d = diagram;
+  for (const e of drawnEdges(diagram, model, 'classic', nodes)) {
+    const id = elkId(e);
+    if (e.from === e.to || !crossings(d, id)) continue;
+    const a = nodes.get(e.from)!.box;
+    const b = nodes.get(e.to)!.box;
+    const [p, q] = [{ x: a.x + a.w / 2, y: a.y + a.h / 2 }, { x: b.x + b.w / 2, y: b.y + b.h / 2 }];
+    const options: Waypoints[] = [routes.get(id) ?? [], [{ x: p.x, y: q.y }], [{ x: q.x, y: p.y }]];
+    for (const s of shapesCrossed(e, nodes)) {
+      for (const x of [s.box.x - DETOUR_GAP, s.box.x + s.box.w + DETOUR_GAP]) options.push([{ x, y: p.y }, { x, y: q.y }]);
+      for (const y of [s.box.y - DETOUR_GAP, s.box.y + s.box.h + DETOUR_GAP]) options.push([{ x: p.x, y }, { x: q.x, y }]);
+    }
+    let best: { waypoints: Waypoints; n: number } | undefined;
+    for (const option of options) {
+      if (!option.length) continue;
+      const waypoints = option.map((w) => ({ x: Math.round(w.x), y: Math.round(w.y) }));
+      const n = crossings(withWaypoints(d, (x) => (x === id ? waypoints : undefined)), id);
+      if (!best || n < best.n || (n === best.n && waypoints.length < best.waypoints.length)) best = { waypoints, n };
+    }
+    if (best && best.n < crossings(d, id)) d = withWaypoints(d, (x) => (x === id ? best!.waypoints : undefined));
+  }
+  return d;
+}
+
+/** Label moves, nearest first: up to LABEL_REACH in every direction, in LABEL_STEP steps. */
+const LABEL_STEP = 6;
+const LABEL_REACH = 96;
+const SHIFTS = (() => {
+  const out: [number, number][] = [];
+  for (let x = -LABEL_REACH; x <= LABEL_REACH; x += LABEL_STEP) for (let y = -LABEL_REACH; y <= LABEL_REACH; y += LABEL_STEP) if (x || y) out.push([x, y]);
+  return out.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+})();
+
+/**
+ * Labels that still cover a shape or another label (every place along their line was taken) are moved
+ * beside it, to the nearest free spot; the renderer ties them to their line with a dotted leader (M-5).
+ */
+function moveLabels(diagram: CanvasDiagram, model: Model): CanvasDiagram {
+  const lanes = new Set(diagram.local.nodes.filter((n) => n.kind === 'partition').map((n) => n.id));
+  const tried = new Set<string>();
+  let d = diagram;
+  for (let round = 0; round <= d.edges.length + d.local.edges.length; round++) {
+    const nodes = layoutNodes(d, model);
+    const shapes = [...nodes.values()].filter((n) => !n.container && !n.side && !lanes.has(n.id)).map((n) => n.box);
+    const edges = drawnEdges(d, model, 'classic', nodes);
+    // The first label in the way, in the order validate checks them (shapes, then the labels before it).
+    const clash = edges.findIndex((e, i) => {
+      const box = e.labelBox;
+      if (!box || tried.has(elkId(e))) return false;
+      return shapes.some((s) => overlaps(box, s, 2)) || edges.slice(0, i).some((o) => o.labelBox && overlaps(box, o.labelBox, 1));
+    });
+    if (clash < 0) break;
+    const e = edges[clash]!;
+    tried.add(elkId(e));
+    const box = e.labelBox!;
+    const blockers: Box[] = [...shapes, ...edges.filter((o, i) => i !== clash && o.labelBox).map((o) => o.labelBox!)];
+    const free = SHIFTS.find(([x, y]) => {
+      const b = { ...box, x: box.x + x, y: box.y + y };
+      return !blockers.some((o) => overlaps(b, o, -3));
+    });
+    if (!free) continue;
+    // An offset counts from the label's default place (the middle of the line's middle segment).
+    const base = labelBox(e.points, e.label, 'classic');
+    const labelOffset = { x: Math.round(box.x - base.x + free[0]), y: Math.round(box.y - base.y + free[1]) };
+    d = e.local
+      ? { ...d, local: { ...d.local, edges: d.local.edges.map((x) => (x.id === e.id ? { ...x, labelOffset } : x)) } }
+      : { ...d, edges: d.edges.map((x) => (x.ref === e.id ? { ...x, labelOffset } : x)) };
+  }
+  return d;
 }

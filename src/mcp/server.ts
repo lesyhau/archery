@@ -83,6 +83,20 @@ function writeFiles(root: string, changes: Map<string, string>): void {
   }
 }
 
+/**
+ * Deletes what the window was asked to delete but left on disk: a window may answer "applied" and
+ * still keep the file (an older extension even wrote the delete marker into it). Throws when a file
+ * cannot be deleted, so the agent is never told a file is gone while it is there.
+ */
+function ensureDeleted(root: string, changes: Map<string, string>): void {
+  for (const [path, text] of changes) {
+    if (text !== DELETED) continue;
+    const target = join(root, path);
+    if (existsSync(target)) rmSync(target, { force: true });
+    if (existsSync(target)) throw new OpError(`Could not delete ${toPosix(path)}; it is still on disk.`);
+  }
+}
+
 const toPosix = (p: string) => p.split(sep).join('/');
 
 const ok = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] });
@@ -146,6 +160,7 @@ export function createArcheryMcpServer(options: ServerOptions): McpServer {
           const input = def.input.parse(args ?? {});
           const result = await def.run(session, input);
           if (session.changes.size && !(bridge && (await bridge.apply(session.changes)))) writeFiles(root, session.changes);
+          ensureDeleted(root, session.changes);
           return ok(result);
         } catch (e) {
           if (e instanceof OpError) return fail(e.message);

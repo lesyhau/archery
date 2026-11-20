@@ -101,6 +101,20 @@ describe('display options and text (M-1, M-2, M-3, H-2, L-7)', () => {
     expect(t).not.toContain('«use» calls');
   });
 
+  it('can hide «use» from the start, and get_diagram shows the display options (L-7)', async () => {
+    const { files, call } = await workspace();
+    await call('add_element', { id: 'a', name: 'Part A', kind: 'component' });
+    await call('add_element', { id: 'b', name: 'Part B', kind: 'component' });
+    await call('add_relationship', { kind: 'usage', from: 'a', to: 'b', label: 'calls' });
+    expect((await call('get_diagram', { diagram: 'building-blocks-l1' })).show).toEqual({ tags: false, keywords: true });
+    await call('create_diagram', { title: 'Plain', type: 'component', elements: ['a', 'b'], show: { keywords: false } });
+    expect((await call('get_diagram', { diagram: 'plain' })).show).toEqual({ tags: false, keywords: false });
+    const session = await ArcherySession.load(memoryReader(files), '');
+    const t = texts(layoutCanvas(session.canvasDiagram('diagrams/plain.uml.json'), session.model()));
+    expect(t).toContain('calls');
+    expect(t.join(' ')).not.toContain('«use»');
+  });
+
   it('keeps a given width: long property strings wrap, the drawn box is reported', async () => {
     const { call } = await workspace();
     await call('add_element', { id: 'a', name: 'Webview', kind: 'component', technology: 'TypeScript, React 18, Vite, Tiptap, React Flow', diagram: 'building-blocks-l1' });

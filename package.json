@@ -1521,6 +1521,18 @@
                 "mostSpecific",
                 "all"
               ]
+            },
+            "show": {
+              "type": "object",
+              "properties": {
+                "tags": {
+                  "type": "boolean"
+                },
+                "keywords": {
+                  "type": "boolean"
+                }
+              },
+              "description": "What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines, default true; false shows only the labels). Change it later with update_diagram"
             }
           },
           "required": [

@@ -1365,16 +1365,16 @@ export function labelBox(points: Pt[], text: string, ds: DiagramStyle, at?: numb
 export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<string, LaidOutNode>, ds: DiagramStyle = 'classic'): Map<string, EdgeDraw> {
   const relationships = new Map(model.relationships.map((r) => [r.id, r]));
   const keywords = diagram.show?.keywords !== false;
-  type Item = { key: string; from: string; to: string; waypoints: { x: number; y: number }[]; style?: Record<string, string>; label: string; moved: boolean };
+  type Item = { key: string; from: string; to: string; waypoints: { x: number; y: number }[]; style?: Record<string, string>; label: string; offset?: { x: number; y: number } };
   const items: Item[] = [];
   for (const e of diagram.edges) {
     const rel = relationships.get(e.ref);
     if (!rel || !nodes.has(rel.from) || !nodes.has(rel.to)) continue;
-    items.push({ key: edgeKey('model', e.ref), from: rel.from, to: rel.to, waypoints: e.waypoints, style: e.style, label: relationshipLabel(rel, keywords), moved: !!e.labelOffset });
+    items.push({ key: edgeKey('model', e.ref), from: rel.from, to: rel.to, waypoints: e.waypoints, style: e.style, label: relationshipLabel(rel, keywords), offset: e.labelOffset });
   }
   for (const e of diagram.local.edges) {
     if (!nodes.has(e.from) || !nodes.has(e.to)) continue;
-    items.push({ key: edgeKey('local', e.id), from: e.from, to: e.to, waypoints: e.waypoints, style: e.style, label: e.label ?? '', moved: !!e.labelOffset });
+    items.push({ key: edgeKey('local', e.id), from: e.from, to: e.to, waypoints: e.waypoints, style: e.style, label: e.label ?? '', offset: e.labelOffset });
   }
 
   const out = new Map<string, EdgeDraw>();
@@ -1427,15 +1427,23 @@ export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<str
     });
   }
 
-  // Labels: shapes and the labels placed so far are in the way.
+  // Labels: shapes, labels moved by hand (they stay where they were put) and the labels placed so far are in the way.
   const obstacles = [...nodes.values()].filter((n) => !n.container).map((n) => n.box);
   const placed: Box[] = [];
-  for (const it of items) {
-    if (!it.label || it.moved) continue;
-    const draw = out.get(it.key)!;
+  const pointsOf = (it: Item) => {
     const a = nodes.get(it.from)!;
     const b = nodes.get(it.to)!;
-    const points = edgePoints({ box: a.box, outline: a.outline, lollipop: a.lollipop }, { box: b.box, outline: b.outline, lollipop: b.lollipop }, it.waypoints, ds, draw);
+    return edgePoints({ box: a.box, outline: a.outline, lollipop: a.lollipop }, { box: b.box, outline: b.outline, lollipop: b.lollipop }, it.waypoints, ds, out.get(it.key)!);
+  };
+  for (const it of items) {
+    if (!it.label || !it.offset) continue;
+    const box = labelBox(pointsOf(it), it.label, ds);
+    placed.push({ ...box, x: box.x + it.offset.x, y: box.y + it.offset.y });
+  }
+  for (const it of items) {
+    if (!it.label || it.offset) continue;
+    const draw = out.get(it.key)!;
+    const points = pointsOf(it);
     let best: { at: number; cost: number; box: Box } | undefined;
     for (const at of LABEL_SPOTS) {
       const box = labelBox(points, it.label, ds, at);

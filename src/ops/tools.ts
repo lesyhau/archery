@@ -713,11 +713,21 @@ export const TOOLS: ToolDef<any>[] = [
         file: session.display(path),
         type: d.type,
         title: d.title,
-        ...(d.show ? { show: d.show } : {}),
+        // With the defaults, so an agent sees what it can switch (update_diagram show).
+        show: { tags: d.show?.tags ?? false, keywords: d.show?.keywords ?? true },
         nodes: d.nodes.map((n) => ({ ...n, ...boxes[n.ref], name: elements.get(n.ref)?.name ?? '(missing)', kind: elements.get(n.ref)?.kind })),
         edges: d.edges.map((e) => {
           const r = rels.get(e.ref);
-          return { ref: e.ref, kind: r?.kind, from: r?.from, to: r?.to, label: r?.label, ...(e.style ? { style: e.style } : {}) };
+          return {
+            ref: e.ref,
+            kind: r?.kind,
+            from: r?.from,
+            to: r?.to,
+            label: r?.label,
+            ...(e.style ? { style: e.style } : {}),
+            ...(e.waypoints.length ? { waypoints: e.waypoints } : {}),
+            ...(e.labelOffset ? { labelOffset: e.labelOffset } : {}),
+          };
         }),
         local: { ...d.local, nodes: d.local.nodes.map((n) => ({ ...n, ...boxes[n.id] })) },
       };
@@ -736,6 +746,7 @@ export const TOOLS: ToolDef<any>[] = [
       elements: z.array(IdSchema).default([]),
       includeRelationships: z.boolean().default(true),
       relationships: RelationshipPolicySchema.default('mostSpecific').describe('mostSpecific (default): leave out a container\'s relationship when one of its shown parts has the same relationship to the same partner (or a part of it); all: every relationship between shown elements'),
+      show: DiagramShowSchema.describe('What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines, default true; false shows only the labels). Change it later with update_diagram').optional(),
     }),
     readOnly: false,
     confirm: (i) => `Create ${i.type} diagram "${i.title}"?`,
@@ -750,6 +761,7 @@ export const TOOLS: ToolDef<any>[] = [
         version: 1,
         type: input.type,
         title: input.title,
+        ...(input.show && Object.keys(compact(input.show)).length ? { show: compact(input.show) } : {}),
         nodes: placeNodes([], [...new Set(input.elements)]),
         edges: [],
         local: { nodes: [], edges: [] },
