@@ -22,7 +22,10 @@ const TEAL = { light: '#33B3D0', deep: '#147A94' };
 const AMBER = { light: '#F6A623', deep: '#DB7608' };
 const gradient = (id, { light, deep }) =>
   `<linearGradient id="${id}" x1="2" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${deep}"/></linearGradient>`;
-const colored = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.5 -0.5 25 25" width="24" height="24">
+// Centred on the rings (their centre in icon.svg); the half-size leaves room for the arrow's feathers (lower left).
+const RINGS = { x: 14, y: 10 };
+const HALF = 12.2;
+const colored = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${RINGS.x - HALF} ${RINGS.y - HALF} ${2 * HALF} ${2 * HALF}" width="24" height="24">
   <defs>${gradient('teal', TEAL)}${gradient('amber', AMBER)}</defs>
   <path fill="url(#teal)" d="${outer}"/>
   <path fill="url(#teal)" d="${inner}"/>
