@@ -556,7 +556,7 @@ signals), place-order sequence (activations, constraint, lost message). It must 
   code identifiers (`ArcherySession`, `archeryDiagram`, ...), `src/template/` (was `src/arc42/`), icon font
   `media/archery-icons.woff` / `$(archery-logo)`. Only references to the arc42 *template* keep its name
   (attribution, section titles/help, "arc42 section", template fields). Earlier rounds above use the old names.
-- **Icon:** an arrow in a bullseye (`media/icon.svg`, generated; filled shapes only).
+- **Icon:** a blueprint of three amber honeycomb cells, two built as cubes and the top one still a wireframe (`scripts/build-icon.mjs` draws it and writes `media/icon.svg`, `icon.png`, the logos and the icon font: `npm run icon`).
 - **Export** (`archery.exportDocument`, toolbar Export menu, view title, version menu): `src/export/documentHtml.ts`
   renders one self-contained HTML (contents, numbered chapters/headings, diagrams as inline SVG, data tables, ADR
   index, images as data URIs, numbered captions, change history; guidance left out; print CSS with A4 pages and a

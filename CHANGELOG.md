@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **New logo:** a blueprint of three amber cubes, the top one still a wireframe drawing; in the Extensions view, the activity bar, editor tabs and the chat.
+
 ## 0.2.3
 
 - **«use» only where it adds something.** A usage line with a label no longer repeats «use»; a line without a label still shows it. Right-click the canvas → Show to put keywords on every line, or on none.

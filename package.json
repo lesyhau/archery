@@ -335,7 +335,7 @@
     },
     "icons": {
       "archery-logo": {
-        "description": "Archery (UML component symbol)",
+        "description": "Archery logo",
         "default": {
           "fontPath": "media/archery-icons.woff",
           "fontCharacter": "\\E001"
