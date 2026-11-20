@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- **«use» only where it adds something.** A usage line with a label no longer repeats «use»; a line without a label still shows it. Right-click the canvas → Show to put keywords on every line, or on none.
+- **Routed lines start and end at the border.** A line that automatic layout routes around a shape leaves and enters its shapes through their border and stays inside the box that holds both ends, instead of starting inside its own box or running along the box's wall.
+- **Labels stay off other lines.** A label is placed where no other line runs through it; automatic layout moves one that still has a line through it.
+- **For agents:** `validate` reports lines that run back across their own end and lines that run through another line's label, with coordinates; `show.keywords` takes `"auto"` (the new default) besides `true` and `false`.
+
 ## 0.2.2
 
 - **Automatic layout routes lines around shapes.** A line that would run straight through a shape in between gets bend points that go around it, and a label that still covers a shape or another label is moved next to its line (with a dotted leader).
