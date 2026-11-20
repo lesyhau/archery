@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - **Agents' model edits are shown live.** Adding, renaming or changing an element or relationship brings the diagram that shows it into view and selects it, also while you type in the agent's chat. An open diagram is no longer moved into the chat's tab group.
 - **Following pauses while you work.** A click, key or scroll in the document, a diagram or the sidebar pauses following the agent; it resumes 30 seconds after your last action.
