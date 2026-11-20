@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- **Claude Code finds Archery without setup.** The MCP server is added to your Claude Code configuration automatically (restart Claude Code once); it no longer depends on the `claude` command being on PATH.
+- **Cleaner interface.** Shorter messages, tooltips and empty states.
+
 ## 0.1.0
 
 First public release.
@@ -9,5 +14,5 @@ First public release.
 - **Classic and Modern diagram styles**, used everywhere: editors, document and export.
 - **Export** to PDF (with page numbers in the contents) or one self-contained HTML file, with font, page, header, footer and contents settings; diagrams as SVG or PNG.
 - **Versions:** every change is tracked; release a version with a change log entry (it goes into the document's change history) or restore an earlier release.
-- **Claude Code and GitHub Copilot** get the same tools for everything you can do in the document and the editors (chapters, model, diagrams, tables, decisions, versions, export). Their edits are shown live: the chapter or diagram comes into view, then the change lands and is highlighted. The MCP server is registered with Claude Code automatically.
+- **Claude Code and GitHub Copilot** get the same tools for everything you can do in the document and the editors (chapters, model, diagrams, tables, decisions, versions, export). Their edits are shown live: the chapter or diagram comes into view, then the change lands and is highlighted.
 - **Sidebar:** Contents (chapters and headings), Diagrams, and Diagram Tools (the palette and properties of the open diagram).
