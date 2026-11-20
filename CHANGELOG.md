@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- **Rename the system in the document.** Click the system name at the top of the contents to change it.
+- **Maximized diagrams open in a window over the document.** Esc, the close button or a click outside closes it; it fades in and out.
+- **New icon colours:** the target in teal and amber, without a tile, so it reads on light and dark themes.
+- **For agents:** `rename_diagram` and `delete_diagram` find chapter embeds that have a caption (renaming updates them; deleting refuses without `force`); `validate` reports chapters that show a missing diagram or table, accepts notes inside an element shown on the diagram, and no longer calls a shape inside a container an overlap.
+
 ## 0.2.0
 
 - **Agents' model edits are shown live.** Adding, renaming or changing an element or relationship brings the diagram that shows it into view and selects it, also while you type in the agent's chat. An open diagram is no longer moved into the chat's tab group.
