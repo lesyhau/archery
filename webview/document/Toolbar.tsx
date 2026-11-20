@@ -216,7 +216,7 @@ export function Toolbar() {
         <Btn title="Insert table" disabled={off || inTable} onClick={run((e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}>
           <IconTable />
         </Btn>
-        <Btn title="Insert image (you can also paste or drop images)" disabled={off} onClick={() => imageInput.current?.click()}>
+        <Btn title="Insert image" disabled={off} onClick={() => imageInput.current?.click()}>
           <IconImage />
         </Btn>
         <input
@@ -317,7 +317,7 @@ export function Toolbar() {
             <IconDeleteCol />
           </Btn>
           <Sep />
-          <Btn title="Merge the selected cells (drag across cells to select them)" disabled={!can((e) => e.can().mergeCells())} onClick={run((e) => e.chain().focus().mergeCells().run())}>
+          <Btn title="Merge cells" disabled={!can((e) => e.can().mergeCells())} onClick={run((e) => e.chain().focus().mergeCells().run())}>
             <IconMerge />
           </Btn>
           <Btn title="Split the merged cell" disabled={!can((e) => e.can().splitCell())} onClick={run((e) => e.chain().focus().splitCell().run())}>

@@ -176,8 +176,8 @@ export async function exportDocument(context: vscode.ExtensionContext, root: vsc
     (
       await vscode.window.showQuickPick(
         [
-          { label: '$(file-pdf) PDF', description: 'printed by an installed Edge, Chrome or Chromium', format: 'pdf' as const },
-          { label: '$(globe) HTML', description: 'one self-contained file (diagrams and images included)', format: 'html' as const },
+          { label: '$(file-pdf) PDF', format: 'pdf' as const },
+          { label: '$(globe) HTML', format: 'html' as const },
         ],
         { title: 'Archery: Export Document' },
       )
@@ -187,7 +187,7 @@ export async function exportDocument(context: vscode.ExtensionContext, root: vsc
   const browsers = picked === 'pdf' ? pdfBrowsers() : [];
   if (picked === 'pdf' && browsers.length === 0) {
     const choice = await vscode.window.showErrorMessage(
-      'Archery: PDF export needs Microsoft Edge, Google Chrome, Chromium or Brave. Install one, set "archery.export.browserPath", or export HTML and print it from any browser.',
+      'Archery: no browser found for PDF export.',
       'Export HTML',
       'Open Settings',
     );

@@ -7,7 +7,7 @@ export async function deleteFromModel(refs: string[], runOp: (name: string, inpu
     `Delete ${refs.length === 1 ? `"${refs[0]}"` : `${refs.length} items`} from the model?`,
     {
       modal: true,
-      detail: 'The element(s) are removed from the model and from every diagram that shows them, together with their relationships. Use "Remove from diagram" (Delete key) to hide them on this diagram only.',
+      detail: 'Removed from every diagram, with their relationships.',
     },
     'Delete from model',
   );

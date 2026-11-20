@@ -889,12 +889,12 @@ export function CanvasEditor() {
       </div>
       {parsed && parsed.issues.length > 0 && (
         <div className="banner error">
-          {'The file is not a valid diagram. Fix it in the text editor (Reopen With: Text Editor):\n'}
+          {'Invalid diagram:\n'}
           {parsed.issues.map((i) => `• ${i.message}`).join('\n')}
         </div>
       )}
       {host.modelIssues.length > 0 && <div className="banner warning">{host.modelIssues.join('\n')}</div>}
-      {!editable && diagram && <div className="banner warning">Read-only: this diagram is not inside an Archery documentation folder.</div>}
+      {!editable && diagram && <div className="banner warning">Read-only</div>}
       {diagram && (
         <div className="workspace">
           <DockPanels panels={{ title: diagram.title || 'Untitled diagram', rail: { component: 'canvasRail', props: railProps(diagram) }, inspector: { component: 'canvasInspector', props: inspectorProps(diagram) } }} />
@@ -970,7 +970,7 @@ export function CanvasEditor() {
               {settings.showGrid && <Background variant={BackgroundVariant.Dots} gap={settings.gridSize} size={1} />}
               {minimap && <MiniMap pannable zoomable ariaLabel="Overview map" />}
             </ReactFlow>
-            {nodes.length === 0 && editable && <div className="empty-hint">Pick an element on the left (click or drag) to start.</div>}
+            {nodes.length === 0 && editable && <div className="empty-hint">Empty diagram</div>}
             {connecting && (
               <div className="tool-hint" role="status">
                 {pending ? 'Now click the target' : 'Click the source'} · Esc to stop

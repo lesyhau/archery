@@ -55,12 +55,12 @@ function ChangeHistory({ data }: { data: DocumentData }) {
         <span>
           Current version {status}
         </span>
-        <button type="button" className="link-btn" disabled={!data.canRelease} onClick={() => vscodeApi.postMessage({ type: 'release' })} title="Release the current state as the next major version (asks for the change log)">
+        <button type="button" className="link-btn" disabled={!data.canRelease} onClick={() => vscodeApi.postMessage({ type: 'release' })} title="Release a new version">
           Release
         </button>
       </div>
       {data.changeHistory.length === 0 ? (
-        <div className="generated-empty">No releases yet. Release creates v1.0 and asks for its change log.</div>
+        <div className="generated-empty">No releases yet.</div>
       ) : (
         <div className="table-wrap">
           <table>

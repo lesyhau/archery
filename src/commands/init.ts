@@ -9,19 +9,19 @@ export const DEFAULT_DOCS_DIR = 'docs/architecture';
 export async function initCommand(): Promise<vscode.Uri | undefined> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length === 0) {
-    void vscode.window.showErrorMessage('Archery: open a folder first, then run "Archery: Initialize documentation".');
+    void vscode.window.showErrorMessage('Archery: open a folder first.');
     return undefined;
   }
   const folder =
     folders.length === 1
       ? folders[0]
-      : await vscode.window.showWorkspaceFolderPick({ placeHolder: 'Workspace folder for the architecture documentation' });
+      : await vscode.window.showWorkspaceFolderPick({ placeHolder: 'Workspace folder' });
   if (!folder) return undefined;
 
   const root = vscode.Uri.joinPath(folder.uri, ...DEFAULT_DOCS_DIR.split('/'));
   try {
     await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'archery.yaml'));
-    void vscode.window.showWarningMessage(`Archery: ${DEFAULT_DOCS_DIR}/archery.yaml already exists in ${folder.name}.`);
+    void vscode.window.showWarningMessage(`Archery: ${folder.name} already has architecture documentation.`);
     return root;
   } catch {
     // not initialized yet: continue
@@ -37,8 +37,8 @@ export async function initCommand(): Promise<vscode.Uri | undefined> {
 
   const help = await vscode.window.showQuickPick(
     [
-      { label: 'With help', description: 'Embed the arc42 help texts as hidden comments (recommended)', includeHelp: true },
-      { label: 'Plain', description: 'Headings and placeholders only', includeHelp: false },
+      { label: 'With help', description: 'arc42 help texts (recommended)', includeHelp: true },
+      { label: 'Plain', description: 'headings only', includeHelp: false },
     ],
     { title: 'Archery: Initialize documentation', placeHolder: 'Template variant' },
   );

@@ -173,7 +173,6 @@ export function Toc({ data, active, activeHeading, editors, historyNumber, width
       >
         <a
           href={`#sec-${sectionId}`}
-          title="Click to go there, drag to move, right-click for more"
           aria-current={isActive ? 'location' : undefined}
           onPointerDown={(e) => startDrag(e, sectionId, it.index)}
           onClick={(e) => {

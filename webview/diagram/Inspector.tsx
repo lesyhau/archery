@@ -871,7 +871,7 @@ export function Inspector(p: Props) {
             </Field>
             {e.detail && (
               <div className="ins-hint-row">
-                <span className="ins-hint">{e.detail === p.self ? 'This diagram. The others mark it and link here.' : 'Marked on its diagrams; click the mark to drill down.'}</span>
+                <span className="ins-hint">{e.detail === p.self ? 'This diagram' : 'Detail diagram'}</span>
                 {e.detail !== p.self && (
                   <button type="button" className="icon-text" onClick={() => p.openDiagram(e.detail!)}>
                     <IconOpen /> Open
@@ -1192,7 +1192,7 @@ function Actions({ ro, remove, del }: { ro: boolean; remove(): void; del?: () =>
         <IconRemove /> Remove from diagram
       </button>
       {del && (
-        <button type="button" className="icon-text danger" onClick={del} title="Delete from the model and every diagram (Shift+Delete)">
+        <button type="button" className="icon-text danger" onClick={del} title="Delete from model (Shift+Delete)">
           <IconTrash /> Delete from model
         </button>
       )}

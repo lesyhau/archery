@@ -174,7 +174,7 @@
     "viewsWelcome": [
       {
         "view": "archery.contents",
-        "contents": "No architecture documentation found in this workspace (looking for an archery.yaml file).\n[Initialize architecture documentation](command:archery.init)",
+        "contents": "No architecture documentation in this workspace.\n[Initialize architecture documentation](command:archery.init)",
         "when": "!archery.hasRoot"
       },
       {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { installMcpServer, setupClaudeCodeCommand } from './ai/claudeCode';
+import { ensureClaudeCodeRegistration, installMcpServer, setupClaudeCodeCommand } from './ai/claudeCode';
 import { registerLanguageModelTools } from './ai/lmTools';
 import { Bridge } from './live/bridge';
 import { extensionHost } from './live/host';
@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = vscode.languages.createDiagnosticCollection('archery');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'archery.versionMenu';
-  status.tooltip = 'architecture documentation version - click for release / restore';
+  status.tooltip = 'Archery';
 
   let rootWatcher: vscode.Disposable | undefined;
   let bridge: Bridge | undefined;
@@ -42,7 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!tracker) return status.hide();
     versionLabel = `v${(await tracker.history()).current}`;
     status.text = '$(archery-logo) Archery';
-    status.tooltip = `Archery: documentation ${versionLabel}. Click for release and history.`;
+    status.tooltip = `Archery ${versionLabel}`;
     status.show();
   };
 
@@ -195,8 +195,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   void refresh();
-  // Keep the MCP server at its stable path up to date after extension updates.
-  installMcpServer(context).catch((e: unknown) => console.error('Archery: could not install the MCP server', e));
+  // Keep the MCP server at its stable path up to date after extension updates, and registered with Claude Code.
+  installMcpServer(context)
+    .then((server) => ensureClaudeCodeRegistration(context, server))
+    .catch((e: unknown) => console.error('Archery: could not install the MCP server', e));
 }
 
 function publishDiagnostics(collection: vscode.DiagnosticCollection, root: vscode.Uri, issues: Issue[]): void {

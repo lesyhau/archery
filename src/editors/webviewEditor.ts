@@ -185,7 +185,7 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
 
     // --- operations -------------------------------------------------------------
     const runOp = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
-      if (!root || !diagramPath) throw new OpError('This diagram is not inside an architecture documentation folder (no archery.yaml found above it).');
+      if (!root || !diagramPath) throw new OpError('This diagram is not part of the architecture documentation.');
       const def = TOOLS.find((t) => t.name === name);
       if (!def) throw new OpError(`Unknown operation "${name}".`);
       const shape = def.input.shape as Record<string, unknown>;

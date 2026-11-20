@@ -231,7 +231,7 @@ export function TimingInspector(p: Props) {
           </div>
         </div>
         <Field label="Role (shown as role : Type)" wide>
-          <Text value={l.role ?? ''} disabled={ro} placeholder="e.g. buyer (empty: anonymous :Type)" onCommit={(v) => set({ role: v.trim() || undefined })} />
+          <Text value={l.role ?? ''} disabled={ro} placeholder="e.g. buyer" onCommit={(v) => set({ role: v.trim() || undefined })} />
         </Field>
         <Field label="Form" wide>
           <Segmented
@@ -277,7 +277,7 @@ export function TimingInspector(p: Props) {
             <button type="button" className="icon-text" title="Move down" disabled={i === diagram.lifelines.length - 1} onClick={() => p.moveLifeline(ref, 1)}>
               <IconDown />
             </button>
-            <button type="button" className="icon-text" title="Remove from this diagram (Delete), with its messages and constraints" onClick={p.deleteSelected}>
+            <button type="button" className="icon-text" title="Remove from this diagram (Delete)" onClick={p.deleteSelected}>
               <IconRemove /> Remove from diagram
             </button>
           </div>

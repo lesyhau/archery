@@ -69,7 +69,7 @@ export async function writeDiagramImage(uri: vscode.Uri, format: 'svg' | 'png', 
 export async function exportDiagramCommand(target?: vscode.Uri | { uri?: vscode.Uri }, format?: 'svg' | 'png'): Promise<void> {
   const uri = target instanceof vscode.Uri ? target : target?.uri ?? activeDiagramUri();
   if (!uri || !/\.(uml|seq|timing)\.json$/.test(uri.path)) {
-    void vscode.window.showWarningMessage('Archery: open a diagram (*.uml.json, *.seq.json or *.timing.json) to export it.');
+    void vscode.window.showWarningMessage('Archery: open a diagram to export it.');
     return;
   }
   let theme: ExportTheme = 'light';

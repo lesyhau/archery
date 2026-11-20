@@ -144,7 +144,7 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
             <fieldset>
               <legend>Header</legend>
               <label className="xd-field wide">
-                <span>Text at the top of every page except the cover</span>
+                <span>Text</span>
                 <input value={r.header} placeholder="No header" onChange={(e) => set({ header: e.target.value })} />
               </label>
               <p className="xd-hint">
@@ -155,7 +155,7 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
             <fieldset>
               <legend>Footer</legend>
               <label className="xd-field wide">
-                <span>Text at the bottom of every page except the cover</span>
+                <span>Text</span>
                 <input value={r.footer} placeholder="No footer" onChange={(e) => set({ footer: e.target.value })} />
               </label>
               <p className="xd-hint">Same parts and placeholders as the header.</p>
@@ -246,7 +246,6 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
           </aside>
         </div>
         <div className="xd-foot">
-          <span className="xd-note">Your choices are saved with the documentation.</span>
           <button type="button" className="btn secondary" onClick={onClose}>
             Cancel
           </button>

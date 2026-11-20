@@ -41,7 +41,7 @@ export function drawPrim(p: Prim, key: number, style?: DiagramStyle, onLink?: (f
             }}
             onDoubleClick={(e) => e.stopPropagation()}
           >
-            <title>Shown in detail on another diagram: click to go there</title>
+            <title>Open detail diagram</title>
           </rect>
         );
       }

@@ -247,7 +247,7 @@ export function SeqInspector(p: Props) {
             <Text
               value={diagram.lifelines.find((l) => l.ref === ref)?.role ?? ''}
               disabled={ro}
-              placeholder="e.g. buyer (empty: anonymous :Type)"
+              placeholder="e.g. buyer"
               onCommit={(v) => p.change({ ...diagram, lifelines: diagram.lifelines.map((l) => (l.ref === ref ? (v.trim() ? { ...l, role: v.trim() } : { ref: l.ref }) : l)) })}
             />
           </Field>
@@ -280,7 +280,7 @@ export function SeqInspector(p: Props) {
             <button type="button" className="icon-text" title="Move right" disabled={i < 0 || i === p.lifelines.length - 1} onClick={() => p.moveLifeline(ref, 1)}>
               <IconRight />
             </button>
-            <button type="button" className="icon-text" title="Remove from this diagram (Delete); its messages stay" onClick={() => p.removeLifeline(ref)}>
+            <button type="button" className="icon-text" title="Remove from this diagram (Delete)" onClick={() => p.removeLifeline(ref)}>
               <IconRemove /> Remove from diagram
             </button>
           </div>
@@ -372,7 +372,7 @@ export function SeqInspector(p: Props) {
             </label>
           )}
           {(m.kind === 'lost' || m.kind === 'found') && (
-            <label className="check" title="The other end is a gate on the diagram frame: the message comes from (or goes to) outside this interaction">
+            <label className="check">
               <input type="checkbox" checked={!!m.gate} disabled={ro} onChange={(ev) => update({ gate: ev.target.checked || undefined })} /> {m.kind === 'found' ? 'From a gate on the frame' : 'To a gate on the frame'}
             </label>
           )}
@@ -504,7 +504,7 @@ export function SeqInspector(p: Props) {
               onCommit={(guard) => set({ ...f, branches: f.branches.map((x, j) => (j === i ? { ...x, guard } : x)) })}
             />
             {!ro && f.branches.length > 1 && (
-              <button type="button" className="icon-btn subtle" title="Remove the operand (its steps go too)" onClick={() => set({ ...f, branches: f.branches.filter((_, j) => j !== i) })}>
+              <button type="button" className="icon-btn subtle" title="Remove operand" onClick={() => set({ ...f, branches: f.branches.filter((_, j) => j !== i) })}>
                 <IconRemove />
               </button>
             )}

@@ -472,7 +472,6 @@ export function DataGrid({
         <div
           className={`edge edge-col${resizable ? ' resizable' : ''}`}
           style={{ left: edge.pos - Z / 2, top: t.top - (resizable ? EDGE_STRIP : 0), width: Z, height: t.height + (resizable ? EDGE_STRIP : 0) }}
-          title={resizable ? 'Drag to resize the columns, double-click to fit the column on the left to its content' : fittable ? 'Double-click to fit the last column to its content' : undefined}
           onPointerDown={(e) => startResize(e, edge.index)}
           onDoubleClick={(e) => {
             if (!fittable || (e.target as Element).closest('.edge-plus')) return;
@@ -641,7 +640,7 @@ export function DataGrid({
                   key={col.field}
                   data-col={c}
                   className={drag?.kind === 'col' && drag.from === c ? 'moving' : undefined}
-                  title={`Click to edit, hold Ctrl and drag to move${fieldInfo.get(col.field)?.values ? `\nValues: ${fieldInfo.get(col.field)!.values!.join(', ')}` : ''}`}
+                  title={fieldInfo.get(col.field)?.values ? `Values: ${fieldInfo.get(col.field)!.values!.join(', ')}` : undefined}
                   onPointerDown={(e) => {
                     if (renaming === c || !isMove(e)) return;
                     e.preventDefault();
@@ -692,7 +691,6 @@ export function DataGrid({
                   return (
                     <td
                       key={col.field}
-                      title={active ? undefined : 'Click to edit, hold Ctrl and drag to move the row'}
                       data-r={r}
                       data-c={c}
                       rowSpan={span?.rows}

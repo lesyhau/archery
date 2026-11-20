@@ -103,7 +103,7 @@ export function Rail({ type, editable, palette, existing, tool, onTool, onType, 
                   data-kind={item.kind}
                   onDragStart={(e) => dragData?.(e, { item })}
                   onClick={() => onAdd(item)}
-                  title={`${item.label}: click to add, or drag onto the canvas`}
+                  title={item.label}
                 >
                   <I />
                   <span className="rail-label">{item.label}</span>
@@ -123,7 +123,7 @@ export function Rail({ type, editable, palette, existing, tool, onTool, onType, 
                 role="radio"
                 aria-checked={active === toolKey(c.tool)}
                 className={`rail-btn${active === toolKey(c.tool) ? ' on' : ''}`}
-                title={`${c.label}. Pick a tool, then click the source and the target`}
+                title={c.label}
                 onClick={() => onTool(active === toolKey(c.tool) ? null : c.tool)}
               >
                 <c.icon />
@@ -155,7 +155,6 @@ export function Rail({ type, editable, palette, existing, tool, onTool, onType, 
                             onAddExisting(e.id);
                             setFlyout(false);
                           }}
-                          title="Click or drag onto the canvas"
                         >
                           <I />
                           <span>{e.name}</span>

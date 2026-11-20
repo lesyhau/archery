@@ -37,7 +37,7 @@ export async function newDiagramCommand(root: vscode.Uri | undefined): Promise<v
   }
   const kind = await vscode.window.showQuickPick(KINDS, { title: 'Archery: New diagram' });
   if (!kind) return;
-  const title = await vscode.window.showInputBox({ title: `Archery: New ${kind.label.toLowerCase()} diagram`, prompt: 'Title (also used for the file name)', validateInput: (v) => (v.trim() ? undefined : 'Please enter a title') });
+  const title = await vscode.window.showInputBox({ title: `Archery: New ${kind.label.toLowerCase()} diagram`, prompt: 'Title', validateInput: (v) => (v.trim() ? undefined : 'Please enter a title') });
   if (!title) return;
   try {
     const session = await ArcherySession.load(createReader(root), '');

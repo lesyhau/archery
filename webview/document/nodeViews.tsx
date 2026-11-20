@@ -128,7 +128,7 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
           top right corner while the pointer is over the diagram. */}
       <figure ref={frameRef} className="diagram-figure" data-src={attrs.src} style={{ width }}>
        <div className={`frame diagram-frame${selected ? ' selected' : ''}`}>
-        <div className="frame-head" data-drag-handle title="Drag to move">
+        <div className="frame-head" data-drag-handle>
           <span className="frame-grip" aria-hidden="true">
             <svg width="8" height="14" viewBox="0 0 8 14">
               {[2, 7, 12].flatMap((y) => [<circle key={`a${y}`} cx="2" cy={y} r="1.2" />, <circle key={`b${y}`} cx="6" cy={y} r="1.2" />])}
@@ -153,7 +153,7 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
               <button
                 type="button"
                 className="icon-btn"
-                title="Remove from the document (the diagram file is kept)"
+                title="Remove from the document"
                 onClick={() => {
                   deleteNode();
                   saveNow(editor);
@@ -171,7 +171,6 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
             style={{ height: scene ? height : undefined }}
             onDoubleClick={open}
             onPointerDown={scene ? pz.startPan : undefined}
-            title="Drag to pan, Ctrl+wheel to zoom, double-click to edit"
           >
             {scene ? (
               <div className="stage-canvas" style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})` }}>
@@ -180,7 +179,7 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
             ) : (
               <div className="frame-error">{error}</div>
             )}
-            {scene && scene.prims.length === 0 && <div className="frame-empty">Empty diagram - double-click to draw it.</div>}
+            {scene && scene.prims.length === 0 && <div className="frame-empty">Empty diagram</div>}
           </div>
         )}
         {editable && (
@@ -252,7 +251,6 @@ export function DecisionList({ node }: NodeViewProps) {
                   <strong>A record contains:</strong> status (proposed, accepted, rejected, deprecated, superseded), date, the quality goals and constraints it addresses, then
                   Context (the forces at play), Decision (what was chosen) and Consequences (what becomes easier or harder).
                 </span>
-                <span className="help-p">Use New decision to add one; click a row to open it.</span>
               </span>
             </span>
           </span>

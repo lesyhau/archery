@@ -285,9 +285,7 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
           ev.stopPropagation();
           data.onWaypoints(id, []);
         }}
-      >
-        <title>Drag to move this part of the line; double-click for the automatic route</title>
-      </rect>,
+      />,
     ];
   });
 
@@ -312,9 +310,7 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
                 e.stopPropagation();
                 data.onWaypoints(id, data.waypoints.filter((_, j) => j !== i));
               }}
-            >
-              <title>Drag to move, double-click to remove</title>
-            </circle>
+            />
           ))}
           {points.slice(0, -1).map(([x1, y1], i) => {
             const [x2, y2] = points[i + 1]!;

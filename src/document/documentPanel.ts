@@ -280,7 +280,7 @@ export class DocumentPanel implements vscode.Disposable {
   private async createDiagram(kind: DiagramKind): Promise<string | null> {
     const title = await vscode.window.showInputBox({
       title: `Archery: New ${kind} diagram`,
-      prompt: 'Diagram title (also used as its caption and file name)',
+      prompt: 'Diagram title',
       validateInput: (v) => (v.trim() ? undefined : 'Please enter a title'),
     });
     if (!title) return null;

@@ -44,10 +44,10 @@ const NEW_PARTICIPANTS: { kind: ElementKind; label: string }[] = [
 ];
 type Tool = 'change' | 'message' | 'duration' | 'time';
 const TOOLS: { tool: Tool; label: string; icon: () => JSX.Element }[] = [
-  { tool: 'change', label: 'State change: click a state row at a point in time', icon: IconStateChange },
-  { tool: 'message', label: 'Message: click the sender at the send time, then the receiver at the arrival time', icon: IconTimingMessage },
-  { tool: 'duration', label: 'Duration constraint {d..3*d}: click the start, then the end', icon: IconDuration },
-  { tool: 'time', label: 'Time constraint or observation (t = now): click the instant', icon: IconTimeMark },
+  { tool: 'change', label: 'State change', icon: IconStateChange },
+  { tool: 'message', label: 'Message', icon: IconTimingMessage },
+  { tool: 'duration', label: 'Duration constraint', icon: IconDuration },
+  { tool: 'time', label: 'Time constraint', icon: IconTimeMark },
 ];
 const twoClicks = (t: Tool) => t === 'message' || t === 'duration';
 const inBox = (b: Box, x: number, y: number, pad = 0) => x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad;
@@ -447,7 +447,7 @@ export function TimingEditor() {
   if (!draft || !hits || !scene) {
     return (
       <div className="banner error">
-        {'The file is not a valid timing diagram. Fix it in the text editor (Reopen With: Text Editor):\n'}
+        {'Invalid timing diagram:\n'}
         {parsed?.issues.map((i) => `• ${i.message}`).join('\n')}
       </div>
     );
@@ -582,7 +582,7 @@ export function TimingEditor() {
           <IconExportPng />
         </button>
       </div>
-      {!editable && <div className="banner warning">Read-only: this diagram is not inside an architecture documentation folder.</div>}
+      {!editable && <div className="banner warning">Read-only</div>}
       {host.modelIssues.length > 0 && <div className="banner warning">{host.modelIssues.join('\n')}</div>}
       <div className="workspace">
         <DockPanels panels={{ title: draft.title || 'Untitled timing diagram', rail: editable ? { component: 'timingRail', props: railProps } : undefined, inspector: { component: 'timingInspector', props: inspectorProps } }} />
@@ -600,7 +600,6 @@ export function TimingEditor() {
             setHover({ ...p, t: timeAt(p.x, e.altKey) });
           }}
           onPointerLeave={() => setHover(null)}
-          title={tool ? undefined : 'Click to select, drag a change to move it, double-click to edit, drag to pan, Ctrl+scroll to zoom'}
         >
           <div className="stage-canvas" style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})`, width: scene.width, height: scene.height }}>
             <SceneSvg scene={scene} label={draft.title} />

@@ -81,10 +81,10 @@ The tools keep ids stable, update references across files, keep YAML comments an
 | | Claude Code | GitHub Copilot |
 | --- | --- | --- |
 | How | MCP server | Language model tools (`archery_*`) and the `@archery` chat participant |
-| Setup | Run **Archery: Set up Claude Code (MCP server)** once | None: available in agent mode |
+| Setup | None: registered with Claude Code automatically | None: available in agent mode |
 | Edits | Shown live in the VS Code window that has the documentation open; written to the files when there is none | Shown live, one undoable edit per tool call |
 
-The setup command registers the MCP server for all your projects or for this one. Node.js must be on PATH.
+When Claude Code is installed, Archery adds its MCP server to your user configuration (`~/.claude.json`) the first time it starts; restart Claude Code to pick it up. To add it for one project only (`.mcp.json`), run **Archery: Set up Claude Code (MCP server)**. Node.js must be on PATH.
 
 ## Your documentation
 

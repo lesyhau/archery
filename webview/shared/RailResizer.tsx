@@ -50,5 +50,5 @@ export function RailResizer() {
       // nothing stored
     }
   };
-  return <div className="rail-resizer" role="separator" aria-orientation="vertical" title="Drag to resize the palette (wide: icons and names). Double-click for the automatic width" onPointerDown={start} onDoubleClick={reset} />;
+  return <div className="rail-resizer" role="separator" aria-orientation="vertical" onPointerDown={start} onDoubleClick={reset} />;
 }

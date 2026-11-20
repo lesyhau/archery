@@ -218,7 +218,7 @@ export async function releaseCommand(tracker: VersionTracker | undefined): Promi
   const next = `${Number(history.current.split('.')[0]) + 1}.0`;
   const note = await vscode.window.showInputBox({
     title: `Archery: Release v${next}`,
-    prompt: `Change log for v${next} - it is added to the document's change history`,
+    prompt: `Change log for v${next}`,
     placeHolder: 'e.g. Added the deployment view; reviewed by the architecture board',
     validateInput: (v) => (v.trim() ? undefined : 'A change log entry is required for a release'),
   });
@@ -231,12 +231,12 @@ export async function rollbackCommand(tracker: VersionTracker | undefined): Prom
   if (!tracker) return void vscode.window.showWarningMessage('Archery: no documentation found.');
   const [snapshots, history] = await Promise.all([tracker.snapshots(), tracker.history()]);
   if (snapshots.length === 0) {
-    return void vscode.window.showInformationMessage('Archery: there are no releases yet. Use "Archery: Release" first.');
+    return void vscode.window.showInformationMessage('Archery: no releases yet.');
   }
   const pick = await vscode.window.showQuickPick(
     snapshots.map((s) => ({
       label: `v${s.version}`,
-      description: `${s.kind === 'release' ? 'release' : 'backup before a rollback'} · ${new Date(s.date).toLocaleString()}`,
+      description: `${s.kind === 'release' ? 'release' : 'backup'} · ${new Date(s.date).toLocaleString()}`,
       detail: s.note,
       version: s.version,
     })),
@@ -247,7 +247,7 @@ export async function rollbackCommand(tracker: VersionTracker | undefined): Prom
     `Restore v${pick.version}?`,
     {
       modal: true,
-      detail: `All documentation files are replaced by v${pick.version}. The current state is kept as backup snapshot v${history.current}, so this can be undone by restoring that version.`,
+      detail: `The current state is kept as backup v${history.current}.`,
     },
     'Restore',
   );

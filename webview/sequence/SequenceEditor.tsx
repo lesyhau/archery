@@ -49,10 +49,10 @@ const MESSAGE_ORDER: MessageKind[] = ['sync', 'async', 'reply', 'create', 'destr
 type Block = 'fragment' | 'ref' | 'note' | 'constraint';
 type SeqTool = { msg: MessageKind } | { block: Block };
 const BLOCKS: { block: Block; label: string; icon: () => JSX.Element }[] = [
-  { block: 'fragment', label: 'Combined fragment (alt, opt, loop, par…): click where it goes, or select steps first to group them', icon: IconFragment },
-  { block: 'ref', label: 'Interaction use (ref): click the first and the last participant', icon: IconRef },
-  { block: 'note', label: 'Note: click a participant', icon: IconNote },
-  { block: 'constraint', label: 'Constraint {…}: click a participant', icon: IconConstraint },
+  { block: 'fragment', label: 'Combined fragment', icon: IconFragment },
+  { block: 'ref', label: 'Interaction use', icon: IconRef },
+  { block: 'note', label: 'Note', icon: IconNote },
+  { block: 'constraint', label: 'Constraint', icon: IconConstraint },
 ];
 const twoClicks = (t: SeqTool) => ('msg' in t ? !['self', 'lost', 'found'].includes(t.msg) : t.block === 'ref');
 const inBox = (b: Box, x: number, y: number, pad = 0) => x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad;
@@ -435,7 +435,7 @@ export function SequenceEditor() {
   if (!draft || !hits || !scene) {
     return (
       <div className="banner error">
-        {'The file is not a valid sequence diagram. Fix it in the text editor (Reopen With: Text Editor):\n'}
+        {'Invalid sequence diagram:\n'}
         {parsed?.issues.map((i) => `• ${i.message}`).join('\n')}
       </div>
     );
@@ -540,7 +540,7 @@ export function SequenceEditor() {
             role="radio"
             aria-checked={!comm}
             className={`tb icon${!comm ? ' on' : ''}`}
-            title="Sequence notation: lifelines and messages over time"
+            title="Sequence notation"
             disabled={!editable}
             onClick={() => comm && (write({ ...draft, notation: undefined }), setTool(null))}
           >
@@ -551,7 +551,7 @@ export function SequenceEditor() {
             role="radio"
             aria-checked={comm}
             className={`tb icon${comm ? ' on' : ''}`}
-            title="Communication notation: participants, links and numbered messages"
+            title="Communication notation"
             disabled={!editable}
             onClick={() => !comm && (write({ ...draft, notation: 'communication' }), setTool(null))}
           >
@@ -588,7 +588,7 @@ export function SequenceEditor() {
           <IconExportPng />
         </button>
       </div>
-      {!editable && <div className="banner warning">Read-only: this diagram is not inside an architecture documentation folder.</div>}
+      {!editable && <div className="banner warning">Read-only</div>}
       {host.modelIssues.length > 0 && <div className="banner warning">{host.modelIssues.join('\n')}</div>}
       <div className="workspace">
         <DockPanels panels={{ title: draft.title || 'Untitled sequence', rail: editable ? { component: 'seqRail', props: railProps } : undefined, inspector: { component: 'seqInspector', props: inspectorProps } }} />
@@ -602,7 +602,6 @@ export function SequenceEditor() {
           onDoubleClick={onDoubleClick}
           onPointerMove={(e) => tool && setHover(toScene(e))}
           onPointerLeave={() => setHover(null)}
-          title={tool ? undefined : 'Click to select, double-click to edit, drag to pan, Ctrl+scroll to zoom'}
         >
           <div className="stage-canvas" style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})`, width: scene.width, height: scene.height }}>
             <SceneSvg scene={scene} label={draft.title} />
@@ -747,7 +746,7 @@ export function SeqRail({ comm, toolKey, candidates, flyout, setFlyout, addParti
               aria-checked={toolKey === k}
               data-tool={k}
               className={`rail-btn${toolKey === k ? ' on' : ''}`}
-              title={`${MESSAGE_LABELS[k]}: ${twoClicks({ msg: k }) ? 'click the sender, then the receiver' : 'click the participant'}`}
+              title={MESSAGE_LABELS[k]}
               onClick={() => pickTool({ msg: k })}
             >
               <I />

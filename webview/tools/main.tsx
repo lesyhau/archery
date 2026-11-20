@@ -51,7 +51,7 @@ function App() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  if (!panels) return <div className="tools-empty">Open a diagram to see its palette and properties here.</div>;
+  if (!panels) return <div className="tools-empty">No diagram open</div>;
   return (
     <div className="tools">
       {panels.rail && (
