@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Routed lines keep their distance.** A line that automatic layout routes around a shape no longer runs along the border of another box, where it looked like part of that box.
+- **Leader lines stay off boxes.** Automatic layout no longer moves a label to a spot whose dotted leader line would cross a box.
+- **For agents:** `validate` reports lines that run along a box's border (closer than 12) and leader lines that run through a box, with coordinates.
+
 ## 0.2.4
 
 - **New logo:** a blueprint of three amber cubes, the top one still a wireframe drawing; in the Extensions view, the activity bar, editor tabs and the chat.

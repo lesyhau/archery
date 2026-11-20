@@ -188,3 +188,64 @@ describe('relationship keywords (L-7)', () => {
     expect(relationshipLabel(rel('usage'), false)).toBe('');
   });
 });
+
+// Round 4: a routed line ran 2 units along another box's border (N-10), and a moved label's dotted
+// leader ran through a box (N-11).
+describe('clearance of routes and leader lines (N-10, N-11)', () => {
+  /** a and b in a column, c beside the space between them. */
+  async function three(call: (name: string, args?: Record<string, unknown>) => Promise<any>, label?: string) {
+    for (const id of ['a', 'b', 'c']) await call('add_element', { id, name: id.toUpperCase(), kind: 'component' });
+    await call('add_relationship', { kind: 'usage', from: 'a', to: 'b', ...(label ? { label } : {}) });
+    await call('create_diagram', { title: 'Three', name: 'three', type: 'component', elements: ['a', 'b', 'c'] });
+  }
+
+  it('validate reports a line along the border of a box it does not connect', async () => {
+    const { call, warnings } = await workspace();
+    await three(call);
+    await call('move_nodes', {
+      diagram: 'three',
+      nodes: [
+        { id: 'a', x: 100, y: 100, w: 120, h: 60 },
+        { id: 'b', x: 100, y: 400, w: 120, h: 60 },
+        { id: 'c', x: 300, y: 200, w: 120, h: 60 },
+      ],
+    });
+    // Out of a to the right, down 2 units left of c, back into b.
+    await call('set_edge_waypoints', { diagram: 'three', id: 'a-b', waypoints: [{ x: 298, y: 130 }, { x: 298, y: 430 }] });
+    expect(await warnings(/along the border/)).toEqual([expect.stringMatching(/^The line of a-b runs along the border of c \(300, 200, \d+x\d+\), closer than 12/)]);
+    // 30 units off: clear.
+    await call('set_edge_waypoints', { diagram: 'three', id: 'a-b', waypoints: [{ x: 270, y: 130 }, { x: 270, y: 430 }] });
+    expect(await warnings(/along the border/)).toEqual([]);
+  });
+
+  it('validate reports a leader line through a box', async () => {
+    const { call, warnings } = await workspace();
+    await three(call, 'writes frames');
+    await call('move_nodes', {
+      diagram: 'three',
+      nodes: [
+        { id: 'a', x: 100, y: 100, w: 120, h: 60 },
+        { id: 'b', x: 500, y: 100, w: 120, h: 60 },
+        { id: 'c', x: 300, y: 170, w: 120, h: 60 },
+      ],
+    });
+    // The label below c: its leader back up to the line runs through c.
+    await call('set_label_offset', { diagram: 'three', id: 'a-b', offset: { x: 0, y: 150 } });
+    expect(await warnings(/leader/)).toEqual([expect.stringMatching(/^The leader line of the label of a-b \(\d+, \d+, \d+x\d+\) runs through c \(300, 170, \d+x\d+\)/)]);
+  });
+
+  it('are kept by auto_layout', async () => {
+    const { call, warnings } = await workspace();
+    await engine(call);
+    await call('update_element', { id: 'rxThreads', technology: 'TIME_CRITICAL priority, pinned to core 2, lock-free ring buffers' });
+    for (const [id, name] of [['engineThread', 'Engine thread'], ['trace', 'Trace writer']]) await call('add_element', { id, name, kind: 'component', parent: 'engine' });
+    await call('add_relationship', { kind: 'usage', from: 'scheduler', to: 'engineThread', label: 'wakes' });
+    await call('add_relationship', { kind: 'usage', from: 'engineThread', to: 'trace', label: 'append records' });
+    await call('add_relationship', { kind: 'usage', from: 'scheduler', to: 'busDrivers', label: 'write frames' });
+    await call('add_to_diagram', { diagram: 'engine', elements: ['engineThread', 'trace'] });
+    for (const direction of ['DOWN', 'RIGHT']) {
+      await call('auto_layout', { diagram: 'engine', direction });
+      expect(await warnings(/./), direction).toEqual([]);
+    }
+  });
+});

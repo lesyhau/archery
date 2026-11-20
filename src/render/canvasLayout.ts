@@ -1007,17 +1007,24 @@ export function nearestOnPolyline(points: [number, number][], p: [number, number
 }
 
 /**
+ * The dotted leader of a moved label whose box is `b`: from the label's edge (its background box) to
+ * `anchorOf` its centre, the nearest point of what it labels; undefined while the label is close to it.
+ */
+export function leaderLine(b: Box, anchorOf: (c: [number, number]) => [number, number]): [Pt, Pt] | undefined {
+  const a = anchorOf([b.x + b.w / 2, b.y + b.h / 2]);
+  const e: Pt = [Math.max(b.x - 4, Math.min(b.x + b.w + 4, a[0])), Math.max(b.y, Math.min(b.y + b.h + 1, a[1]))];
+  return Math.hypot(a[0] - e[0], a[1] - e[1]) > 8 ? [e, a] : undefined;
+}
+
+/**
  * Adds a label moved by `offset` from its default place. Once it is away from what it labels, a
  * dotted line ties it to the nearest point of that (`anchorOf`, given the label's center).
  */
 export function placeLabel(text: TextPrim, offset: Offset, anchorOf: (c: [number, number]) => [number, number], out: Prim[]) {
   const t: TextPrim = { ...text, x: r(text.x + (offset?.x ?? 0)), y: r(text.y + (offset?.y ?? 0)), movable: true };
   if (offset && (offset.x || offset.y)) {
-    const b = textBox(t);
-    const a = anchorOf([b.x + b.w / 2, b.y + b.h / 2]);
-    // From the label's edge (its background box) to the anchor.
-    const e: [number, number] = [Math.max(b.x - 4, Math.min(b.x + b.w + 4, a[0])), Math.max(b.y, Math.min(b.y + b.h + 1, a[1]))];
-    if (Math.hypot(a[0] - e[0], a[1] - e[1]) > 8) out.push({ t: 'line', x1: r(e[0]), y1: r(e[1]), x2: r(a[0]), y2: r(a[1]), stroke: 'muted', dotted: true });
+    const leader = leaderLine(textBox(t), anchorOf);
+    if (leader) out.push({ t: 'line', x1: r(leader[0][0]), y1: r(leader[0][1]), x2: r(leader[1][0]), y2: r(leader[1][1]), stroke: 'muted', dotted: true });
   }
   out.push(t);
 }

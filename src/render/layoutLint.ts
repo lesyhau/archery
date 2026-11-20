@@ -2,7 +2,7 @@
 // picture, so it gets the coordinates of what overlaps instead. auto_layout uses the same checks to
 // route lines around shapes and to move labels out of the way.
 import type { CanvasDiagram, Model } from '../model/schema';
-import { edgeKey, edgeLayouts, edgePoints, labelBox, layoutNodes, relationshipLabel, segmentCrossesBox, type Box, type LaidOutNode } from './canvasLayout';
+import { edgeKey, edgeLayouts, edgePoints, labelBox, layoutNodes, leaderLine, nearestOnPolyline, relationshipLabel, segmentCrossesBox, type Box, type LaidOutNode } from './canvasLayout';
 
 export { segmentCrossesBox };
 import type { DiagramStyle } from './scene';
@@ -99,6 +99,48 @@ export function endsCrossed(edge: Pick<DrawnEdge, 'from' | 'to' | 'points'>, nod
   return out;
 }
 
+/** How close a line may run along a box it does not connect. */
+export const CLEARANCE = 12;
+
+/**
+ * The shapes a line runs along (N-10 of the agent report): a horizontal or vertical stretch of the line
+ * closer than CLEARANCE to a side of a shape it does not connect (outside it, or just inside its border),
+ * for at least 16 of that side's length, so that it reads as part of the border. The same shapes as
+ * shapesCrossed are left out.
+ */
+export function shapesAlong(edge: Pick<DrawnEdge, 'from' | 'to' | 'points'>, nodes: Map<string, LaidOutNode>): LaidOutNode[] {
+  const within = (id: string, ancestor: string) => {
+    for (let p = nodes.get(id)?.parent; p; p = nodes.get(p)?.parent) if (p === ancestor) return true;
+    return false;
+  };
+  const related = (id: string) => [edge.from, edge.to].some((end) => end === id || within(end, id) || within(id, end));
+  /** A stretch at `at` from `a` to `b` along one axis, against a side at `side` spanning `lo`..`hi`. */
+  const near = (at: number, a: number, b: number, side: number, outward: number, lo: number, hi: number) => {
+    const gap = (at - side) * outward; // outside the box when positive
+    return gap > -3 && gap < CLEARANCE && Math.min(Math.max(a, b), hi) - Math.max(Math.min(a, b), lo) >= 16;
+  };
+  const out: LaidOutNode[] = [];
+  for (const n of nodes.values()) {
+    if (n.container || n.side || related(n.id)) continue;
+    const { x, y, w, h } = n.box;
+    const along = edge.points.slice(1).some((q, i) => {
+      const p = edge.points[i]!;
+      if (Math.abs(p[1] - q[1]) < 0.5) return near(p[1], p[0], q[0], y, -1, x, x + w) || near(p[1], p[0], q[0], y + h, 1, x, x + w);
+      if (Math.abs(p[0] - q[0]) < 0.5) return near(p[0], p[1], q[1], x, -1, y, y + h) || near(p[0], p[1], q[1], x + w, 1, y, y + h);
+      return false;
+    });
+    if (along) out.push(n);
+  }
+  return out;
+}
+
+/** The shapes the dotted leader of a moved label runs through (N-11). */
+export function leaderCrosses(edge: Pick<DrawnEdge, 'points' | 'labelBox' | 'moved'>, nodes: Iterable<LaidOutNode>, box = edge.labelBox): LaidOutNode[] {
+  const leader = box && edge.moved !== false ? leaderLine(box, (c) => nearestOnPolyline(edge.points, c)) : undefined;
+  if (!leader) return [];
+  return [...nodes].filter((n) => !n.container && !n.side && segmentCrossesBox(leader[0], leader[1], n.box));
+}
+
 /** The labels of other lines that a line runs through (N-9). */
 export function labelsCrossed(edge: Pick<DrawnEdge, 'id' | 'local' | 'points'>, edges: DrawnEdge[]): DrawnEdge[] {
   return edges.filter(
@@ -109,7 +151,8 @@ export function labelsCrossed(edge: Pick<DrawnEdge, 'id' | 'local' | 'points'>, 
 /**
  * What is drawn on top of something else: shapes with the same parent that overlap, shapes that lie
  * partly over a container they are not in, lines that run through a shape (or back through their own
- * end), and line labels that cover a shape, another label, or are crossed by another line.
+ * end) or along its border, line labels that cover a shape, another label, or are crossed by another
+ * line, and leader lines of moved labels that run through a shape.
  */
 export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic'): string[] {
   const nodes = layoutNodes(diagram, model);
@@ -151,6 +194,13 @@ export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: Diagram
     }
     for (const n of endsCrossed(e, nodes)) {
       out.push(`The line of ${e.id} runs back across its own end ${n.id} ${at(n.box)}; run auto_layout, or move the bend points of ${e.id} out of ${n.id} with set_edge_waypoints.`);
+    }
+    for (const n of shapesAlong(e, nodes)) {
+      if (lanes.has(n.id)) continue;
+      out.push(`The line of ${e.id} runs along the border of ${n.id} ${at(n.box)}, closer than ${CLEARANCE}; run auto_layout, or move its bend points with set_edge_waypoints.`);
+    }
+    for (const n of leaderCrosses(e, all)) {
+      out.push(`The leader line of the label of ${e.id} ${at(e.labelBox!)} runs through ${n.id} ${at(n.box)}; run auto_layout, or move the label with set_label_offset.`);
     }
     for (const o of labelsCrossed(e, edges)) {
       out.push(`The line of ${e.id} runs through the label of ${o.id} ${at(o.labelBox!)}; run auto_layout, or move the label with set_label_offset.`);

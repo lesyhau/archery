@@ -19,7 +19,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type { CanvasDiagram, CanvasDiagramType, Model, Relationship } from '../model/schema';
 import { containerInset, displayModel, labelBox, layoutNodes, minSize, relationshipLabel, type Box } from '../render/canvasLayout';
-import { drawnEdges, endsCrossed, overlaps, segmentCrossesBox, shapesCrossed } from '../render/layoutLint';
+import { drawnEdges, endsCrossed, leaderCrosses, overlaps, segmentCrossesBox, shapesAlong, shapesCrossed } from '../render/layoutLint';
 import { textWidth } from '../render/scene';
 
 export type LayoutDirection = 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
@@ -264,21 +264,25 @@ function laneRoutes(a: Box, b: Box, s: Box, x: number): Waypoints[] {
 /**
  * Lines drawn straight (Classic) or with right angles (Modern) between their shapes may run through a
  * shape in between (N-7 of the agent report). Such a line gets the route that runs through the fewest
- * shapes (its own ends included), then has the fewest bends: ELK's route, one corner, or a lane beside
- * a shape in the way. (ELK has no usable route for a line that ends on a port: it routes it to the
- * port's parent.)
+ * shapes (its own ends included), then runs along the border of the fewest (N-10), then has the fewest
+ * bends: ELK's route, one corner, or a lane beside a shape in the way. (ELK has no usable route for a
+ * line that ends on a port: it routes it to the port's parent.)
  */
 function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, Waypoints>): CanvasDiagram {
   const nodes = layoutNodes(diagram, model);
-  /** How many shapes the line `id` runs through, in the worse of the two styles. */
-  const crossings = (d: CanvasDiagram, id: string) => {
+  /** How many shapes the line `id` runs through, and along, in the worse of the two styles. */
+  const fit = (d: CanvasDiagram, id: string) => {
     let n = 0;
+    let along = 0;
     for (const ds of ['classic', 'modern'] as const) {
       const e = drawnEdges(d, model, ds, nodes).find((x) => elkId(x) === id);
-      if (e && e.from !== e.to) n = Math.max(n, shapesCrossed(e, nodes).length + endsCrossed(e, nodes).length);
+      if (!e || e.from === e.to) continue;
+      n = Math.max(n, shapesCrossed(e, nodes).length + endsCrossed(e, nodes).length);
+      along = Math.max(along, shapesAlong(e, nodes).length);
     }
-    return n;
+    return { n, along };
   };
+  const crossings = (d: CanvasDiagram, id: string) => fit(d, id).n;
   let d = diagram;
   for (const e of drawnEdges(diagram, model, 'classic', nodes)) {
     const id = elkId(e);
@@ -300,12 +304,14 @@ function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, W
       for (const x of [s.box.x - DETOUR_GAP, s.box.x + s.box.w + DETOUR_GAP]) options.push(...laneRoutes(a, b, s.box, x));
       for (const y of [s.box.y - DETOUR_GAP, s.box.y + s.box.h + DETOUR_GAP]) options.push(...laneRoutes(swap(a), swap(b), swap(s.box), y).map(flip));
     }
-    let best: { waypoints: Waypoints; n: number } | undefined;
+    let best: { waypoints: Waypoints; n: number; along: number } | undefined;
     for (const option of options) {
       if (!option.length) continue;
       const waypoints = option.map((w) => ({ x: Math.round(w.x), y: Math.round(w.y) }));
-      const n = crossings(withWaypoints(d, (x) => (x === id ? waypoints : undefined)), id) + walls(waypoints);
-      if (!best || n < best.n || (n === best.n && waypoints.length < best.waypoints.length)) best = { waypoints, n };
+      const f = fit(withWaypoints(d, (x) => (x === id ? waypoints : undefined)), id);
+      const n = f.n + walls(waypoints);
+      const better = !best || n < best.n || (n === best.n && (f.along < best.along || (f.along === best.along && waypoints.length < best.waypoints.length)));
+      if (better) best = { waypoints, n, along: f.along };
     }
     if (best && best.n < crossings(d, id)) d = withWaypoints(d, (x) => (x === id ? best!.waypoints : undefined));
   }
@@ -350,9 +356,13 @@ function moveLabels(diagram: CanvasDiagram, model: Model): CanvasDiagram {
     tried.add(elkId(e));
     const box = e.labelBox!;
     const blockers: Box[] = [...shapes, ...edges.filter((o, i) => i !== clash && o.labelBox).map((o) => o.labelBox!)];
-    // What is in the way at a spot: the area it covers, and half the label's area for each line through it.
+    const solid = [...nodes.values()].filter((n) => !lanes.has(n.id));
+    // What is in the way at a spot: the area it covers, half the label's area for each line through it,
+    // and the whole label's area for each shape its dotted leader would run through (N-11).
     const cost = (b: Box, margin: number, inset: number) =>
-      blockers.reduce((sum, o) => sum + (overlaps(b, o, margin) ? Math.max(1, overlapArea(b, o)) : 0), 0) + (lines(b, clash, inset) * b.w * b.h) / 2;
+      blockers.reduce((sum, o) => sum + (overlaps(b, o, margin) ? Math.max(1, overlapArea(b, o)) : 0), 0) +
+      (lines(b, clash, inset) * b.w * b.h) / 2 +
+      leaderCrosses({ points: e.points, moved: true }, solid, b).length * b.w * b.h;
     const now = cost(box, 1, 1);
     let best: { shift: [number, number]; cost: number } | undefined;
     for (const shift of SHIFTS) {
