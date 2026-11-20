@@ -33,14 +33,9 @@ How it is organised:
 
 ## Releasing
 
-Work branches (`feature/`, `bugfix/`, `chore/`, `docs/` and so on) come off `dev` and merge back into it. `main` changes only through a `dev` → `main` pull request.
+Releases are made from `main`.
 
-1. On a `release/x.y.z` branch off `dev`, bump `version` in `package.json` and add the version to `CHANGELOG.md`. Merge it into `dev`.
-2. Open the `dev` → `main` pull request and merge it with a merge commit.
-3. Tag `main` and push the tag: `git tag vx.y.z && git push origin vx.y.z`.
+1. On `main`, bump the version (`npm version x.y.z --no-git-tag-version`) and add it to `CHANGELOG.md`. Commit this as "Archery x.y.z".
+2. Tag the commit and push both: `git tag vx.y.z && git push origin main vx.y.z`.
 
-The **Release** workflow then tests and packages the extension and attaches the `.vsix` to a GitHub Release. It also publishes it, but only when the repository has the tokens:
-- to the VS Code Marketplace with a `VSCE_PAT` secret;
-- to Open VSX (VSCodium, Cursor and other editors) with an `OVSX_PAT` secret.
-
-Without them, upload the `.vsix` from the GitHub Release by hand.
+The **Release** workflow then tests and packages the extension and attaches the `.vsix` to a GitHub Release. Upload that `.vsix` to the VS Code Marketplace by hand (marketplace.visualstudio.com/manage → Archery → Update).
