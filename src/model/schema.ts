@@ -263,6 +263,15 @@ export const DiagramNodeSchema = z.object({
 });
 export type DiagramNode = z.infer<typeof DiagramNodeSchema>;
 
+/**
+ * How an edge's line is drawn (its `style.line`): straight, with right angles, curved, or with one
+ * corner (horizontal first / vertical first). Without it the diagram style decides: straight in
+ * Classic, right angles in Modern.
+ */
+export const LineShapes = ['straight', 'orthogonal', 'curved', 'horizontalFirst', 'verticalFirst'] as const;
+export const LineShapeSchema = z.enum(LineShapes);
+export type LineShape = z.infer<typeof LineShapeSchema>;
+
 export const DiagramEdgeSchema = z.object({
   /** Relationship id in model.yaml. */
   ref: IdSchema,
@@ -350,13 +359,25 @@ export const LocalEdgeSchema = z.object({
   waypoints: z.array(PointSchema).default([]),
   /** A moved label: its offset from the default place (a dotted line then ties it to its line or shape). */
   labelOffset: PointSchema.optional(),
+  /** Presentation options, e.g. { line: "curved" } (see LineShapes). */
+  style: z.record(z.string(), z.string()).optional(),
 });
 export type LocalEdge = z.infer<typeof LocalEdgeSchema>;
+
+/** What the shapes and lines of a canvas diagram show. */
+export const DiagramShowSchema = z.object({
+  /** Tagged values ({owner=…, location=…}) in the boxes; default false. */
+  tags: z.boolean().optional(),
+  /** Relationship keywords («use», «deploy», «manifest») on the lines; default true. */
+  keywords: z.boolean().optional(),
+});
+export type DiagramShow = z.infer<typeof DiagramShowSchema>;
 
 export const CanvasDiagramSchema = z.object({
   version: z.literal(1),
   type: CanvasDiagramTypeSchema,
   title: z.string().default(''),
+  show: DiagramShowSchema.optional(),
   nodes: z.array(DiagramNodeSchema).default([]),
   edges: z.array(DiagramEdgeSchema).default([]),
   local: z

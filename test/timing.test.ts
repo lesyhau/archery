@@ -3,7 +3,7 @@ import { parseTimingDiagram } from '../src/model/load';
 import type { Model, TimingDiagram } from '../src/model/schema';
 import { constraintText, layoutTimingWithHits, niceStep, stateAt, statesOf, timeScale } from '../src/render/timingLayout';
 import { scaffold } from '../src/template/scaffold';
-import { ArcherySession } from '../src/ops/session';
+import { ArcherySession, DELETED } from '../src/ops/session';
 import { TOOLS } from '../src/ops/tools';
 import { validateWorkspace } from '../src/model/validate';
 import { diagramUsage } from '../src/model/usage';
@@ -111,7 +111,7 @@ describe('timing diagrams: operations', () => {
       const def = TOOLS.find((t) => t.name === name)!;
       const session = await ArcherySession.load(memoryReader(files), '');
       const result = await def.run(session, def.input.parse(args));
-      for (const [path, text] of session.changes) files.set(path, text);
+      for (const [path, text] of session.changes) text === DELETED ? files.delete(path) : files.set(path, text);
       return result;
     };
     return { files, call };

@@ -12,6 +12,10 @@ import { fillPlaceholders, marginSlots, resolveExportSettings, type ResolvedExpo
 import { docDiagramScene } from '../render/docDiagram';
 import type { DiagramStyle } from '../render/scene';
 import { sceneToSvg } from '../render/svgExport';
+import { ARC42_TEMPLATE_VERSION } from '../template/template';
+
+/** Where Archery lives (the "About this document" page links to it). */
+const ARCHERY_URL = 'https://github.com/lesyhau/archery';
 
 export type ExportContent = Pick<DocumentData, 'system' | 'title' | 'version' | 'changeHistory' | 'sections' | 'diagrams' | 'model' | 'tables' | 'decisions'>;
 
@@ -56,7 +60,7 @@ export function cssContent(template: string, values: Record<string, string>): st
 /** @page rules: size, margins and the margin boxes (header, footer, page numbers). */
 export function pageCss(set: ResolvedExportSettings, values: Record<string, string>): string {
   const slots = marginSlots(set);
-  const boxStyle = `font-family: ${fontStack(set.font)}; font-size: ${Math.max(7, set.fontSize - 2.5)}pt; color: #59636e;`;
+  const boxStyle = `font-family: ${fontStack(set.font)}; font-size: ${Math.max(7, set.fontSize - 2.5)}pt; color: #555555;`;
   const boxes = Object.entries(slots)
     .map(([slot, text]) => `@${slot} { content: ${cssContent(text!, values)}; ${boxStyle} }`)
     .join(' ');
@@ -133,7 +137,8 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     let svg: string;
     try {
       const scene = docDiagramScene(entry, content.model, diagramStyle, d.src);
-      svg = sceneToSvg(scene, { theme: 'light', background: false, title: d.caption || entry.title, link: linkTo })
+      // Black and grays only, like the rest of the printed document.
+      svg = sceneToSvg(scene, { theme: 'print', background: false, title: d.caption || entry.title, link: linkTo })
         .replace(/^\s*<\?xml[^>]*>\s*/, '')
         .replace('<svg ', '<svg class="diagram-svg" role="img" ');
     } catch (e) {
@@ -282,6 +287,26 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <p>Current version: v${esc(content.version)}${released && released !== content.version ? ` (unreleased changes since v${esc(released)})` : ''}</p>
 <figure class="table">${caption('Table', ++counters.table, 'Change history', 'figcaption')}<table><thead><tr><th>Version</th><th>Date</th><th>Author</th><th>Changes</th></tr></thead><tbody>${historyRows}</tbody></table></figure></section>`;
 
+  // The last page: how the document is structured and made.
+  const aboutId = uniqueId('sec-about');
+  if (set.tocDepth >= 1) toc.push({ id: aboutId, number: '', title: 'About this document', level: 1 });
+  const count = (n: number, one: string, many: string) => (n > 0 ? [`${n} ${n === 1 ? one : many}`] : []);
+  const stats = [
+    ...count(content.sections.length, 'chapter', 'chapters'),
+    ...count(Object.keys(content.diagrams).length, 'diagram', 'diagrams'),
+    ...count(content.model?.elements.length ?? 0, 'model element', 'model elements'),
+    ...count(content.decisions.length, 'architecture decision', 'architecture decisions'),
+  ];
+  const about = `<section class="chapter about" id="chapter-about"><h1 id="${aboutId}">About this document</h1>
+<p>This document describes the software architecture of <strong>${esc(content.system)}</strong>, version ${esc(content.version)}, as of ${esc(options.date)}.</p>
+<h2>Structure: arc42</h2>
+<p>The chapters follow <a href="https://arc42.org">arc42</a>, a template for communicating and documenting software architectures: from the goals and constraints (chapters 1 and 2) through the context, the solution strategy and the building blocks, runtime and deployment views (chapters 3 to 7) to the concepts, decisions, quality requirements, risks and glossary (chapters 8 to 12). Chapters that do not apply to the system may be short or left out.</p>
+<p class="credit">Template: arc42 ${esc(ARC42_TEMPLATE_VERSION)} by Dr. Peter Hruschka, Dr. Gernot Starke and contributors, licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
+<h2>Made with Archery</h2>
+<p>The documentation is kept as plain text next to the code and versioned with it: the chapters in Markdown, the structured lists (quality goals, stakeholders, constraints, quality scenarios, risks, glossary) in YAML, and one shared architecture model that every UML diagram draws from. An element is defined once and appears in each diagram that shows it, so all diagrams and tables tell the same story.</p>
+<p>This edition${stats.length ? ` (${stats.join(', ')})` : ''} was generated from those files with <a href="${ARCHERY_URL}">${esc(options.generator)}</a>.</p>
+</section>`;
+
   const tocHtml = !toc.length ? '' : `<nav class="toc" aria-label="Contents"><h2>Contents</h2><ol>${toc
     .map((e) => {
       const page = options.tocPages?.[e.id];
@@ -291,7 +316,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     })
     .join('')}</ol></nav>`;
 
-  const docTitle = `${content.system} - Architecture Design Document`;
+  const docTitle = content.title || content.system;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -301,12 +326,12 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <title>${esc(docTitle)}</title>
 <style>${EXPORT_CSS}
 :root { --font: ${fontStack(set.font)}; --heading-font: ${fontStack(set.headingFont)}; --size: ${set.fontSize}pt; }
-${pageCss(set, { title: content.title || docTitle, system: content.system, version: content.version, date: options.date })}
+${pageCss(set, { title: docTitle, system: content.system, version: content.version, date: options.date })}
 ${set.chapterBreaks ? '' : '@media print { .chapter { break-before: auto; } .chapter h1 { margin-top: 28px; } }'}</style>
 </head>
 <body>
 <header class="cover${set.cover ? '' : ' compact'}">
-<h1 class="doc-title">${esc(content.title || docTitle)}</h1>
+<h1 class="doc-title">${esc(docTitle)}</h1>
 <p class="doc-kind">Architecture Design Document</p>
 <p class="doc-meta">${esc(content.system)} · Version ${esc(content.version)} · ${esc(options.date)}</p>
 </header>
@@ -314,8 +339,8 @@ ${tocHtml}
 <main>
 ${chapters}
 ${history}
+${about}
 </main>
-<footer class="doc-footer">Structure based on the arc42 template. Generated with ${esc(options.generator)}.</footer>
 </body>
 </html>
 `;
@@ -360,8 +385,12 @@ a { color: var(--accent); text-decoration: none; }
 .toc li.l3 .num { width: 3.4em; }
 .toc li.l4 { padding-left: 7.8em; }
 .toc li.l4 .num { width: 4.2em; }
-.toc .lead { flex: 1 1 auto; min-width: 1.5em; margin: 0 0.4em; border-bottom: 1.5px dotted var(--muted); transform: translateY(-0.28em); }
+/* Dotted leader made of text dots (a dotted border prints as a solid line in PDF). */
+.toc .lead { flex: 1 1 0; min-width: 1.5em; margin: 0 0.3em; overflow: hidden; white-space: nowrap; color: var(--muted); font-weight: 400; letter-spacing: 0.25em; }
+.toc .lead::before { content: '${'. '.repeat(120)}'; }
 .toc .pg { flex: none; min-width: 1.6em; text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+.about { break-before: page; }
+.about .credit { color: var(--muted); font-size: 0.93em; }
 .chapter h1 { font-size: 1.75em; line-height: 1.3; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 .chapter h2 { font-size: 1.33em; margin: 28px 0 8px; }
 .chapter h3 { font-size: 1.1em; margin: 22px 0 6px; }
@@ -377,9 +406,11 @@ figure { margin: 16px 0 20px; }
 .caption b { font-weight: 600; }
 figure.diagram .caption { margin: 6px 0 0; text-align: center; }
 figure.table .caption { margin: 0 0 10px; text-align: center; }
-table { width: 100%; border-collapse: collapse; font-size: 0.93em; }
-th, td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
-th { background: var(--well); font-weight: 600; }
+/* Tables: a thin black grid inside a thicker black border. */
+table { width: 100%; border-collapse: collapse; font-size: 0.93em; border: 1.5pt solid #000; }
+th, td { padding: 6px 10px; border: 0.5pt solid #000; text-align: left; vertical-align: top; }
+th { background: #ebebeb; font-weight: 600; }
+thead tr:last-child th { border-bottom-width: 1pt; }
 td.empty { color: var(--muted); font-style: italic; }
 td.nowrap { white-space: nowrap; }
 .cell-image { max-width: 220px; max-height: 160px; vertical-align: middle; }
@@ -389,8 +420,11 @@ td.nowrap { white-space: nowrap; }
 .figure img { max-width: 100%; }
 .figure .caption { margin: 0; text-align: center; }
 .missing { color: #d1242f; }
-.doc-footer { margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8em; }
 @media print {
+  /* The PDF uses black and grays only. */
+  :root { --ink: #000; --muted: #555; --line: #000; --well: #f0f0f0; --accent: #000; }
+  .missing { color: #000; font-weight: 600; }
+  .cover, .chapter h1 { border-bottom-width: 0.75pt; }
   body { max-width: none; padding: 0; }
   .cover:not(.compact) { padding-top: 30vh; border-bottom: 0; break-after: page; }
   .toc { break-after: page; }

@@ -3,7 +3,7 @@
 // artifacts, classes with generics, enums, data types, n-ary association diamonds), the
 // diagram-local nodes of state machines and activity diagrams, and all relationships with
 // their UML adornments. The diagram editor reuses the per-element and per-edge functions.
-import type { CanvasDiagram, DiagramNode, Element, LocalEdge, LocalNode, Model, Relationship } from '../model/schema';
+import { LineShapes, type CanvasDiagram, type DiagramNode, type Element, type LineShape, type LocalEdge, type LocalNode, type Model, type Relationship } from '../model/schema';
 import { FONT_SIZE, headPath, normalize, r, textBox, textWidth, type Prim, type Scene, polylineD, roundCorners, withStyle, fillShapes, type DiagramStyle } from './scene';
 
 const LINE = 18;
@@ -81,10 +81,10 @@ export function outlineOf(kind: string, lollipop = false): Outline {
 }
 
 /** Keywords UML 2.0 shows for a kind (a component's icon is optional, its keyword is not: 8.3.1).
- *  An external system is drawn as an actor in rectangle notation (16.3.1): an external entity. */
+ *  An external system is a grey box marked «external» (an actor in rectangle notation would read «actor»). */
 const KEYWORDS: Partial<Record<Element['kind'], string>> = {
   component: 'component',
-  externalSystem: 'actor',
+  externalSystem: 'external',
   interface: 'interface',
   executionEnvironment: 'executionEnvironment',
   artifact: 'artifact',
@@ -99,14 +99,61 @@ export function keywordText(e: Pick<Element, 'kind' | 'stereotype'>, subject = f
   return [...new Set(parts)].map((k) => `«${k}»`).join(' ');
 }
 
-/** Property strings drawn under the name: {technology=…, version=…, tag=value} and each {constraint}. */
-export function propertyLines(e: Element): string[] {
+/** A text cut to `max` wide, ending in "…". */
+export function ellipsize(text: string, max: number, size = FONT_SIZE): string {
+  if (textWidth(text, size) <= max) return text;
+  let s = text;
+  while (s.length > 1 && textWidth(`${s}…`, size) > max) s = s.slice(0, -1);
+  return `${s.trimEnd()}…`;
+}
+
+/** Word-wrapped lines of at most `max` wide (a word longer than that is cut). */
+export function wrapText(text: string, max: number, size = FONT_SIZE): string[] {
+  const out: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const next = line ? `${line} ${word}` : word;
+      if (!line || textWidth(next, size) <= max) line = next;
+      else {
+        out.push(line);
+        line = word;
+      }
+    }
+    out.push(line);
+  }
+  return out.map((l) => ellipsize(l, max, size));
+}
+
+/** Property strings are never wider than this, unless the box is given a larger width. */
+const PROPS_MAX = 300;
+
+/**
+ * Property strings drawn under the name: {technology=…, version=…, tag=value} and each {constraint}.
+ * A property string wider than `max` is broken after a comma; a single property wider than that is cut.
+ */
+export function propertyLines(e: Element, max = Infinity): string[] {
   const props = [
     ...(e.technology ? [`technology=${e.technology}`] : []),
     ...(e.version ? [`version=${e.version}`] : []),
     ...Object.entries(e.tags ?? {}).map(([k, v]) => `${k}=${v}`),
   ];
-  return [...(props.length ? [`{${props.join(', ')}}`] : []), ...(e.constraints ?? []).map((c) => `{${c}}`)];
+  const constraints = (e.constraints ?? []).map((c) => ellipsize(`{${c}}`, max, 11));
+  if (!props.length) return constraints;
+  const whole = `{${props.join(', ')}}`;
+  if (textWidth(whole, 11) <= max) return [whole, ...constraints];
+  const lines: string[] = [];
+  let line = '';
+  props.forEach((p, i) => {
+    const piece = `${i === 0 ? '{' : ''}${p}${i === props.length - 1 ? '}' : ','}`;
+    const next = line ? `${line} ${piece}` : piece;
+    if (line && textWidth(next, 11) > max) {
+      lines.push(line);
+      line = piece;
+    } else line = next;
+  });
+  lines.push(line);
+  return [...lines.map((l) => ellipsize(l, max, 11)), ...constraints];
 }
 
 /** "name : Type" of an instance, part or collaboration use (":Type" for an anonymous one), with a part's [multiplicity]. */
@@ -141,7 +188,8 @@ function hasCompartments(e: Element): boolean {
 /** Minimum size of an element's shape (class boxes grow to fit their members). */
 const PROP_LINE = 14;
 
-export function minSize(e: Element | undefined, lollipop = false, classifier?: Pick<Element, 'name'>): [number, number] {
+/** `width`: the width the box was given (property strings wrap to it). */
+export function minSize(e: Element | undefined, lollipop = false, classifier?: Pick<Element, 'name'>, width?: number): [number, number] {
   if (!e) return [140, 50];
   if (lollipop) return DEFAULT_SIZE.lollipop!;
   const [dw, dh] = DEFAULT_SIZE[e.kind] ?? [160, 70];
@@ -151,7 +199,7 @@ export function minSize(e: Element | undefined, lollipop = false, classifier?: P
     const w = Math.max(dw, textWidth(label, FONT_SIZE, true) + (e.kind === 'collaborationUse' ? 60 : 32), ...slots.map((l) => textWidth(l) + 24));
     return [w, Math.max(dh, (slots.length ? 38 + slots.length * LINE + 8 : dh))];
   }
-  const props = propertyLines(e);
+  const props = propertyLines(e, (width ?? PROPS_MAX) - 24);
   const propW = Math.max(0, ...props.map((l) => textWidth(l, 11) + 24));
   if (e.kind === 'usecase' && e.extensionPoints?.length) {
     // The ellipse holds the name, a line and the "extension points" compartment.
@@ -209,7 +257,7 @@ export function elementPrims(e: Element | undefined, ref: string, box: Box, opts
     return out;
   }
   const keyword = keywordText(e, opts.subject);
-  const props = propertyLines(e);
+  const props = propertyLines(e, w - 24);
   /** «keywords», the name, then the property strings ({tagged values}, {constraints}). */
   const nameLines = (top: number, at = cx, anchor: 'middle' | 'start' = 'middle') => {
     let ty = top;
@@ -416,7 +464,7 @@ export function elementPrims(e: Element | undefined, ref: string, box: Box, opts
     return out;
   }
 
-  // component, externalSystem («actor» rectangle), interface (plain box), use case subject
+  // component, externalSystem («external» rectangle), interface (plain box), use case subject
   if (opts.subject) {
     // The subject of use cases: a plain rectangle with its name at the top (16.3.6).
     out.push({ t: 'rect', x, y, w, h, fill: 'surface', stroke: 'ink' });
@@ -435,6 +483,18 @@ export function elementPrims(e: Element | undefined, ref: string, box: Box, opts
   else nameLines(centeredTop);
   if (e.kind === 'component') instances(x + w - 30, y + 18);
   return out;
+}
+
+/** A note's text, wrapped to its width. */
+export function noteLines(text: string, w: number): string[] {
+  return wrapText(text, w - 20, 12);
+}
+
+/** The size a note needs: wide enough for its longest line (up to 280), tall enough for all its lines. */
+export function noteSize(text: string, w?: number, h?: number): [number, number] {
+  const [dw, dh] = DEFAULT_SIZE.note ?? [160, 60];
+  const width = w ?? Math.max(dw, Math.min(280, Math.max(0, ...text.split('\n').map((l) => textWidth(l, 12) + 24))));
+  return [width, Math.max(h ?? dh, 12 + noteLines(text, width).length * 16)];
 }
 
 /** Primitives for one state-machine/activity/note node. */
@@ -483,7 +543,7 @@ export function localNodePrims(n: LocalNode, box: Box, container = false, opts: 
   switch (n.kind) {
     case 'note':
       out.push({ t: 'path', d: `M${x} ${y} L${x + w - 12} ${y} L${x + w} ${y + 12} L${x + w} ${y + h} L${x} ${y + h} Z M${x + w - 12} ${y} L${x + w - 12} ${y + 12} L${x + w} ${y + 12}`, fill: 'alt', stroke: 'ink' });
-      (n.text ?? name).split('\n').forEach((line, i) => out.push({ t: 'text', x: x + 8, y: y + 18 + i * 16, text: line, size: 12 }));
+      noteLines(n.text ?? name, w).forEach((line, i) => out.push({ t: 'text', x: x + 8, y: y + 18 + i * 16, text: line, size: 12 }));
       break;
     case 'state': {
       const lines = (n.text ?? '').split('\n').filter(Boolean);
@@ -650,24 +710,160 @@ export interface EdgeGeometry {
   points: [number, number][];
 }
 
-/** The polyline of an edge between two shapes (through waypoints), clipped to both outlines. */
-export function edgePoints(from: Shape, to: Shape, waypoints: { x: number; y: number }[], ds: DiagramStyle = 'classic'): [number, number][] {
-  const center = (b: Box): [number, number] => [b.x + b.w / 2, b.y + b.h / 2];
-  if (ds === 'modern') {
-    if (waypoints.length === 0) {
-      const ortho = orthoRoute(from, to);
-      if (ortho) return ortho;
-    } else {
-      // Bend points: leave and enter through the ports facing the nearest bend point.
-      const pts = waypoints.map((p) => [p.x, p.y] as [number, number]);
-      return [portToward(from, pts[0]!), ...pts, portToward(to, pts.at(-1)!)];
+type Pt = [number, number];
+
+/** How one edge is drawn: its line shape, and for edges between the same two shapes a sideways shift. */
+export interface Route {
+  line?: LineShape;
+  /** Shift by `by` (signed) across `perp`; edges between the same two shapes share `perp` and differ in `by`. */
+  offset?: { by: number; perp: Pt };
+  /** Right-angled lines sharing a side of a shape: move this line's end along that side. */
+  ports?: { from?: number; to?: number };
+}
+
+/** The line shape of an edge: its own (style.line), else the diagram style's (straight / right angles). */
+export function lineShapeOf(style: Record<string, string> | undefined, ds: DiagramStyle = 'classic'): LineShape {
+  const own = style?.line;
+  return (LineShapes as readonly string[]).includes(own ?? '') ? (own as LineShape) : ds === 'modern' ? 'orthogonal' : 'straight';
+}
+
+const centerOf = (b: Box): Pt => [b.x + b.w / 2, b.y + b.h / 2];
+
+/** The polyline of an edge between two shapes (through waypoints), ending on both outlines. Curves come as many short segments. */
+export function edgePoints(from: Shape, to: Shape, waypoints: { x: number; y: number }[], ds: DiagramStyle = 'classic', route: Route = {}): Pt[] {
+  const line = route.line ?? lineShapeOf(undefined, ds);
+  const pts = waypoints.map((p) => [p.x, p.y] as Pt);
+  if (line === 'curved') return curvedRoute(from, to, pts, route.offset);
+  if (pts.length > 0) {
+    if (line === 'straight') return [clipTo(from.box, from.outline, ...pts[0]!), ...pts, clipTo(to.box, to.outline, ...pts.at(-1)!)];
+    // Bend points: leave and enter through the ports facing the nearest bend point.
+    return [portToward(from, pts[0]!), ...pts, portToward(to, pts.at(-1)!)];
+  }
+  if (line !== 'straight') {
+    const routed = line === 'orthogonal' ? orthoRoute(from, to) : (cornerRoute(from, to, line === 'horizontalFirst') ?? orthoRoute(from, to));
+    if (routed) return route.offset ? shiftRoute(routed, route.offset) : route.ports ? spreadPorts(routed, route.ports) : routed;
+  }
+  if (route.offset) return bowed(from, to, route.offset);
+  const start = clipTo(from.box, from.outline, ...centerOf(to.box));
+  const end = clipTo(to.box, to.outline, ...centerOf(from.box));
+  return [start, end];
+}
+
+/**
+ * One corner: out of the side facing the target, horizontally (`horizontalFirst`) or vertically, then
+ * into the target's top / bottom (or left / right). Straight across when the ends already line up;
+ * undefined when the target is right above / below (or beside) the source.
+ */
+function cornerRoute(from: Shape, to: Shape, horizontalFirst: boolean): Pt[] | undefined {
+  const a = from.box;
+  const b = to.box;
+  const [acx, acy] = centerOf(a);
+  const [bcx, bcy] = centerOf(b);
+  if (horizontalFirst) {
+    if (bcx >= a.x && bcx <= a.x + a.w) return undefined;
+    const right = bcx > acx;
+    const s = portOf(from, right ? 'right' : 'left');
+    if (s[1] >= b.y && s[1] <= b.y + b.h) return [s, [right ? b.x : b.x + b.w, s[1]]];
+    const t = portOf(to, bcy > s[1] ? 'top' : 'bottom');
+    return [s, [t[0], s[1]], t];
+  }
+  if (bcy >= a.y && bcy <= a.y + a.h) return undefined;
+  const down = bcy > acy;
+  const s = portOf(from, down ? 'bottom' : 'top');
+  if (s[0] >= b.x && s[0] <= b.x + b.w) return [s, [s[0], down ? b.y : b.y + b.h]];
+  const t = portOf(to, bcx > s[0] ? 'left' : 'right');
+  return [s, [s[0], t[1]], t];
+}
+
+/** Moves the ends of a right-angled route along their sides (the next corner moves with them, so it stays right-angled). */
+function spreadPorts(route: Pt[], ports: NonNullable<Route['ports']>): Pt[] {
+  const out = route.map((p) => [p[0], p[1]] as Pt);
+  const shift = (i: number, j: number, d: number | undefined) => {
+    if (!d) return;
+    const axis = Math.abs(out[j]![0] - out[i]![0]) > Math.abs(out[j]![1] - out[i]![1]) ? 1 : 0;
+    out[i]![axis] += d;
+    if (out.length > 2) out[j]![axis] += d;
+  };
+  shift(0, 1, ports.from);
+  shift(out.length - 1, out.length - 2, ports.to);
+  if (out.length === 2) {
+    const [s, t] = out as [Pt, Pt];
+    // Two ends no longer in line: a step halfway.
+    if (Math.abs(s[0] - t[0]) > 0.5 && Math.abs(s[1] - t[1]) > 0.5) {
+      const horizontal = Math.abs(route[1]![0] - route[0]![0]) > Math.abs(route[1]![1] - route[0]![1]);
+      if (horizontal) return [s, [(s[0] + t[0]) / 2, s[1]], [(s[0] + t[0]) / 2, t[1]], t];
+      return [s, [s[0], (s[1] + t[1]) / 2], [t[0], (s[1] + t[1]) / 2], t];
     }
   }
-  const first = waypoints[0] ? ([waypoints[0].x, waypoints[0].y] as [number, number]) : center(to.box);
-  const last = waypoints.at(-1) ? ([waypoints.at(-1)!.x, waypoints.at(-1)!.y] as [number, number]) : center(from.box);
-  const start = clipTo(from.box, from.outline, first[0], first[1]);
-  const end = clipTo(to.box, to.outline, last[0], last[1]);
-  return [start, ...waypoints.map((p) => [p.x, p.y] as [number, number]), end];
+  return out;
+}
+
+/** Moves a right-angled route sideways: the ends along their side, the corners with them. */
+function shiftRoute(route: Pt[], offset: NonNullable<Route['offset']>): Pt[] {
+  const sx = offset.perp[0] >= 0 ? 1 : -1;
+  const sy = offset.perp[1] >= 0 ? 1 : -1;
+  const d = offset.by;
+  return route.map((p, i) => {
+    if (i > 0 && i < route.length - 1) return [p[0] + d * sx, p[1] + d * sy];
+    const q = route[i === 0 ? 1 : i - 1]!;
+    const horizontal = Math.abs(q[0] - p[0]) > Math.abs(q[1] - p[1]);
+    return horizontal ? [p[0], p[1] + d * sy] : [p[0] + d * sx, p[1]];
+  });
+}
+
+const SAMPLES = 24;
+
+function cubic(p0: Pt, c1: Pt, c2: Pt, p3: Pt, n = SAMPLES): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    out.push([u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p3[0], u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p3[1]]);
+  }
+  return out;
+}
+
+/** A straight edge that shares its ends with another: a gentle arc to one side. */
+function bowed(from: Shape, to: Shape, offset: NonNullable<Route['offset']>): Pt[] {
+  const a = centerOf(from.box);
+  const b = centerOf(to.box);
+  const c: Pt = [(a[0] + b[0]) / 2 + offset.perp[0] * offset.by * 2, (a[1] + b[1]) / 2 + offset.perp[1] * offset.by * 2];
+  const s = clipTo(from.box, from.outline, ...c);
+  const e = clipTo(to.box, to.outline, ...c);
+  // A quadratic curve as a cubic one.
+  return cubic(s, [s[0] + ((c[0] - s[0]) * 2) / 3, s[1] + ((c[1] - s[1]) * 2) / 3], [e[0] + ((c[0] - e[0]) * 2) / 3, e[1] + ((c[1] - e[1]) * 2) / 3], e, 16);
+}
+
+/**
+ * Curved: from the port facing the target, leaving and arriving straight out of the sides (like the
+ * right-angled route, with its corners smoothed away); through the bend points when there are some.
+ */
+function curvedRoute(from: Shape, to: Shape, pts: Pt[], offset: Route['offset']): Pt[] {
+  if (pts.length > 0) {
+    // A smooth curve through every bend point (Catmull-Rom).
+    const all: Pt[] = [clipTo(from.box, from.outline, ...pts[0]!), ...pts, clipTo(to.box, to.outline, ...pts.at(-1)!)];
+    const out: Pt[] = [all[0]!];
+    for (let i = 0; i < all.length - 1; i++) {
+      const p0 = all[Math.max(0, i - 1)]!;
+      const p1 = all[i]!;
+      const p2 = all[i + 1]!;
+      const p3 = all[Math.min(all.length - 1, i + 2)]!;
+      const c1: Pt = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+      const c2: Pt = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      out.push(...cubic(p1, c1, c2, p2, 12).slice(1));
+    }
+    return out;
+  }
+  let routed = orthoRoute(from, to);
+  if (!routed) return offset ? bowed(from, to, offset) : [clipTo(from.box, from.outline, ...centerOf(to.box)), clipTo(to.box, to.outline, ...centerOf(from.box))];
+  if (offset) routed = shiftRoute(routed, offset);
+  const s = routed[0]!;
+  const e = routed.at(-1)!;
+  if (routed.length === 2) return routed;
+  const out = unit(s, routed[1]!);
+  const into = unit(routed.at(-2)!, e);
+  const k = Math.max(24, Math.hypot(e[0] - s[0], e[1] - s[1]) * 0.45);
+  return cubic(s, [s[0] + out[0] * k, s[1] + out[1] * k], [e[0] - into[0] * k, e[1] - into[1] * k], e);
 }
 
 export type PortSide = 'top' | 'right' | 'bottom' | 'left';
@@ -826,19 +1022,48 @@ export function placeLabel(text: TextPrim, offset: Offset, anchorOf: (c: [number
   out.push(t);
 }
 
-function midLabel(points: [number, number][], text: string, out: Prim[], ds: DiagramStyle = 'classic', offset?: Offset) {
+/** The point at fraction `t` of a polyline's length, and the segment it is on. */
+export function pointAlong(points: Pt[], t: number): { p: Pt; a: Pt; b: Pt } {
+  const lengths = points.slice(1).map((q, i) => Math.hypot(q[0] - points[i]![0], q[1] - points[i]![1]));
+  const total = lengths.reduce((x, y) => x + y, 0);
+  let left = total * Math.min(1, Math.max(0, t));
+  for (let i = 0; i < lengths.length; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    if (left <= lengths[i]! || i === lengths.length - 1) {
+      const f = lengths[i]! ? Math.min(1, left / lengths[i]!) : 0;
+      return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], a, b };
+    }
+    left -= lengths[i]!;
+  }
+  return { p: points[0]!, a: points[0]!, b: points[0]! };
+}
+
+/**
+ * The label of a line at fraction `at` of its length (default: the middle of its middle segment):
+ * above a line that runs sideways, to the right of one that runs up or down.
+ */
+function labelPrim(points: Pt[], text: string, ds: DiagramStyle, at?: number): TextPrim {
   // Modern: muted italic labels above the line.
   const look = ds === 'modern' ? { fill: 'muted' as const, italic: true } : {};
-  const mid = Math.floor((points.length - 1) / 2);
-  const a = points[mid]!;
-  const b = points[mid + 1]!;
-  const mx = (a[0] + b[0]) / 2;
-  const my = (a[1] + b[1]) / 2;
-  const prim: TextPrim =
-    Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1])
-      ? { t: 'text', x: mx, y: my - 7, text, anchor: 'middle', size: 12, halo: true, ...look }
-      : { t: 'text', x: mx + 8, y: my + 4, text, anchor: 'start', size: 12, halo: true, ...look };
-  placeLabel(prim, offset, (c) => nearestOnPolyline(points, c), out);
+  let a: Pt, b: Pt, mx: number, my: number;
+  if (at === undefined) {
+    const mid = Math.floor((points.length - 1) / 2);
+    a = points[mid]!;
+    b = points[mid + 1]!;
+    [mx, my] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  } else {
+    const hit = pointAlong(points, at);
+    [a, b] = [hit.a, hit.b];
+    [mx, my] = hit.p;
+  }
+  return Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1])
+    ? { t: 'text', x: mx, y: my - 7, text, anchor: 'middle', size: 12, halo: true, ...look }
+    : { t: 'text', x: mx + 8, y: my + 4, text, anchor: 'start', size: 12, halo: true, ...look };
+}
+
+function midLabel(points: Pt[], text: string, out: Prim[], ds: DiagramStyle = 'classic', offset?: Offset, at?: number) {
+  placeLabel(labelPrim(points, text, ds, at), offset, (c) => nearestOnPolyline(points, c), out);
 }
 
 export function midpoint(points: [number, number][]): [number, number] {
@@ -848,10 +1073,27 @@ export function midpoint(points: [number, number][]): [number, number] {
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 
+/** How to draw one edge: its route, where its label goes, and whether relationship keywords («use», ...) show. */
+export interface EdgeDraw extends Route {
+  labelAt?: number;
+  keywords?: boolean;
+}
+
+/** Corners are rounded in Modern, on lines that have corners. */
+const cornerRadius = (ds: DiagramStyle, line: LineShape | undefined) => {
+  const shape = line ?? lineShapeOf(undefined, ds);
+  return ds === 'modern' && shape !== 'straight' && shape !== 'curved' ? MODERN_RADIUS : 0;
+};
+
+/** The label of a relationship: its keywords (unless hidden) and its label. */
+export function relationshipLabel(rel: Relationship, keywords = true): string {
+  return [keywords ? relationshipKeywords(rel) : '', rel.label ?? ''].filter(Boolean).join(' ');
+}
+
 /** Primitives for one relationship between two shapes. */
-export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, waypoints: { x: number; y: number }[], ds: DiagramStyle = 'classic', labelOffset?: Offset): Prim[] {
+export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, waypoints: { x: number; y: number }[], ds: DiagramStyle = 'classic', labelOffset?: Offset, opts: EdgeDraw = {}): Prim[] {
   const out: Prim[] = [];
-  let points = edgePoints(from, to, waypoints, ds);
+  let points = edgePoints(from, to, waypoints, ds, opts);
   const style = { ...REL_STYLE[rel.kind] };
   // Provided/required interfaces in lollipop notation.
   if (to.lollipop && rel.kind === 'realization') {
@@ -910,12 +1152,12 @@ export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, way
     end = back;
     points = [...points.slice(0, -1), back];
   }
-  out.unshift({ t: 'path', d: polylineD(points, ds === 'modern' ? MODERN_RADIUS : 0), fill: 'none', stroke: 'ink', dashed: style.dashed });
+  out.unshift({ t: 'path', d: polylineD(points, cornerRadius(ds, opts.line)), fill: 'none', stroke: 'ink', dashed: style.dashed });
   drawHead(style.to, end, unit(points.at(-2)!, end), out, ds);
   drawHead(style.from, start, unit(points[1]!, start), out, ds);
 
-  const label = [relationshipKeywords(rel), rel.label ?? ''].filter(Boolean).join(' ');
-  if (label) midLabel(points, label, out, ds, labelOffset);
+  const label = relationshipLabel(rel, opts.keywords !== false);
+  if (label) midLabel(points, label, out, ds, labelOffset, opts.labelAt);
   if (rel.condition || rel.extensionPoint) {
     // «extend» condition and extension point: a note attached to the relationship (16.3.3).
     const lines = [rel.condition ? `Condition: {${rel.condition}}` : '', rel.extensionPoint ? `extension point: ${rel.extensionPoint}` : ''].filter(Boolean);
@@ -939,10 +1181,11 @@ export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, way
 }
 
 /** Primitives for a local edge (transition, control/object flow, note anchor). */
-export function localEdgePrims(edge: LocalEdge, from: Shape, to: Shape, ds: DiagramStyle = 'classic'): Prim[] {
+export function localEdgePrims(edge: LocalEdge, from: Shape, to: Shape, ds: DiagramStyle = 'classic', opts: EdgeDraw = {}): Prim[] {
   const out: Prim[] = [];
-  let points = edgePoints(from, to, edge.waypoints, ds);
-  const radius = ds === 'modern' && edge.kind !== 'interrupt' ? MODERN_RADIUS : 0;
+  const line = opts.line ?? lineShapeOf(edge.style, ds);
+  let points = edgePoints(from, to, edge.waypoints, ds, { ...opts, line });
+  const radius = edge.kind !== 'interrupt' ? cornerRadius(ds, line) : 0;
   if (edge.kind === 'interrupt') {
     // Interrupting edge (12.3.31): a lightning bolt in the middle of the line.
     const i = Math.floor((points.length - 1) / 2);
@@ -961,7 +1204,7 @@ export function localEdgePrims(edge: LocalEdge, from: Shape, to: Shape, ds: Diag
   }
   out.push({ t: 'path', d: polylineD(points, radius), fill: 'none', stroke: 'ink', dashed: edge.kind === 'anchor' });
   if (edge.kind !== 'anchor') drawHead('open', points.at(-1)!, unit(points.at(-2)!, points.at(-1)!), out, ds);
-  if (edge.label) midLabel(points, edge.label, out, ds, edge.labelOffset);
+  if (edge.label) midLabel(points, edge.label, out, ds, edge.labelOffset, opts.labelAt);
   return out;
 }
 
@@ -988,10 +1231,30 @@ export interface LaidOutNode {
 }
 
 /**
+ * The room a container keeps around its children: `pad` on every side, plus `header` above them for
+ * «keywords», the name and the property strings. Regions get a small inset (and room for their name);
+ * a state holding regions only needs its name compartment.
+ */
+export function containerInset(el: Element | undefined, localKind: string | undefined, localName: string | undefined, subject: boolean, holdsRegions: boolean, width = Infinity): { pad: number; header: number } {
+  const isRegion = localKind === 'region';
+  const pad = isRegion ? 10 : holdsRegions ? 0 : 16;
+  const header = el ? 34 + (keywordText(el, subject) ? 16 : 0) + propertyLines(el, Math.min(width, PROPS_MAX) - 24).length * PROP_LINE : isRegion ? (localName ? 14 : 0) : holdsRegions ? 28 : 34;
+  return { pad, header };
+}
+
+/** The model as a diagram shows it: without tagged values unless the diagram shows them. */
+export function displayModel(model: Model, diagram: Pick<CanvasDiagram, 'show'>): Model {
+  if (diagram.show?.tags) return model;
+  if (!model.elements.some((e) => e.tags)) return model;
+  return { ...model, elements: model.elements.map((e) => (e.tags ? (({ tags: _, ...rest }) => rest)(e) : e)) };
+}
+
+/**
  * Absolute boxes of every node: default sizes, class boxes grown to their members,
  * containers grown around their children, ports snapped to their component's border.
  */
 export function layoutNodes(diagram: CanvasDiagram, model: Model): Map<string, LaidOutNode> {
+  model = displayModel(model, diagram);
   const elements = new Map(model.elements.map((e) => [e.id, e]));
   const result = new Map<string, LaidOutNode>();
   const onDiagram = new Set([...diagram.nodes.map((n) => n.ref), ...diagram.local.nodes.map((n) => n.id)]);
@@ -1005,9 +1268,14 @@ export function layoutNodes(diagram: CanvasDiagram, model: Model): Map<string, L
   for (const n of diagram.nodes) {
     const e = elements.get(n.ref);
     const lollipop = e?.kind === 'interface' && n.style?.notation === 'lollipop';
-    add(n.ref, 'model', e?.kind ?? 'component', n, e?.parent, lollipop, minSize(e, lollipop, e?.classifier ? elements.get(e.classifier) : undefined));
+    add(n.ref, 'model', e?.kind ?? 'component', n, e?.parent, lollipop, minSize(e, lollipop, e?.classifier ? elements.get(e.classifier) : undefined, n.w));
   }
-  for (const n of diagram.local.nodes) add(n.id, 'local', n.kind, n, n.parent, false, [0, 0]);
+  for (const n of diagram.local.nodes) {
+    if (n.kind === 'note') {
+      const [w, h] = noteSize(n.text ?? n.name ?? '', n.w, n.h);
+      add(n.id, 'local', n.kind, { ...n, w, h }, n.parent, false, [0, 0]);
+    } else add(n.id, 'local', n.kind, n, n.parent, false, [0, 0]);
+  }
 
   // Depths for containment (children inside parents; cycles are cut).
   const depthOf = (id: string, seen = new Set<string>()): number => {
@@ -1030,18 +1298,8 @@ export function layoutNodes(diagram: CanvasDiagram, model: Model): Map<string, L
     const el = elements.get(node.id);
     // A component holding use cases is the subject (system boundary) of a use case diagram.
     node.subject = el?.kind === 'component' && kids.some((k) => elements.get(k.id)?.kind === 'usecase');
-    // Regions get a small inset (and room for their name); a state holding regions only needs its name compartment.
-    const isRegion = localKind.get(node.id) === 'region';
     const holdsRegions = kids.some((k) => localKind.get(k.id) === 'region');
-    const pad = isRegion ? 10 : holdsRegions ? 0 : 16;
-    // Room for «keywords», the name and the property strings above the children.
-    const header = el
-      ? 34 + (keywordText(el, node.subject) ? 16 : 0) + propertyLines(el).length * PROP_LINE
-      : isRegion
-        ? (localName.get(node.id) ? 14 : 0)
-        : holdsRegions
-          ? 28
-          : 34;
+    const { pad, header } = containerInset(el, localKind.get(node.id), localName.get(node.id), node.subject, holdsRegions, node.box.w);
     const minX = Math.min(...kids.map((k) => k.box.x)) - pad;
     const minY = Math.min(...kids.map((k) => k.box.y)) - pad - header;
     const maxX = Math.max(...kids.map((k) => k.box.x + k.box.w)) + pad;
@@ -1081,12 +1339,125 @@ export function layoutNodes(diagram: CanvasDiagram, model: Model): Map<string, L
   return result;
 }
 
+/** The key of an edge in edgeLayouts: m:<relationship ref> or l:<local edge id>. */
+export const edgeKey = (source: 'model' | 'local', id: string) => `${source === 'model' ? 'm' : 'l'}:${id}`;
+
+/** Edges between the same two shapes are this far apart. */
+const PARALLEL_GAP = 20;
+/** Where along its line a label may go (fractions of the length), best first. */
+const LABEL_SPOTS = [0.5, 0.35, 0.65, 0.22, 0.78];
+
+const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const overlapArea = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+
+/** The box a label takes (as labelPrim places it). */
+export function labelBox(points: Pt[], text: string, ds: DiagramStyle, at?: number): Box {
+  return textBox(labelPrim(points, text, ds, at));
+}
+
+/**
+ * How every edge of a canvas diagram is drawn, so the editor and the exports agree:
+ *  - its line shape (its own, else the diagram style's);
+ *  - edges between the same two shapes (either direction, no bend points) are spread apart sideways;
+ *  - its label goes to the first place along the line where it covers no shape and no other label
+ *    (a label moved by hand stays where it was put).
+ */
+export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<string, LaidOutNode>, ds: DiagramStyle = 'classic'): Map<string, EdgeDraw> {
+  const relationships = new Map(model.relationships.map((r) => [r.id, r]));
+  const keywords = diagram.show?.keywords !== false;
+  type Item = { key: string; from: string; to: string; waypoints: { x: number; y: number }[]; style?: Record<string, string>; label: string; moved: boolean };
+  const items: Item[] = [];
+  for (const e of diagram.edges) {
+    const rel = relationships.get(e.ref);
+    if (!rel || !nodes.has(rel.from) || !nodes.has(rel.to)) continue;
+    items.push({ key: edgeKey('model', e.ref), from: rel.from, to: rel.to, waypoints: e.waypoints, style: e.style, label: relationshipLabel(rel, keywords), moved: !!e.labelOffset });
+  }
+  for (const e of diagram.local.edges) {
+    if (!nodes.has(e.from) || !nodes.has(e.to)) continue;
+    items.push({ key: edgeKey('local', e.id), from: e.from, to: e.to, waypoints: e.waypoints, style: e.style, label: e.label ?? '', moved: !!e.labelOffset });
+  }
+
+  const out = new Map<string, EdgeDraw>();
+  const groups = new Map<string, Item[]>();
+  for (const it of items) {
+    out.set(it.key, { line: lineShapeOf(it.style, ds), keywords });
+    if (it.from === it.to || it.waypoints.length) continue;
+    const pair = [it.from, it.to].sort().join(' ');
+    groups.set(pair, [...(groups.get(pair) ?? []), it]);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // One sideways direction for the pair, whichever way each edge points.
+    const [first, second] = [group[0]!.from, group[0]!.to].sort();
+    const u = unit(centerOf(nodes.get(first!)!.box), centerOf(nodes.get(second!)!.box));
+    const perp: Pt = [-u[1], u[0]];
+    group.forEach((it, k) => (out.get(it.key)!.offset = { by: (k - (group.length - 1) / 2) * PARALLEL_GAP, perp }));
+  }
+
+  // Right-angled lines that leave or enter the same side of a shape: spread along that side, in the
+  // order of where their other ends are (so they do not cross), instead of meeting in one point.
+  const sides = new Map<string, { it: Item; end: 'from' | 'to'; key: number }[]>();
+  const sideOf = (b: Box, p: Pt) => {
+    const d = [Math.abs(p[1] - b.y), Math.abs(p[1] - (b.y + b.h)), Math.abs(p[0] - b.x), Math.abs(p[0] - (b.x + b.w))];
+    return (['top', 'bottom', 'left', 'right'] as const)[d.indexOf(Math.min(...d))]!;
+  };
+  for (const it of items) {
+    const draw = out.get(it.key)!;
+    if (it.from === it.to || it.waypoints.length || draw.offset || !(draw.line === 'orthogonal' || draw.line === 'horizontalFirst' || draw.line === 'verticalFirst')) continue;
+    const a = nodes.get(it.from)!;
+    const b = nodes.get(it.to)!;
+    if (a.side || b.side || a.lollipop || b.lollipop) continue;
+    const pts = edgePoints({ box: a.box, outline: a.outline }, { box: b.box, outline: b.outline }, [], ds, { line: draw.line });
+    for (const [end, node, other, p] of [['from', a, b, pts[0]!], ['to', b, a, pts.at(-1)!]] as const) {
+      const side = sideOf(node.box, p);
+      const along = side === 'top' || side === 'bottom' ? centerOf(other.box)[0] : centerOf(other.box)[1];
+      const k = `${node.id} ${side}`;
+      sides.set(k, [...(sides.get(k) ?? []), { it, end, key: along }]);
+    }
+  }
+  for (const [k, list] of sides) {
+    if (list.length < 2) continue;
+    const node = nodes.get(k.slice(0, k.lastIndexOf(' ')))!;
+    const vertical = / (left|right)$/.test(k);
+    const room = (vertical ? node.box.h : node.box.w) * 0.8;
+    const gap = Math.min(16, room / list.length);
+    list.sort((x, y) => x.key - y.key).forEach((e, i) => {
+      const draw = out.get(e.it.key)!;
+      draw.ports = { ...draw.ports, [e.end]: (i - (list.length - 1) / 2) * gap };
+    });
+  }
+
+  // Labels: shapes and the labels placed so far are in the way.
+  const obstacles = [...nodes.values()].filter((n) => !n.container).map((n) => n.box);
+  const placed: Box[] = [];
+  for (const it of items) {
+    if (!it.label || it.moved) continue;
+    const draw = out.get(it.key)!;
+    const a = nodes.get(it.from)!;
+    const b = nodes.get(it.to)!;
+    const points = edgePoints({ box: a.box, outline: a.outline, lollipop: a.lollipop }, { box: b.box, outline: b.outline, lollipop: b.lollipop }, it.waypoints, ds, draw);
+    let best: { at: number; cost: number; box: Box } | undefined;
+    for (const at of LABEL_SPOTS) {
+      const box = labelBox(points, it.label, ds, at);
+      const cost = [...obstacles, ...placed].reduce((sum, o) => sum + (boxesOverlap(box, o) ? overlapArea(box, o) : 0), 0);
+      if (!best || cost < best.cost) best = { at, cost, box };
+      if (cost === 0) break;
+    }
+    if (!best) continue;
+    if (best.at !== 0.5) draw.labelAt = best.at;
+    placed.push(best.box);
+  }
+  return out;
+}
+
 /** `file`: the diagram's own path, so elements detailed on it get no link to themselves. */
 export function layoutCanvas(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic', file?: string): Scene {
+  model = displayModel(model, diagram);
   const elements = new Map(model.elements.map((e) => [e.id, e]));
   const relationships = new Map(model.relationships.map((rel) => [rel.id, rel]));
   const locals = new Map(diagram.local.nodes.map((n) => [n.id, n]));
   const nodes = layoutNodes(diagram, model);
+  const draws = edgeLayouts(diagram, model, nodes, ds);
   const shape = (id: string): Shape | undefined => {
     const n = nodes.get(id);
     return n && { box: n.box, outline: n.outline, lollipop: n.lollipop };
@@ -1111,11 +1482,12 @@ export function layoutCanvas(diagram: CanvasDiagram, model: Model, ds: DiagramSt
     const from = rel && shape(rel.from);
     const to = rel && shape(rel.to);
     if (!rel || !from || !to) continue;
-    edgePrims.push(...relationshipPrims(rel, from, to, edge.waypoints, ds, edge.labelOffset));
+    const draw = draws.get(edgeKey('model', edge.ref));
+    edgePrims.push(...relationshipPrims(rel, from, to, edge.waypoints, ds, edge.labelOffset, draw));
     // Association class: dashed line from the middle of the association to the class.
     const cls = rel.associationClass && shape(rel.associationClass);
     if (cls) {
-      const [mx, my] = midpoint(edgePoints(from, to, edge.waypoints, ds));
+      const [mx, my] = midpoint(edgePoints(from, to, edge.waypoints, ds, draw));
       const [ex, ey] = clipTo(cls.box, cls.outline, mx, my);
       edgePrims.push({ t: 'line', x1: mx, y1: my, x2: ex, y2: ey, stroke: 'ink', dashed: true });
     }
@@ -1123,7 +1495,7 @@ export function layoutCanvas(diagram: CanvasDiagram, model: Model, ds: DiagramSt
   for (const edge of diagram.local.edges) {
     const from = shape(edge.from);
     const to = shape(edge.to);
-    if (from && to) edgePrims.push(...localEdgePrims(edge, from, to, ds));
+    if (from && to) edgePrims.push(...localEdgePrims(edge, from, to, ds, draws.get(edgeKey('local', edge.id))));
   }
 
   return withStyle(normalize(roundCorners([...nodePrims, ...edgePrims], ds)), ds);

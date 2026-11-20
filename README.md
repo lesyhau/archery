@@ -57,16 +57,18 @@ Elements and relationships are defined once in `model.yaml`; diagrams are views 
 In the editors:
 - **Palette and properties.** Add elements by click or drag, pick a relationship tool, or bring in existing model elements. The palette shows names when it is wide enough; drag its edge to resize it. The properties show the selected element's details, its relations grouped by meaning, and the other diagrams it appears in.
 - **Arrange.** Select two or more shapes to align or distribute them, from the toolbar or the right-click menu. Automatic layout, bend points, snap to grid.
-- **Labels and lines.** Drag any line label away from its line; a dotted line keeps them connected. In the Modern style, drag a straight part of a line to move it.
+- **Labels and lines.** Right-click a line to make it straight, right-angled, curved or give it one corner; right-click the canvas to change all lines at once. Drag any line label away from its line; a dotted line keeps them connected. On a right-angled line, drag a straight part to move it.
+- **Right-click menus.** On a shape: add the elements related to it, show an interface as a ball or a box, change its lines. On the canvas: arrange, all lines, show tagged values or line keywords, add missing relationships.
+- **One diagram tab.** Diagrams open in one tab that switches between them.
 - **Drill-down.** Set **Detailed in** on an element to the diagram that shows its inside. Every other diagram marks its box with the UML rake; click it to open that diagram, or, in the document, to jump to the chapter that shows it.
-- **Two styles.** **Classic** and **Modern** (rounded corners, light fills, right-angle lines, muted labels), used by the editors, the document and every export.
+- **Two styles.** **Classic** and **Modern** (rounded corners, light fills, right-angle lines unless a line has its own shape, muted labels), used by the editors, the document and every export.
 
 ## Claude Code and GitHub Copilot
 
 Both get the same tools, so an agent can do what you do in the document and the editors:
 
 - **Chapters:** read, edit and rewrite text; place diagrams, data tables and the decision list, with captions.
-- **Model and diagrams:** elements and relationships; create and fill diagrams; move, resize, align, route and lay out; drill-down links; sequence and timing diagrams.
+- **Model and diagrams:** elements and relationships, many at once in one call; create, fill, rename and delete diagrams; move, resize, align, route, shape lines and lay out; drill-down links; sequence and timing diagrams. `get_diagram` returns every shape's drawn box and `validate` reports overlaps with coordinates, so an agent can check a layout without looking at it.
 - **Tables and decisions:** rows, columns and merged cells; architecture decision records.
 - **Versions and export:** list, release and restore versions; export the document or a diagram.
 
@@ -75,7 +77,9 @@ The tools keep ids stable, update references across files, keep YAML comments an
 **You see what the agent does.**
 - **A chapter:** before it changes, the document scrolls to the part being edited, then the change lands and is highlighted.
 - **A diagram:** the document scrolls to the chapter that shows it, the diagram opens in its tab, then the new or changed shapes are selected and outlined.
+- **An element or relationship:** the diagram that shows it comes into view the same way (the one already open, if it is there).
 - **A table:** it comes into view before its rows change.
+- **Your turn:** as soon as you click, type or scroll in the document or a diagram, Archery stops following the agent. It starts again 30 seconds after your last action; the agent's changes still land meanwhile.
 - **Undo:** agent edits can be undone like your own.
 
 | | Claude Code | GitHub Copilot |

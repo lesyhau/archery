@@ -8,11 +8,11 @@
 // which is the project directory when launched by Claude Code.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { scaffold } from '../template/scaffold';
 import type { WorkspaceReader } from '../model/load';
-import { ArcherySession, OpError } from '../ops/session';
+import { ArcherySession, DELETED, OpError } from '../ops/session';
 import { INITIALIZE_TOOL, SERVER_INSTRUCTIONS, TOOLS } from '../ops/tools';
 import { connectBridge } from './bridgeClient';
 
@@ -74,6 +74,10 @@ export function fsReader(root: string): WorkspaceReader {
 function writeFiles(root: string, changes: Map<string, string>): void {
   for (const [path, text] of changes) {
     const target = join(root, path);
+    if (text === DELETED) {
+      rmSync(target, { force: true });
+      continue;
+    }
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, text);
   }

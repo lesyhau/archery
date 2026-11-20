@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Agents' model edits are shown live.** Adding, renaming or changing an element or relationship brings the diagram that shows it into view and selects it, also while you type in the agent's chat. An open diagram is no longer moved into the chat's tab group.
+- **Following pauses while you work.** A click, key or scroll in the document, a diagram or the sidebar pauses following the agent; it resumes 30 seconds after your last action.
+- **Better automatic layout.** Superclasses and interfaces above their specializations, base use cases before extensions, initial nodes first and final nodes last, orthogonal regions stacked in their state, containers sized to their name and keywords, room for edge labels, unconnected parts packed in rows, and stable results when run again. Use case diagrams default to left to right.
+- **Initialize opens only the document**, not the first chapter's Markdown file.
+- **One diagram tab.** Every diagram opens in the same tab, which switches to it; agents creating many diagrams no longer leave a tab for each. An open diagram also no longer stops updating after agent edits.
+- **Line shapes.** Each line can be straight, right-angled, curved, or have one corner (across first, or up / down first); right-click a line, the shapes' lines, or the canvas for all lines. Without a choice the diagram style decides, as before.
+- **More in the right-click menus:** line shape, remove bend points and reverse direction on lines; add related elements, ball or box notation for interfaces and the lines of the selected shapes on shapes; all lines, what the diagram shows and add missing relationships on the canvas. Submenus open on hover or with the arrow keys.
+- **Clearer diagrams.** Lines between the same two shapes are drawn apart, lines meeting one side of a shape are spread along it, labels move along their line to stay off shapes and other labels, note text wraps, long property strings wrap to the box width, tagged values are hidden unless a diagram shows them, «use» and the other line keywords can be hidden, and external systems are marked «external» instead of «actor».
+- **Exports:** the document title is the system name (or its own title), the PDF uses black and grays only (text, diagrams, page headers and footers), tables have a thin black grid inside a thicker border, the PDF contents have dotted leaders again, and a last page "About this document" describes the arc42 structure and how the document is made. PNG export of a diagram always shows its current content.
+- **For agents:** `batch` (many operations in one all-or-nothing call), `set_line_shape`, `set_project` (system name, title, authors), `delete_diagram`, `rename_diagram`, `update_decision` (status, sections, supersedes), `update_relationship` with `reverse`, display options in `update_diagram`, drawn boxes in `get_diagram` / `move_nodes` / `add_element`, notes inside elements, layout warnings with coordinates in `validate`, a container's relationship left out when a shown part refines it, decision file names cut at a whole word, and nested deployment nodes laid out without overlaps.
+- **Sequence and timing diagrams:** a lifeline destroyed and created again gets a new head; timing constraint labels that do not fit their window move above it.
+
 ## 0.1.1
 
 - **Claude Code finds Archery without setup.** The MCP server is added to your Claude Code configuration automatically (restart Claude Code once); it no longer depends on the `claude` command being on PATH.

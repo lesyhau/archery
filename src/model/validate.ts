@@ -2,6 +2,7 @@
 import { checkReferences, type CheckInput } from './checks';
 import { loadWorkspace, parseCanvasDiagram, parseSequenceDiagram, parseTimingDiagram, parseYaml, type Issue, type LoadedWorkspace, type WorkspaceReader } from './load';
 import { QualityGoalsSchema, QualityRequirementsSchema } from './schema';
+import { layoutProblems } from '../render/layoutLint';
 
 export async function validateWorkspace(reader: WorkspaceReader): Promise<{ workspace: LoadedWorkspace; issues: Issue[] }> {
   const workspace = await loadWorkspace(reader);
@@ -31,5 +32,11 @@ export async function validateWorkspace(reader: WorkspaceReader): Promise<{ work
   // Reference checks are only meaningful when model.yaml itself parsed.
   const modelBroken = workspace.issues.some((i) => i.file === 'model.yaml' && i.severity === 'error');
   const issues = [...workspace.issues, ...(modelBroken ? [] : checkReferences(input))];
+  // Layout: what is drawn over something else (with coordinates, for agents that cannot look).
+  if (!modelBroken) {
+    for (const { file, diagram } of input.canvasDiagrams) {
+      for (const message of layoutProblems(diagram, workspace.model)) issues.push({ file, message, severity: 'warning' });
+    }
+  }
   return { workspace, issues };
 }

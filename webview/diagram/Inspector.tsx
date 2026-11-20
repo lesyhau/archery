@@ -135,6 +135,22 @@ export function Field({ label, children, wide }: { label: string; children: Reac
   );
 }
 
+/** How a line is drawn (style.line); empty: as the diagram style draws it. */
+function LineField({ value, modern, disabled, onChange }: { value?: string; modern: boolean; disabled?: boolean; onChange(line: string): void }) {
+  return (
+    <Field label="Line">
+      <select value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value || 'auto')}>
+        <option value="">{modern ? 'Diagram style (right angles)' : 'Diagram style (straight)'}</option>
+        <option value="straight">Straight</option>
+        <option value="orthogonal">Right angles</option>
+        <option value="curved">Curved</option>
+        <option value="horizontalFirst">One corner, across first</option>
+        <option value="verticalFirst">One corner, up or down first</option>
+      </select>
+    </Field>
+  );
+}
+
 /** A text input that commits on blur / Enter when the value changed. */
 export function Text({ value, onCommit, placeholder, multiline, rows = 3, disabled, mono, className }: { value: string; onCommit(v: string): void; placeholder?: string; multiline?: boolean; rows?: number; disabled?: boolean; mono?: boolean; className?: string }) {
   const [v, setV] = useState(value);
@@ -1065,9 +1081,10 @@ export function Inspector(p: Props) {
             </Field>
           </Section>
         )}
+        <LineField value={diagram.edges.find((e) => e.ref === r.id)?.style?.line} modern={!!p.modern} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [r.id], line })} />
         {selection.waypoints > 0 && !ro && (
           <button type="button" className="btn secondary" onClick={() => p.op('set_edge_waypoints', { id: r.id, waypoints: [] })}>
-            {p.modern ? 'Automatic route' : 'Straighten'}
+            Remove bend points
           </button>
         )}
         {diagram.edges.find((e) => e.ref === r.id)?.labelOffset && !ro && (
@@ -1106,9 +1123,10 @@ export function Inspector(p: Props) {
           <Text value={ed.label ?? ''} disabled={ro} placeholder={ed.kind === 'transition' ? 'paid [amount > 0] / ship' : '[in stock]'} onCommit={(v) => p.op('update_local_edge', { id: ed.id, label: orNull(v) })} />
         </Field>
       )}
+      <LineField value={ed.style?.line} modern={!!p.modern} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [ed.id], line })} />
       {ed.waypoints.length > 0 && !ro && (
         <button type="button" className="btn secondary" onClick={() => p.op('set_edge_waypoints', { id: ed.id, waypoints: [] })}>
-          {p.modern ? 'Automatic route' : 'Straighten'}
+          Remove bend points
         </button>
       )}
       {ed.labelOffset && !ro && (

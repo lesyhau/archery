@@ -11,7 +11,7 @@ import { pdfString, tocPages } from '../src/export/pdfOutline';
 import { bridgeFile } from '../src/live/bridgeProtocol';
 import type { WorkspaceReader } from '../src/model/load';
 import { createArcheryMcpServer } from '../src/mcp/server';
-import { ArcherySession } from '../src/ops/session';
+import { ArcherySession, DELETED } from '../src/ops/session';
 import { TOOLS } from '../src/ops/tools';
 import { scaffold } from '../src/template/scaffold';
 
@@ -26,7 +26,7 @@ function workspace() {
     const def = TOOLS.find((t) => t.name === name)!;
     const session = await ArcherySession.load(memoryReader(files), '');
     const result = await def.run(session, def.input.parse(args));
-    for (const [path, text] of session.changes) files.set(path, text);
+    for (const [path, text] of session.changes) text === DELETED ? files.delete(path) : files.set(path, text);
     return result;
   };
   return { files, call };

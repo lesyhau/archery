@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CanvasDiagram, Model, SequenceDiagram } from '../src/model/schema';
 import { clipToBox, elementPrims, keywordText, layoutCanvas, localNodePrims, propertyLines, relationshipKeywords, relationshipPrims, typedName } from '../src/render/canvasLayout';
+import { textWidth } from '../src/render/scene';
 import { layoutCommunication, layoutCommunicationWithHits, numberMessages } from '../src/render/communicationLayout';
 import { layoutSequence, layoutSequenceWithHits } from '../src/render/sequenceLayout';
 import { insertAt, moveWithin, removeMany, stepAt, unwrap, wrap } from '../webview/sequence/steps';
@@ -37,7 +38,7 @@ describe('canvas layout', () => {
 
   it('draws names, keywords, members, labels and missing elements', () => {
     const scene = layoutCanvas(diagram, model);
-    expect(texts(scene)).toEqual(expect.arrayContaining(['«component» «service»', 'Order Service', '«actor»', 'Payment Gateway', 'Order', '-id: UUID', '+total(): Money', 'charge()', 'missing: ghost']));
+    expect(texts(scene)).toEqual(expect.arrayContaining(['«component» «service»', 'Order Service', '«external»', 'Payment Gateway', 'Order', '-id: UUID', '+total(): Money', 'charge()', 'missing: ghost']));
     expect(scene.width).toBeGreaterThan(400);
     // Normalized: nothing is drawn at negative coordinates.
     for (const p of scene.prims) if (p.t === 'rect') expect(p.x).toBeGreaterThanOrEqual(0);
@@ -240,7 +241,7 @@ describe('UML 2.0 notation (formal/05-07-04)', () => {
     expect(keywordText({ kind: 'interface', stereotype: 'service' })).toBe('«interface» «service»');
     expect(keywordText({ kind: 'component' })).toBe('«component»');
     expect(keywordText({ kind: 'executionEnvironment' })).toBe('«executionEnvironment»');
-    expect(keywordText({ kind: 'externalSystem' })).toBe('«actor»');
+    expect(keywordText({ kind: 'externalSystem' })).toBe('«external»');
     expect(keywordText({ kind: 'node', stereotype: 'device' })).toBe('«device»');
     expect(keywordText({ kind: 'interface', stereotype: 'interface' })).toBe('«interface»');
   });
@@ -255,8 +256,12 @@ describe('UML 2.0 notation (formal/05-07-04)', () => {
   it('draws tagged values, constraints and instance multiplicity', () => {
     const e = { id: 'db', kind: 'node' as const, name: 'DB server', technology: 'PostgreSQL 16', tags: { owner: 'Ops' }, constraints: ['replicas >= 2'], instances: '3' };
     expect(propertyLines(e)).toEqual(['{technology=PostgreSQL 16, owner=Ops}', '{replicas >= 2}']);
-    const t = textsOf(elementPrims(e, 'db', box));
+    const t = textsOf(elementPrims(e, 'db', { ...box, w: 320 }));
     expect(t).toEqual(expect.arrayContaining(['DB server', '{technology=PostgreSQL 16, owner=Ops}', '{replicas >= 2}', '3']));
+    // A narrower box: the property string breaks after a comma, a long value is cut.
+    expect(propertyLines(e, 200)).toEqual(['{technology=PostgreSQL 16,', 'owner=Ops}', '{replicas >= 2}']);
+    const long = { ...e, tags: { location: 'packages/service/src/very/long/path/server.ts' } };
+    for (const line of propertyLines(long, 150)) expect(textWidth(line, 11)).toBeLessThanOrEqual(150);
   });
 
   it('puts a package name in the tab only when members are shown inside', () => {

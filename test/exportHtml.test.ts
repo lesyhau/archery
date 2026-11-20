@@ -66,14 +66,20 @@ describe('document export (HTML)', () => {
 
   it('is one standalone page with title, contents, chapters and the change history', () => {
     expect(html).toMatch(/^<!DOCTYPE html>/);
-    expect(html).toContain('<title>Webshop - Architecture Design Document</title>');
+    expect(html).toContain('<title>Webshop</title>');
+    expect(html).toContain('<h1 class="doc-title">Webshop</h1>');
     expect(html).toContain('<nav class="toc"');
     expect(html).toContain('<span class="num">1</span> Introduction and Goals');
     expect(html).toContain('<span class="num">1.1</span> Requirements Overview');
     expect(html).toContain('&lt;building block x.1&gt;'); // placeholders in headings stay visible text
     expect(html).toMatch(/<span class="num">13<\/span> Change history/);
     expect(html).toContain('First draft');
-    expect(html).toContain('Structure based on the arc42 template. Generated with Archery 0.1.0.');
+    // The last page: about the document (arc42, Archery), also in the contents.
+    expect(html).toMatch(/<section class="chapter about" id="chapter-about"><h1 id="sec-about">About this document<\/h1>/);
+    expect(html).toContain('arc42 9.1-EN by Dr. Peter Hruschka, Dr. Gernot Starke and contributors');
+    expect(html).toContain('>Archery 0.1.0</a>');
+    expect(html).toMatch(/<li class="l1"><a href="#sec-about">.*About this document/);
+    expect(html).not.toContain('Structure based on');
     expect(html).not.toMatch(/<(script|link)\b/); // self-contained, no scripts or external styles
   });
 

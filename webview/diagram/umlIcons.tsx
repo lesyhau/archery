@@ -63,6 +63,14 @@ export const IconInterruptible = icon(<rect x="1.5" y="2.5" width="13" height="1
 export const IconInterrupt = icon(<path d="M2 14l4.5-5 2 2.5L14 2 M10.6 2.3L14 2l-.4 3.4" />);
 export const IconInteractionUse = icon(<path d="M1.5 4h13v8h-13z M1.5 7h4l1.2-1.2V4 M6.5 9.8h5" />);
 export const IconInteractionFrame = icon(<><path d="M1.5 2.5h13v11h-13z M1.5 5.5h4.5l1.2-1.2V2.5" /><path d="M5 9h6" strokeDasharray="1.4 1.2" /></>);
+// Line shapes and menu marks.
+export const IconLineStraight = icon(<path d="M2.5 13.5l11-11" />);
+export const IconLineOrthogonal = icon(<path d="M2 13.5h5v-11h7" />);
+export const IconLineCurved = icon(<path d="M2 13.5c7 0 5-11 12-11" />);
+export const IconLineHorizontalFirst = icon(<path d="M2 3h11.5v10.5" />);
+export const IconLineVerticalFirst = icon(<path d="M2.5 2.5v11H14" />);
+export const IconCheck = icon(<path d="M3 8.5l3.2 3.2L13 4.8" />);
+export const IconReverse = icon(<path d="M2.5 5.5h10 M10 3l2.5 2.5L10 8 M13.5 10.5h-10 M6 8l-2.5 2.5L6 13" />);
 export const IconNote = icon(<path d="M2.5 2.5h7.5l3.5 3.5v7.5h-11z M10 2.5V6h3.5" />);
 
 // --- relationships ---------------------------------------------------------------------------

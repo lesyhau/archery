@@ -24,10 +24,10 @@ import {
   type NodeChange,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type DragEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type DragEvent, type ReactNode } from 'react';
 import { parseCanvasDiagram } from '../../src/model/load';
-import { ContainerKinds, type CanvasDiagram, type CanvasDiagramType, type Model, type RelationshipKind } from '../../src/model/schema';
-import { DEFAULT_SIZE, detailOf, layoutCanvas, layoutNodes, minSize, type LaidOutNode } from '../../src/render/canvasLayout';
+import { ContainerKinds, type CanvasDiagram, type CanvasDiagramType, type LineShape, type Model, type RelationshipKind } from '../../src/model/schema';
+import { DEFAULT_SIZE, detailOf, displayModel, edgeLayouts, layoutCanvas, layoutNodes, lineShapeOf, minSize, type LaidOutNode } from '../../src/render/canvasLayout';
 import { eventTarget, rootOf, useHostCtx } from '../shared/host';
 import { DockPanels } from '../shared/remote';
 import { RailResizer } from '../shared/RailResizer';
@@ -46,6 +46,13 @@ import {
   IconFit,
   IconGrid,
   IconLayoutDown,
+  IconCheck,
+  IconLineCurved,
+  IconLineHorizontalFirst,
+  IconLineOrthogonal,
+  IconLineStraight,
+  IconLineVerticalFirst,
+  IconReverse,
   IconLayoutRight,
   IconMinimap,
   IconRemove,
@@ -77,7 +84,78 @@ interface MenuItem {
   hint?: string;
   icon?: () => JSX.Element;
   danger?: boolean;
-  run(): void;
+  /** Shown with a check mark (the current choice, or an option that is on). */
+  checked?: boolean;
+  /** A submenu, opened on hover or with the arrow keys. */
+  items?: MenuItem[];
+  run?(): void;
+}
+
+/** The line shapes, as the menus offer them. */
+const LINE_CHOICES: { line: LineShape; label: string; icon: () => JSX.Element }[] = [
+  { line: 'straight', label: 'Straight', icon: IconLineStraight },
+  { line: 'orthogonal', label: 'Right angles', icon: IconLineOrthogonal },
+  { line: 'curved', label: 'Curved', icon: IconLineCurved },
+  { line: 'horizontalFirst', label: 'One corner, across first', icon: IconLineHorizontalFirst },
+  { line: 'verticalFirst', label: 'One corner, up or down first', icon: IconLineVerticalFirst },
+];
+
+/** A context menu (and its submenus), kept inside the window. */
+function ContextMenu({ x, y, items, onClose, nested }: { x: number; y: number; items: MenuItem[]; onClose(): void; nested?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [pos, setPos] = useState({ x, y });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    // A submenu that would leave the window opens to the left of its item instead.
+    const nx = r.right > window.innerWidth - 4 ? (nested ? x - r.width - (el.parentElement?.getBoundingClientRect().width ?? 0) : window.innerWidth - r.width - 4) : x;
+    const ny = r.bottom > window.innerHeight - 4 ? Math.max(4, window.innerHeight - r.height - 4) : y;
+    if (nx !== pos.x || ny !== pos.y) setPos({ x: nx, y: ny });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y]);
+  return (
+    <div ref={ref} className={`ctx-menu${nested ? ' nested' : ''}`} role="menu" style={{ left: pos.x, top: pos.y }}>
+      {items.map((m, i) => (
+        <div key={m.label} className="menu-row" onMouseEnter={() => setOpen(m.items ? i : null)}>
+          <button
+            type="button"
+            role="menuitem"
+            aria-haspopup={m.items ? 'menu' : undefined}
+            aria-expanded={m.items ? open === i : undefined}
+            className={`menu-item${m.danger ? ' danger' : ''}${m.sep ? ' sep' : ''}${open === i ? ' open' : ''}`}
+            onClick={() => {
+              if (m.items) return setOpen(open === i ? null : i);
+              onClose();
+              m.run?.();
+            }}
+            onKeyDown={(e) => {
+              if (m.items && e.key === 'ArrowRight') setOpen(i);
+              if (e.key === 'ArrowLeft' && nested) (e.currentTarget.closest('.ctx-menu.nested')?.parentElement?.querySelector('button') as HTMLButtonElement | null)?.focus();
+            }}
+          >
+            <span className="menu-icon">{m.checked ? <IconCheck /> : m.icon && <m.icon />}</span>
+            <span>{m.label}</span>
+            {m.hint && <span className="menu-hint">{m.hint}</span>}
+            {m.items && <span className="menu-more" aria-hidden="true">›</span>}
+          </button>
+          {m.items && open === i && <SubMenu items={m.items} onClose={onClose} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A submenu next to its item. */
+function SubMenu({ items, onClose }: { items: MenuItem[]; onClose(): void }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const row = anchor.current?.parentElement?.getBoundingClientRect();
+    if (row) setAt({ x: row.right - 2, y: row.top - 6 });
+  }, []);
+  return <span ref={anchor}>{at && <ContextMenu x={at.x} y={at.y} items={items} onClose={onClose} nested />}</span>;
 }
 
 function ToolButton({ title, onClick, children, on, disabled }: { title: string; onClick(): void; children: ReactNode; on?: boolean; disabled?: boolean }) {
@@ -110,6 +188,10 @@ export function CanvasEditor() {
   const diagram = parsed?.value;
 
   const laid = useMemo(() => (diagram ? layoutNodes(diagram, model) : new Map<string, LaidOutNode>()), [diagram, model]);
+  /** The model as this diagram shows it (without tagged values unless it shows them). */
+  const shown = useMemo(() => (diagram ? displayModel(model, diagram) : model), [diagram, model]);
+  /** Line shapes, sideways shifts and label places, as in the exports. */
+  const draws = useMemo(() => (diagram ? edgeLayouts(diagram, model, laid, settings.diagramStyle) : new Map()), [diagram, model, laid, settings.diagramStyle]);
   // This diagram's path relative to the root (elements detailed here get no drill-down marker).
   const self = useMemo(() => {
     const f = host.fileName.replace(/\\/g, '/');
@@ -165,7 +247,7 @@ export function CanvasEditor() {
 
   const derivedNodes = useMemo<UmlFlowNode[]>(() => {
     if (!diagram) return [];
-    const elements = new Map(model.elements.map((e) => [e.id, e]));
+    const elements = new Map(shown.elements.map((e) => [e.id, e]));
     const locals = new Map(diagram.local.nodes.map((n) => [n.id, n]));
     return [...laid.values()].map((n) => {
       const element = n.source === 'model' ? elements.get(n.id) : undefined;
@@ -187,7 +269,7 @@ export function CanvasEditor() {
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [laid, model, diagram, editable, renaming, onRename, onResize, onLabelOffset, pending, self, flashIds]);
+  }, [laid, shown, diagram, editable, renaming, onRename, onResize, onLabelOffset, pending, self, flashIds, settings.diagramStyle]);
 
   const [nodes, setNodes] = useState<UmlFlowNode[]>([]);
   useEffect(() => setNodes(derivedNodes), [derivedNodes]);
@@ -302,16 +384,16 @@ export function CanvasEditor() {
       const rel = rels.get(e.ref);
       if (!rel || !laid.has(rel.from) || !laid.has(rel.to)) continue;
       const id = `m:${e.ref}`;
-      out.push({ id, type: 'uml', source: `m:${rel.from}`, target: `m:${rel.to}`, zIndex: edgeZ(rel.from, rel.to), selected: sel.includes(id), data: { rel, waypoints: e.waypoints, labelOffset: e.labelOffset, editable, snap, onWaypoints, onLabelOffset, style: settings.diagramStyle } });
+      out.push({ id, type: 'uml', source: `m:${rel.from}`, target: `m:${rel.to}`, zIndex: edgeZ(rel.from, rel.to), selected: sel.includes(id), data: { rel, waypoints: e.waypoints, labelOffset: e.labelOffset, editable, snap, onWaypoints, onLabelOffset, style: settings.diagramStyle, draw: draws.get(id) } });
     }
     for (const e of diagram.local.edges) {
       const end = (ref: string) => (diagram.local.nodes.some((n) => n.id === ref) ? `l:${ref}` : `m:${ref}`);
       const id = `l:${e.id}`;
-      out.push({ id, type: 'uml', source: end(e.from), target: end(e.to), zIndex: edgeZ(e.from, e.to), selected: sel.includes(id), data: { local: e, waypoints: e.waypoints, labelOffset: e.labelOffset, editable, snap, onWaypoints, onLabelOffset, style: settings.diagramStyle } });
+      out.push({ id, type: 'uml', source: end(e.from), target: end(e.to), zIndex: edgeZ(e.from, e.to), selected: sel.includes(id), data: { local: e, waypoints: e.waypoints, labelOffset: e.labelOffset, editable, snap, onWaypoints, onLabelOffset, style: settings.diagramStyle, draw: draws.get(id) } });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagram, model, laid, editable, snap, onWaypoints, onLabelOffset]);
+  }, [diagram, model, laid, editable, snap, onWaypoints, onLabelOffset, draws, settings.diagramStyle]);
   const [edges, setEdges] = useState<UmlFlowEdge[]>([]);
   useEffect(() => setEdges(derivedEdges), [derivedEdges]);
   const onEdgesChange = useCallback((changes: EdgeChange<UmlFlowEdge>[]) => setEdges((current) => applyEdgeChanges(changes.filter((c) => c.type !== 'remove'), current)), []);
@@ -691,6 +773,34 @@ export function CanvasEditor() {
   const changeType = (type: CanvasDiagramType) => void op('update_diagram', { type });
 
   // --- context menus ------------------------------------------------------------------
+  /** The line shape of an edge (flow id) as drawn now. */
+  const lineOf = (edgeId: string): LineShape => {
+    const { source, ref } = splitId(edgeId);
+    const style = source === 'model' ? diagram?.edges.find((x) => x.ref === ref)?.style : diagram?.local.edges.find((x) => x.id === ref)?.style;
+    return lineShapeOf(style, settings.diagramStyle);
+  };
+  /** "Line" choices for some edges (flow ids; all lines when undefined); checked when they all have it. */
+  const lineItems = (edgeIds: string[] | undefined): MenuItem[] => {
+    const ids = edgeIds ?? flow.getEdges().map((x) => x.id);
+    const own = (id: string) => {
+      const { source, ref } = splitId(id);
+      return (source === 'model' ? diagram?.edges.find((x) => x.ref === ref)?.style : diagram?.local.edges.find((x) => x.id === ref)?.style)?.line;
+    };
+    const set = (line: LineShape | 'auto') => void op('set_line_shape', { ...(edgeIds ? { ids: ids.map((id) => splitId(id).ref) } : {}), line });
+    const all = (line: LineShape) => ids.length > 0 && ids.every((id) => own(id) === line);
+    const auto = ids.length > 0 && ids.every((id) => !own(id));
+    return [
+      { label: settings.diagramStyle === 'modern' ? 'Diagram style (right angles)' : 'Diagram style (straight)', checked: auto, run: () => set('auto') },
+      ...LINE_CHOICES.map((c, i) => ({ sep: i === 0, label: c.label, icon: c.icon, checked: all(c.line), run: () => set(c.line) })),
+    ];
+  };
+  /** Elements related to `ref` in the model that are not on the diagram yet. */
+  const relatedMissing = (ref: string) => {
+    const on = new Set(diagram?.nodes.map((n) => n.ref));
+    const ids = model.relationships.flatMap((r) => (r.from === ref ? [r.to] : r.to === ref ? [r.from] : [])).filter((id) => !on.has(id));
+    return [...new Set(ids)];
+  };
+
   const nodeMenu = (e: React.MouseEvent, node: UmlFlowNode) => {
     e.preventDefault();
     if (!selectionRef.current.nodes.includes(node.id)) setSelected([node.id]);
@@ -700,6 +810,19 @@ export function CanvasEditor() {
       if (node.data.local?.labelOffset) items.push({ label: 'Reset label position', run: () => onLabelOffset(node.data.ref, null) });
       items.push({ label: 'Remove from diagram', hint: 'Del', icon: IconRemove, run: removeSelected });
       if (node.id.startsWith('m:')) items.push({ label: 'Delete from model', hint: 'Shift+Del', icon: IconTrash, danger: true, run: deleteSelectedFromModel });
+      const ref = node.data.ref;
+      if (node.data.source === 'model') {
+        const missing = relatedMissing(ref);
+        if (missing.length) items.push({ sep: true, label: `Add related elements (${missing.length})`, run: () => void op('add_to_diagram', { elements: missing }) });
+        if (node.data.element?.kind === 'interface') {
+          const ball = node.data.lollipop;
+          items.push({ sep: !missing.length, label: ball ? 'Show as box' : 'Show as ball', run: () => void op('set_node_style', { ref, style: ball ? null : { notation: 'lollipop' } }) });
+        }
+      }
+      // The lines of the selected shapes.
+      const ids = selectionRef.current.nodes.includes(node.id) ? selectionRef.current.nodes : [node.id];
+      const attached = flow.getEdges().filter((x) => ids.includes(x.source) || ids.includes(x.target)).map((x) => x.id);
+      if (attached.length) items.push({ sep: true, label: 'Lines', items: lineItems(attached) });
     }
     // Several shapes selected: align and distribute them.
     const ids = selectionRef.current.nodes.includes(node.id) ? selectionRef.current.nodes : [node.id];
@@ -715,11 +838,16 @@ export function CanvasEditor() {
   };
   const edgeMenu = (e: React.MouseEvent, edge: UmlFlowEdge) => {
     e.preventDefault();
-    setSelected([], [edge.id]);
+    // Right-clicking one of several selected lines acts on all of them.
+    const ids = selectionRef.current.edges.includes(edge.id) ? selectionRef.current.edges : [edge.id];
+    if (!selectionRef.current.edges.includes(edge.id)) setSelected([], [edge.id]);
     if (!editable) return;
-    const items: MenuItem[] = [];
-    if (edge.data?.waypoints.length) items.push({ label: settings.diagramStyle === 'modern' ? 'Automatic route' : 'Straighten', run: () => void op('set_edge_waypoints', { id: splitId(edge.id).ref, waypoints: [] }) });
+    const items: MenuItem[] = [{ label: 'Line', icon: LINE_CHOICES.find((c) => c.line === lineOf(edge.id))?.icon, items: lineItems(ids) }];
+    const bent = ids.filter((id) => flow.getEdge(id)?.data?.waypoints.length);
+    if (bent.length) items.push({ label: 'Remove bend points', run: () => bent.forEach((id) => void op('set_edge_waypoints', { id: splitId(id).ref, waypoints: [] })) });
     if (edge.data?.labelOffset) items.push({ label: 'Reset label position', run: () => onLabelOffset(splitId(edge.id).ref, null) });
+    const rel = edge.data?.rel;
+    if (rel && ids.length === 1 && rel.from !== rel.to) items.push({ label: 'Reverse direction', icon: IconReverse, run: () => void op('update_relationship', { id: rel.id, reverse: true }) });
     items.push({ label: 'Remove from diagram', hint: 'Del', icon: IconRemove, run: removeSelected });
     if (edge.id.startsWith('m:')) items.push({ label: 'Delete from model', hint: 'Shift+Del', icon: IconTrash, danger: true, run: deleteSelectedFromModel });
     setMenu({ x: e.clientX, y: e.clientY, items });
@@ -733,6 +861,18 @@ export function CanvasEditor() {
     if (editable) {
       items.push({ label: 'Arrange top to bottom', icon: IconLayoutDown, run: () => void layout('DOWN') });
       items.push({ label: 'Arrange left to right', icon: IconLayoutRight, run: () => void layout('RIGHT') });
+      if (diagram?.edges.length || diagram?.local.edges.length) items.push({ sep: true, label: 'All lines', items: lineItems(undefined) });
+      const show = diagram?.show ?? {};
+      items.push({
+        sep: !(diagram?.edges.length || diagram?.local.edges.length),
+        label: 'Show',
+        items: [
+          { label: 'Tagged values', checked: !!show.tags, run: () => void op('update_diagram', { show: { tags: !show.tags } }) },
+          { label: 'Keywords on lines', checked: show.keywords !== false, run: () => void op('update_diagram', { show: { keywords: show.keywords === false } }) },
+        ],
+      });
+      const refs = diagram?.nodes.map((n) => n.ref) ?? [];
+      if (refs.length > 1) items.push({ label: 'Add missing relationships', run: () => void op('add_to_diagram', { elements: refs }) });
     }
     items.push({ label: 'Select all', hint: 'Ctrl+A', run: () => setSelected(flow.getNodes().map((n) => n.id)) });
     setMenu({ x: e.clientX, y: e.clientY, items });
@@ -998,26 +1138,7 @@ export function CanvasEditor() {
                 })}
               </div>
             )}
-            {menu && (
-              <div className="ctx-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
-                {menu.items.map((m) => (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    key={m.label}
-                    className={`menu-item${m.danger ? ' danger' : ''}${m.sep ? ' sep' : ''}`}
-                    onClick={() => {
-                      setMenu(null);
-                      m.run();
-                    }}
-                  >
-                    <span className="menu-icon">{m.icon && <m.icon />}</span>
-                    <span>{m.label}</span>
-                    {m.hint && <span className="menu-hint">{m.hint}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+            {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
           </div>
           {!host.docked && (
             <aside className="properties">

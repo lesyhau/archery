@@ -46,7 +46,6 @@ export function scaffold(options: ScaffoldOptions): ScaffoldFiles {
   const project: Project = {
     version: 1,
     system,
-    title: `${system} - Architecture Documentation`,
     template: `arc42 ${ARC42_TEMPLATE_VERSION}`,
     authors: [],
     sections: SECTIONS.map((s) => ({ id: s.id, file: `sections/${s.file}`, enabled: true })),

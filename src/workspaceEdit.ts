@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DELETED } from './ops/session';
 
 /** Files Archery wrote recently: the live view does not follow them as outside changes. */
 const ownWrites = new Map<string, number>();
@@ -17,6 +18,10 @@ export async function applyChanges(root: vscode.Uri, changes: Map<string, string
   for (const [path, text] of changes) {
     const uri = vscode.Uri.joinPath(root, ...path.split('/'));
     ownWrites.set(uri.toString(), Date.now());
+    if (text === DELETED) {
+      edit.deleteFile(uri, { ignoreIfNotExists: true });
+      continue;
+    }
     let doc: vscode.TextDocument | undefined;
     try {
       doc = await vscode.workspace.openTextDocument(uri);

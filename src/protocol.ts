@@ -19,8 +19,11 @@ export type ToWebview =
   | { type: 'settings'; settings: CanvasSettings }
   /** Answer to an `op` request. */
   | { type: 'opResult'; requestId: number; ok: boolean; result?: unknown; error?: string }
-  /** Asks the webview to render the diagram as PNG (answered with `png`). */
-  | { type: 'renderPng'; requestId: number }
+  /**
+   * Asks the webview for a PNG (answered with `png`): of `svg` (width x height) when given - the
+   * extension renders it from the current files - else of the diagram the webview shows.
+   */
+  | { type: 'renderPng'; requestId: number; svg?: string; width?: number; height?: number }
   /** Whether the sidebar's Diagram Tools view shows the palette and inspector (the editor then hides its own). */
   | { type: 'docked'; docked: boolean }
   /** A call from the docked palette / inspector (see webview/shared/remote.ts). */
@@ -30,6 +33,8 @@ export type ToWebview =
 
 export type FromWebview =
   | { type: 'ready' }
+  /** The user clicked, typed or scrolled with the wheel in the view (hybrid follow, src/live/userActivity.ts). */
+  | { type: 'activity' }
   /** Runs one of the shared operations (src/ops/tools.ts) on this diagram; `diagram` is filled in by the extension. */
   | { type: 'op'; requestId: number; name: string; input: Record<string, unknown> }
   /** Delete elements/relationships from the model everywhere (asks for confirmation). */

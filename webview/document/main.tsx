@@ -9,6 +9,7 @@ import './document.css';
 import { ExportDialog } from './ExportDialog';
 import { installHelpPopups } from './editorTools';
 import { expectEdit, itemFor, showChange } from './follow';
+import { reportUserActivity } from '../shared/activity';
 import { Lightbox } from './Lightbox';
 import { showDetail } from './nodeViews';
 import { SectionEditor } from './SectionEditor';
@@ -131,8 +132,12 @@ function App() {
       }
     };
     window.addEventListener('message', onMessage);
+    const stopReporting = reportUserActivity(() => vscodeApi.postMessage({ type: 'activity' }));
     vscodeApi.postMessage({ type: 'ready' });
-    return () => window.removeEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      stopReporting();
+    };
   }, []);
 
   // Relative image paths in sections resolve against the sections folder.

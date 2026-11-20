@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react';
 import { useEffect, useRef, useState } from 'react';
 import type { Element, LocalEdge, LocalNode, Relationship } from '../../src/model/schema';
-import { detailMarker, edgePoints, elementPrims, localEdgePrims, localNodePrims, midpoint, clipTo, moveSegment, relationshipPrims, segmentAxis, type Outline, type Shape } from '../../src/render/canvasLayout';
+import { detailMarker, edgePoints, elementPrims, lineShapeOf, localEdgePrims, localNodePrims, midpoint, clipTo, moveSegment, relationshipPrims, segmentAxis, type EdgeDraw, type Outline, type Shape } from '../../src/render/canvasLayout';
 import { drawPrim } from '../render/SceneSvg';
 import { fillShapes, roundCorners, strokeWidthOf, textBox, type DiagramStyle, type Prim } from '../../src/render/scene';
 
@@ -61,6 +61,8 @@ export interface UmlEdgeData extends Record<string, unknown> {
   labelOffset?: Point;
   onLabelOffset(ref: string, offset: Point | null): void;
   style?: DiagramStyle;
+  /** Its line shape, sideways shift and label place (edgeLayouts), as in the exports. */
+  draw?: EdgeDraw;
 }
 
 export type UmlFlowEdge = Edge<UmlEdgeData, 'uml'>;
@@ -205,9 +207,14 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
   const label = useLabelDrag(data?.labelOffset, (o) => data?.onLabelOffset(data.rel?.id ?? data.local!.id, o));
   if (!s || !t || !data) return null;
   const waypoints = live ?? data.waypoints;
-  const prims = data.rel ? relationshipPrims(data.rel, s, t, waypoints, data.style, label.offset) : localEdgePrims({ ...data.local!, waypoints, labelOffset: label.offset }, s, t, data.style);
-  const modern = data.style === 'modern';
-  const points = edgePoints(s, t, waypoints, data.style);
+  const draw: EdgeDraw = { ...data.draw, line: data.draw?.line ?? lineShapeOf((data.rel ? undefined : data.local?.style) ?? undefined, data.style) };
+  const prims = data.rel ? relationshipPrims(data.rel, s, t, waypoints, data.style, label.offset, draw) : localEdgePrims({ ...data.local!, waypoints, labelOffset: label.offset }, s, t, data.style, draw);
+  // Right-angled lines are edited by dragging their segments; the others by their bend points.
+  const rightAngled = draw.line === 'orthogonal' || draw.line === 'horizontalFirst' || draw.line === 'verticalFirst';
+  const curved = draw.line === 'curved';
+  const points = edgePoints(s, t, waypoints, data.style, draw);
+  // A curve is drawn as many short pieces; its handles sit on the line through its bend points.
+  const handlePoints: [number, number][] = curved ? [points[0]!, ...waypoints.map((p) => [p.x, p.y] as [number, number]), points.at(-1)!] : points;
   const hit = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ');
   if (assoc) {
     const [mx, my] = midpoint(points);
@@ -219,8 +226,8 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
   const drag = (e: React.PointerEvent, index: number, insert: boolean) => {
     e.stopPropagation();
     e.preventDefault();
-    // An automatic (modern) route keeps its corners: they become the first bend points.
-    let current = data.waypoints.length ? [...data.waypoints] : points.slice(1, -1).map(([x, y]) => ({ x, y }));
+    // An automatic right-angled route keeps its corners: they become the first bend points.
+    let current = data.waypoints.length || curved ? [...data.waypoints] : points.slice(1, -1).map(([x, y]) => ({ x, y }));
     const start = { x: e.clientX, y: e.clientY };
     let moved = false;
     if (insert) current.splice(index, 0, data.snap(screenToFlowPosition(start)));
@@ -295,8 +302,8 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
       {selected && <path d={hit} fill="none" className="uml-edge-highlight" strokeWidth={5} />}
       <g strokeWidth={strokeWidthOf(data.style)}>{prims.map((p, i) => drawPrim(p, i, data.style))}</g>
       {data.editable && <LabelHit prims={prims} onPointerDown={label.start} />}
-      {selected && data.editable && modern && <g className="nodrag nopan">{segmentGrips}</g>}
-      {selected && data.editable && !modern && (
+      {selected && data.editable && rightAngled && <g className="nodrag nopan">{segmentGrips}</g>}
+      {selected && data.editable && !rightAngled && (
         <g className="nodrag nopan">
           {waypoints.map((p, i) => (
             <circle
@@ -312,8 +319,8 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
               }}
             />
           ))}
-          {points.slice(0, -1).map(([x1, y1], i) => {
-            const [x2, y2] = points[i + 1]!;
+          {handlePoints.slice(0, -1).map(([x1, y1], i) => {
+            const [x2, y2] = handlePoints[i + 1]!;
             return (
               <circle key={`a${i}`} className="waypoint-add" cx={(x1 + x2) / 2} cy={(y1 + y2) / 2} r={4} onPointerDown={(e) => drag(e, i, true)}>
                 <title>Drag to add a bend point</title>

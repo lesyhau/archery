@@ -42,27 +42,54 @@ export async function diagramScene(uri: vscode.Uri): Promise<{ scene: Scene; tit
   return { scene: layoutCanvas(parsed.value, model, diagramStyle(), self), title: parsed.value.title };
 }
 
-async function waitForEditor(uri: vscode.Uri) {
-  const key = uri.toString();
+/** A diagram webview that is ready: this diagram's, else any (all of them can rasterize an SVG). */
+async function readyEditor(uri: vscode.Uri) {
   for (let i = 0; i < 50; i++) {
-    const editor = WebviewDiagramEditorProvider.open.get(key);
-    if (editor?.ready) return editor;
+    const own = WebviewDiagramEditorProvider.open.get(uri.toString());
+    const editor = own?.ready ? own : [...WebviewDiagramEditorProvider.open.values()].find((e) => e.ready);
+    if (editor) return editor;
     await new Promise((r) => setTimeout(r, 100));
   }
   return undefined;
 }
 
-/** Writes a diagram as SVG (rendered here) or PNG (rendered by its editor, opened if needed). */
+/** Request ids of our own, apart from the editors' (they ignore answers they did not ask for). */
+let pngRequest = 1_000_000_000;
+
+/** Rasterizes an SVG in a diagram webview: the extension host has no canvas. */
+function rasterize(panel: vscode.WebviewPanel, svg: string, width: number, height: number): Promise<string | null> {
+  const requestId = ++pngRequest;
+  return new Promise((resolve) => {
+    const done = (url: string | null) => {
+      clearTimeout(timer);
+      sub.dispose();
+      gone.dispose();
+      resolve(url);
+    };
+    const sub = panel.webview.onDidReceiveMessage((msg: { type?: string; requestId?: number; dataUrl?: string | null }) => {
+      if (msg?.type === 'png' && msg.requestId === requestId) done(msg.dataUrl ?? null);
+    });
+    const gone = panel.onDidDispose(() => done(null));
+    const timer = setTimeout(() => done(null), 10000);
+    void panel.webview.postMessage({ type: 'renderPng', requestId, svg, width, height });
+  });
+}
+
+/**
+ * Writes a diagram as SVG or PNG. Both are rendered here from the files as they are now (the PNG is
+ * the same SVG, rasterized by a diagram webview), never from what an editor happens to show.
+ */
 export async function writeDiagramImage(uri: vscode.Uri, format: 'svg' | 'png', theme: ExportTheme, target: vscode.Uri): Promise<void> {
+  const { scene, title } = await diagramScene(uri);
+  const svg = sceneToSvg(scene, { theme, title });
   if (format === 'svg') {
-    const { scene, title } = await diagramScene(uri);
-    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(sceneToSvg(scene, { theme, title })));
+    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(svg));
     return;
   }
-  if (!WebviewDiagramEditorProvider.open.has(uri.toString())) await WebviewDiagramEditorProvider.openPanel(uri, { preserveFocus: true });
-  const editor = await waitForEditor(uri);
-  const dataUrl = editor && (await editor.renderPng());
-  if (!dataUrl) throw new Error('the diagram editor could not render the image');
+  if (WebviewDiagramEditorProvider.open.size === 0) await WebviewDiagramEditorProvider.openPanel(uri, { preserveFocus: true });
+  const editor = await readyEditor(uri);
+  const dataUrl = editor && (await rasterize(editor.panel, svg, scene.width, scene.height));
+  if (!dataUrl) throw new Error('the diagram could not be rendered as PNG');
   await vscode.workspace.fs.writeFile(target, Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'));
 }
 

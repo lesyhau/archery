@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 import { readText } from '../workspace';
 import { applyChanges } from '../workspaceEdit';
+import { DELETED } from '../ops/session';
 
 interface Step {
   /** File contents before and after (undefined: the file did not exist). */
@@ -25,10 +26,11 @@ export async function applyRecorded(root: vscode.Uri, changes: Map<string, strin
   if (changes.size === 0) return;
   const before = new Map<string, string | undefined>();
   for (const path of changes.keys()) before.set(path, await readText(vscode.Uri.joinPath(root, ...path.split('/'))));
-  if ([...changes].every(([path, text]) => before.get(path) === text)) return;
+  const after = new Map([...changes].map(([path, text]) => [path, text === DELETED ? undefined : text]));
+  if ([...after].every(([path, text]) => before.get(path) === text)) return;
   await applyChanges(root, changes);
   const s = stackOf(root);
-  s.undo.push({ before, after: new Map(changes) });
+  s.undo.push({ before, after });
   if (s.undo.length > LIMIT) s.undo.shift();
   s.redo = [];
 }

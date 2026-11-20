@@ -1,6 +1,7 @@
 // Loads everything the document shows (sections, diagrams, data tables, decisions, change history)
 // from an documentation root. Used by the document panel and by the HTML / PDF export.
 import { diagramName } from '../model/usage';
+import { documentTitle } from '../doc/title';
 import * as vscode from 'vscode';
 import { parse as parseYamlText } from 'yaml';
 import { findSection } from '../template/template';
@@ -97,7 +98,7 @@ export async function loadDocumentContent(root: vscode.Uri, tracker?: VersionTra
   const history = tracker ? await tracker.history() : undefined;
   return {
     system: project?.system ?? 'Untitled system',
-    title: project?.title ?? `${project?.system ?? ''} architecture`,
+    title: documentTitle(project?.system ?? 'Untitled system', project?.title),
     version: history?.current ?? '0.0',
     canRelease: tracker ? await tracker.canRelease() : false,
     changeHistory: history ? changeHistory(history) : [],

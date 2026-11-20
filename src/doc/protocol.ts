@@ -96,6 +96,8 @@ export type ToDocument =
 
 export type FromDocument =
   | { type: 'ready' }
+  /** The user clicked, typed or scrolled with the wheel in the view (hybrid follow, src/live/userActivity.ts). */
+  | { type: 'activity' }
   /** The chapter (and heading index) being read, for the sidebar's contents. */
   | { type: 'activeSection'; sectionId: string; index: number | null }
   | { type: 'save'; file: string; markdown: string }

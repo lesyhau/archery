@@ -6,7 +6,7 @@ import type { CanvasDiagram, Model } from '../src/model/schema';
 import { layoutCanvas } from '../src/render/canvasLayout';
 import { sceneToSvg } from '../src/render/svgExport';
 import { scaffold } from '../src/template/scaffold';
-import { ArcherySession } from '../src/ops/session';
+import { ArcherySession, DELETED } from '../src/ops/session';
 import { TOOLS } from '../src/ops/tools';
 import type { WorkspaceReader } from '../src/model/load';
 
@@ -92,7 +92,7 @@ describe('drill-down links', () => {
       const def = TOOLS.find((t) => t.name === name)!;
       const session = await ArcherySession.load(memoryReader(files), 'docs/architecture');
       const result = await def.run(session, def.input.parse(args));
-      for (const [path, text] of session.changes) files.set(path, text);
+      for (const [path, text] of session.changes) text === DELETED ? files.delete(path) : files.set(path, text);
       return result;
     };
     await call('add_element', { name: 'Orders', kind: 'component', diagram: 'building-blocks-l1' });

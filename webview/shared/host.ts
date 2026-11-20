@@ -46,8 +46,12 @@ export function useHostCtx(): Host {
 }
 
 /** Rasterizes a scene to a PNG data URL (2x, light background). */
-export async function sceneToPng(scene: Scene, title: string): Promise<string | null> {
-  const svg = sceneToSvg(scene, { theme: 'light', title });
+export function sceneToPng(scene: Scene, title: string): Promise<string | null> {
+  return svgToPng(sceneToSvg(scene, { theme: 'light', title }), scene.width, scene.height);
+}
+
+/** Rasterizes an SVG of width x height to a PNG data URL (2x). */
+export async function svgToPng(svg: string, width: number, height: number): Promise<string | null> {
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const img = new Image();
@@ -57,8 +61,8 @@ export async function sceneToPng(scene: Scene, title: string): Promise<string | 
       img.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = scene.width * 2;
-    canvas.height = scene.height * 2;
+    canvas.width = Math.max(1, Math.ceil(width * 2));
+    canvas.height = Math.max(1, Math.ceil(height * 2));
     const ctx = canvas.getContext('2d')!;
     ctx.scale(2, 2);
     ctx.drawImage(img, 0, 0);

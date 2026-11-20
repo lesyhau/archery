@@ -13,6 +13,12 @@ export function appendItem(doc: Document, path: (string | number)[], value: unkn
   if (isSeq(seq)) seq.flow = false;
 }
 
+/**
+ * The content of a change that deletes its file. Front-ends delete such a file instead of writing it
+ * (src/workspaceEdit.ts, src/mcp/server.ts).
+ */
+export const DELETED = '\u0000archery:deleted\u0000';
+
 /** An error whose message is meant for the agent/user (bad input, unknown id, ...). */
 export class OpError extends Error {}
 
@@ -61,11 +67,13 @@ export class ArcherySession {
   }
 
   has(path: string): boolean {
-    return this.changes.has(path) || this.texts.has(path);
+    return this.read(path) !== undefined;
   }
 
   read(path: string): string | undefined {
-    return this.changes.get(path) ?? this.texts.get(path);
+    const changed = this.changes.get(path);
+    if (changed === DELETED) return undefined;
+    return changed ?? this.texts.get(path);
   }
 
   write(path: string, text: string): void {
@@ -73,10 +81,16 @@ export class ArcherySession {
     else this.changes.set(path, text);
   }
 
+  /** Deletes a file. */
+  remove(path: string): void {
+    if (this.texts.has(path)) this.changes.set(path, DELETED);
+    else this.changes.delete(path);
+  }
+
   files(dir: string): string[] {
     const prefix = `${dir}/`;
     const all = new Set([...this.texts.keys(), ...this.changes.keys()]);
-    return [...all].filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/')).sort();
+    return [...all].filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/') && this.has(p)).sort();
   }
 
   // --- model.yaml ------------------------------------------------------------

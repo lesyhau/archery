@@ -15,6 +15,7 @@ import { SeqRail } from '../sequence/SequenceEditor';
 import { TimingInspector } from '../timing/TimingInspector';
 import { TimingRail } from '../timing/TimingEditor';
 import { decodePanels, type DockedPanels, type PanelComponent, type PanelSpec } from '../shared/remote';
+import { reportUserActivity } from '../shared/activity';
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -47,8 +48,12 @@ function App() {
       if (event.data?.type === 'panels') setPanels(event.data.panels ?? null);
     };
     window.addEventListener('message', onMessage);
+    const stopReporting = reportUserActivity(() => api.postMessage({ type: 'activity' }));
     api.postMessage({ type: 'ready' });
-    return () => window.removeEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      stopReporting();
+    };
   }, []);
 
   if (!panels) return <div className="tools-empty">No diagram open</div>;

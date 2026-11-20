@@ -16,6 +16,7 @@ import { applyChanges } from '../workspaceEdit';
 import { newDiagramInput } from '../commands/newDiagram';
 import { exportDocumentSettings } from '../commands/exportDocument';
 import { WebviewDiagramEditorProvider } from '../editors/webviewEditor';
+import { noteUserActivity } from '../live/userActivity';
 
 export type RevealTarget = { sectionId: string; heading?: string; index?: number; preserveFocus?: boolean };
 
@@ -60,6 +61,11 @@ export class DocumentPanel implements vscode.Disposable {
 
   static isOpen(): boolean {
     return !!DocumentPanel.current;
+  }
+
+  /** The tab group the document is in, if it is open. */
+  static viewColumn(): vscode.ViewColumn | undefined {
+    return DocumentPanel.current?.panel.viewColumn;
   }
 
   /**
@@ -126,7 +132,7 @@ export class DocumentPanel implements vscode.Disposable {
   private async update(): Promise<void> {
     if (!this.ready) return;
     const data = await this.buildData();
-    this.panel.title = `${data.system} - Architecture Design Document - Archery`;
+    this.panel.title = data.title;
     this.post({ type: 'load', data });
   }
 
@@ -137,6 +143,9 @@ export class DocumentPanel implements vscode.Disposable {
         await this.update();
         if (this.pendingReveal) this.post({ type: 'reveal', ...this.pendingReveal });
         this.pendingReveal = undefined;
+        return;
+      case 'activity':
+        noteUserActivity();
         return;
       case 'activeSection':
         DocumentPanel.activeSection.fire({ sectionId: msg.sectionId, index: msg.index });

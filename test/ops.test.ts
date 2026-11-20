@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { scaffold } from '../src/template/scaffold';
 import type { WorkspaceReader } from '../src/model/load';
 import { camelSlug, kebabSlug } from '../src/ops/ids';
-import { ArcherySession, OpError } from '../src/ops/session';
+import { ArcherySession, DELETED, OpError } from '../src/ops/session';
 import { TOOLS } from '../src/ops/tools';
 
 export function memoryReader(files: Map<string, string>): WorkspaceReader {
@@ -22,7 +22,7 @@ async function workspace() {
     const def = TOOLS.find((t) => t.name === name)!;
     const session = await ArcherySession.load(memoryReader(files), 'docs/architecture');
     const result = await def.run(session, def.input.parse(args));
-    for (const [path, text] of session.changes) files.set(path, text);
+    for (const [path, text] of session.changes) text === DELETED ? files.delete(path) : files.set(path, text);
     return result;
   };
   return { files, call };
@@ -289,6 +289,91 @@ describe('diagram editing operations', () => {
     // Layered top-down: web above orders above billing.
     expect(box('web').y).toBeLessThan(box('orders').y);
     expect(box('orders').y).toBeLessThan(box('billing').y);
+    // Children sit below the container's name header.
+    expect(Math.min(...['web', 'orders', 'billing'].map((r) => box(r).y))).toBeGreaterThanOrEqual(shop.y + 34);
+    // Running it again changes nothing.
+    await call('auto_layout', { diagram: 'building-blocks-l1' });
+    expect((await call('get_diagram', { diagram: 'building-blocks-l1' })).nodes).toEqual(d.nodes);
+  });
+
+  it('auto-layouts nested deployment nodes without overlaps (report H-3)', async () => {
+    const { call } = await workspace();
+    await call('create_diagram', { title: 'Dep', type: 'deployment' });
+    await call('add_element', { name: 'Bench PC', kind: 'node', diagram: 'dep', x: 0, y: 0, technology: 'Windows 11' });
+    for (const env of ['VS Code extension host', 'MCP process', 'Service process']) {
+      const { id } = await call('add_element', { name: env, kind: 'executionEnvironment', parent: 'benchPc', diagram: 'dep', x: 0, y: 0, technology: 'Node 22' });
+      await call('add_element', { name: `${env} bundle`, kind: 'artifact', parent: id, diagram: 'dep', x: 0, y: 0 });
+    }
+    await call('add_relationship', { kind: 'connector', from: 'vsCodeExtensionHost', to: 'mcpProcess', label: 'named pipe' });
+    await call('add_relationship', { kind: 'connector', from: 'mcpProcess', to: 'serviceProcess', label: 'HTTP' });
+    for (const direction of ['RIGHT', 'DOWN']) {
+      await call('auto_layout', { diagram: 'dep', direction });
+      const d = await call('get_diagram', { diagram: 'dep' });
+      const model = (await call('get_model')).elements as { id: string; parent?: string }[];
+      const parent = new Map(model.map((e) => [e.id, e.parent]));
+      const box = new Map<string, any>(d.nodes.map((n: any) => [n.ref, n]));
+      const nodes = [...box.values()] as any[];
+      for (const a of nodes) {
+        const p = parent.get(a.ref) && box.get(parent.get(a.ref)!);
+        // Inside its parent, below the parent's header.
+        if (p) {
+          expect(a.x).toBeGreaterThanOrEqual(p.x);
+          expect(a.y).toBeGreaterThan(p.y + 30);
+          expect(a.x + a.w).toBeLessThanOrEqual(p.x + p.w);
+          expect(a.y + a.h).toBeLessThanOrEqual(p.y + p.h);
+        }
+        for (const b of nodes) {
+          if (a === b || parent.get(a.ref) !== parent.get(b.ref)) continue;
+          const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+          expect(overlap, `${a.ref} overlaps ${b.ref} (${direction})`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('auto-layouts class hierarchies with the superclass on top', async () => {
+    const { call } = await workspace();
+    await call('create_diagram', { title: 'Domain', type: 'class' });
+    for (const name of ['Payment', 'Card Payment', 'Invoice Payment']) await call('add_element', { name, kind: 'class', diagram: 'domain', x: 0, y: 0 });
+    await call('add_relationship', { kind: 'generalization', from: 'cardPayment', to: 'payment' });
+    await call('add_relationship', { kind: 'generalization', from: 'invoicePayment', to: 'payment' });
+    await call('auto_layout', { diagram: 'domain' });
+    const d = await call('get_diagram', { diagram: 'domain' });
+    const y = (ref: string) => d.nodes.find((n: any) => n.ref === ref).y;
+    expect(y('payment')).toBeLessThan(y('cardPayment'));
+    expect(y('payment')).toBeLessThan(y('invoicePayment'));
+    expect(y('cardPayment')).toBe(y('invoicePayment'));
+  });
+
+  it('auto-layouts state machines: initial first, final last, regions stacked in their state', async () => {
+    const { call } = await workspace();
+    await call('create_diagram', { title: 'Order states', type: 'state' });
+    const add = async (kind: string, name?: string, parent?: string) => (await call('add_local_node', { diagram: 'order-states', kind, name, parent, x: 0, y: 0 })).id;
+    const final = await add('final');
+    const start = await add('initial');
+    const open = await add('state', 'Open');
+    const active = await add('state', 'Active');
+    const r1 = await add('region', undefined, active);
+    const r2 = await add('region', undefined, active);
+    const paying = await add('state', 'Paying', r1);
+    const packing = await add('state', 'Packing', r2);
+    await call('add_local_edge', { diagram: 'order-states', kind: 'transition', from: start, to: open });
+    await call('add_local_edge', { diagram: 'order-states', kind: 'transition', from: open, to: active, label: 'checkout' });
+    await call('add_local_edge', { diagram: 'order-states', kind: 'transition', from: active, to: final });
+    await call('auto_layout', { diagram: 'order-states' });
+    const d = await call('get_diagram', { diagram: 'order-states' });
+    const n = (id: string) => d.local.nodes.find((x: any) => x.id === id);
+    expect(n(start).y).toBeLessThan(n(open).y);
+    expect(n(open).y).toBeLessThan(n(active).y);
+    expect(n(active).y + n(active).h).toBeLessThanOrEqual(n(final).y);
+    // The regions are one above the other, inside the state.
+    expect(n(r2).y).toBeGreaterThanOrEqual(n(r1).y + n(r1).h);
+    for (const r of [r1, r2]) {
+      expect(n(r).y).toBeGreaterThanOrEqual(n(active).y);
+      expect(n(r).y + n(r).h).toBeLessThanOrEqual(n(active).y + n(active).h + 1);
+    }
+    expect(n(paying).y).toBeGreaterThanOrEqual(n(r1).y);
+    expect(n(packing).y).toBeGreaterThanOrEqual(n(r2).y);
   });
 });
 

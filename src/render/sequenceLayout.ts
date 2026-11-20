@@ -109,10 +109,16 @@ export function layoutSequenceWithHits(diagram: SequenceDiagram, model: Model, d
   const xOf = (ref: string) => columns[index.get(ref)!]!.x;
 
   // Participants created by a message get their header at that message; destroyed ones end there.
+  // A participant created again after its destruction starts a new life: a new header at that create
+  // message, and no line between the X and it. `start`: the header's message y (undefined: at the top).
   const firstUse = new Map<string, Message>();
   for (const m of messages) for (const id of [m.from, m.to]) if (id && !firstUse.has(id)) firstUse.set(id, m);
-  const createdAt = new Map<string, number>();
-  const endAt = new Map<string, number>();
+  const lives = new Map<string, { start?: number; end?: number }[]>();
+  const lifeOf = (ref: string) => {
+    let list = lives.get(ref);
+    if (!list) lives.set(ref, (list = [{}]));
+    return list.at(-1)!;
+  };
 
   const prims: Prim[] = [];
   const top = 0;
@@ -209,9 +215,11 @@ export function layoutSequenceWithHits(diagram: SequenceDiagram, model: Model, d
     }
     const xFrom = xOf(from);
     const xTo = xOf(to);
-    if (m.kind === 'create' && firstUse.get(to) === m) {
+    const recreated = m.kind === 'create' && firstUse.get(to) !== m && lifeOf(to).end !== undefined;
+    if (recreated) lives.get(to)!.push({ start: y });
+    if ((m.kind === 'create' && firstUse.get(to) === m) || recreated) {
       // The created participant's header sits on the arrow.
-      createdAt.set(to, y);
+      lifeOf(to).start = y;
       const col = columns[index.get(to)!]!;
       arrow(edgeX(from, xTo), xTo - (xTo > xFrom ? col.width / 2 : -col.width / 2), y, m, true, 'open');
       y += ROW + 10;
@@ -227,7 +235,7 @@ export function layoutSequenceWithHits(diagram: SequenceDiagram, model: Model, d
     }
     if (m.kind === 'destroy') {
       prims.push({ t: 'path', d: `M${xTo - 8} ${y + 4} L${xTo + 8} ${y + 20} M${xTo + 8} ${y + 4} L${xTo - 8} ${y + 20}`, fill: 'none', stroke: 'ink' });
-      endAt.set(to, y + 12);
+      lifeOf(to).end = y + 12;
       open.delete(to);
       y += 8;
     }
@@ -325,16 +333,22 @@ export function layoutSequenceWithHits(diagram: SequenceDiagram, model: Model, d
   // Lifelines and activation bars go underneath messages.
   const under: Prim[] = [];
   hits.bottom = bottom;
+  const headTopOf = (life: { start?: number }) => (life.start !== undefined ? life.start - (HEADER_H - 6) / 2 : top);
   for (const c of columns) {
-    const headTop = createdAt.has(c.ref) ? createdAt.get(c.ref)! - (HEADER_H - 6) / 2 : top;
+    const all = lives.get(c.ref) ?? [{}];
+    // One hit per participant: the first header, the line down to the end of its last life.
+    const firstTop = headTopOf(all[0]!);
     hits.lifelines.push({
       ref: c.ref,
       x: c.x,
-      head: c.actor ? { x: c.x - Math.max(24, textWidth(c.name, 12, true) / 2 + 4), y: headTop - 2, w: Math.max(48, textWidth(c.name, 12, true) + 8), h: 44 } : { x: c.x - c.width / 2, y: headTop, w: c.width, h: HEADER_H - 6 },
-      y1: headTop + HEADER_H - 6,
-      y2: endAt.get(c.ref) ?? bottom,
+      head: c.actor ? { x: c.x - Math.max(24, textWidth(c.name, 12, true) / 2 + 4), y: firstTop - 2, w: Math.max(48, textWidth(c.name, 12, true) + 8), h: 44 } : { x: c.x - c.width / 2, y: firstTop, w: c.width, h: HEADER_H - 6 },
+      y1: firstTop + HEADER_H - 6,
+      y2: all.at(-1)!.end ?? bottom,
     });
-    under.push({ t: 'line', x1: c.x, y1: headTop + HEADER_H - (c.actor ? 0 : 6), x2: c.x, y2: endAt.get(c.ref) ?? bottom, stroke: 'muted', dashed: true });
+    for (const life of all) drawLife(c, headTopOf(life), life.end ?? bottom);
+  }
+  function drawLife(c: Column, headTop: number, end: number) {
+    under.push({ t: 'line', x1: c.x, y1: headTop + HEADER_H - (c.actor ? 0 : 6), x2: c.x, y2: end, stroke: 'muted', dashed: true });
     if (c.actor) {
       const s = 26;
       const hy = headTop;

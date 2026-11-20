@@ -1,7 +1,8 @@
 // Host for the diagram editor webviews (Archery panels and custom editors): talks to the extension.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FromWebview, ToWebview } from '../../src/protocol';
-import { sceneToPng, type Host, type HostState } from './host';
+import { reportUserActivity } from './activity';
+import { sceneToPng, svgToPng, type Host, type HostState } from './host';
 
 interface VsCodeApi {
   postMessage(message: FromWebview): void;
@@ -69,7 +70,12 @@ export function useHost(): Host {
         }
         case 'renderPng': {
           const current = sceneRef.current;
-          const dataUrl = current ? await sceneToPng(current.scene, current.title) : null;
+          const dataUrl =
+            msg.svg && msg.width && msg.height
+              ? await svgToPng(msg.svg, msg.width, msg.height)
+              : current
+                ? await sceneToPng(current.scene, current.title)
+                : null;
           vscode().postMessage({ type: 'png', requestId: msg.requestId, dataUrl });
           break;
         }
@@ -88,10 +94,12 @@ export function useHost(): Host {
     };
     window.addEventListener('message', onMessage);
     window.addEventListener('keydown', onKey);
+    const stopReporting = reportUserActivity(() => vscode().postMessage({ type: 'activity' }));
     vscode().postMessage({ type: 'ready' });
     return () => {
       window.removeEventListener('message', onMessage);
       window.removeEventListener('keydown', onKey);
+      stopReporting();
     };
   }, []);
 

@@ -1442,7 +1442,7 @@
         "toolReferenceName": "archery-get-diagram",
         "canBeReferencedInPrompt": true,
         "userDescription": "Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints).",
-        "modelDescription": "Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints).",
+        "modelDescription": "Contents of a diagram with element names resolved from the model (canvas: nodes and edges; sequence: lifelines and steps; timing: lifelines with states and changes, messages, constraints). Canvas nodes come with their drawn box (x, y, w, h): text and children can make a box larger than the size it was given.",
         "icon": "$(book)",
         "tags": [
           "archery",
@@ -1512,6 +1512,15 @@
             "includeRelationships": {
               "default": true,
               "type": "boolean"
+            },
+            "relationships": {
+              "default": "mostSpecific",
+              "description": "mostSpecific (default): leave out a container's relationship when one of its shown parts has the same relationship to the same partner (or a part of it); all: every relationship between shown elements",
+              "type": "string",
+              "enum": [
+                "mostSpecific",
+                "all"
+              ]
             }
           },
           "required": [
@@ -1550,6 +1559,15 @@
             "includeRelationships": {
               "default": true,
               "type": "boolean"
+            },
+            "relationships": {
+              "default": "mostSpecific",
+              "description": "mostSpecific (default): leave out a container's relationship when one of its shown parts has the same relationship to the same partner (or a part of it); all: every relationship between shown elements",
+              "type": "string",
+              "enum": [
+                "mostSpecific",
+                "all"
+              ]
             }
           },
           "required": [
@@ -2157,8 +2175,8 @@
         "displayName": "Validate architecture documentation",
         "toolReferenceName": "archery-validate",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Check all documentation files: schemas, and references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals).",
-        "modelDescription": "Check all documentation files: schemas, and references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals). Call after making changes.",
+        "userDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), and the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates).",
+        "modelDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), and the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates). Call after making changes.",
         "icon": "$(book)",
         "tags": [
           "archery",
@@ -2176,7 +2194,7 @@
         "toolReferenceName": "archery-update-relationship",
         "canBeReferencedInPrompt": true,
         "userDescription": "Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend».",
-        "modelDescription": "Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend». Pass null to clear a field.",
+        "modelDescription": "Change a relationship: kind, label, «stereotype», multiplicities, role names, qualifiers, navigability (association arrowheads), association class, or the condition / extension point of an «extend». Pass null to clear a field. reverse: true swaps its ends (from / to, with their multiplicities, roles, qualifiers and navigability).",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2318,6 +2336,9 @@
                 "string",
                 "null"
               ]
+            },
+            "reverse": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -2330,8 +2351,8 @@
         "displayName": "Update diagram",
         "toolReferenceName": "archery-update-diagram",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Change the title of any diagram (the file name stays), or the type of a canvas diagram (its content stays; the type decides what the editor offers to add).",
-        "modelDescription": "Change the title of any diagram (the file name stays), or the type of a canvas diagram (its content stays; the type decides what the editor offers to add).",
+        "userDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines, default true).",
+        "modelDescription": "Change the title of any diagram (the file name stays: rename_diagram), the type of a canvas diagram (its content stays; the type decides what the editor offers to add), or what a canvas diagram shows: show.tags (tagged values in the boxes, default false) and show.keywords (relationship keywords such as «use» on the lines, default true).",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2362,6 +2383,18 @@
                 "interactionOverview"
               ],
               "description": "New diagram type (canvas diagrams only)"
+            },
+            "show": {
+              "type": "object",
+              "properties": {
+                "tags": {
+                  "type": "boolean"
+                },
+                "keywords": {
+                  "type": "boolean"
+                }
+              },
+              "description": "Canvas diagrams only; given fields are changed, the others stay"
             }
           },
           "required": [
@@ -2480,7 +2513,7 @@
         "toolReferenceName": "archery-add-local-node",
         "canBeReferencedInPrompt": true,
         "userDescription": "Add a node that exists only on this diagram: a note, or a state machine / activity node.",
-        "modelDescription": "Add a node that exists only on this diagram: a note, or a state machine / activity node. Kinds: note, state, initial, final, choice, junction, fork, join, history, deepHistory, terminate, region, entryPoint, exitPoint, action, activityFinal, flowFinal, decision, merge, object, partition, sendSignal, acceptEvent, acceptTimeEvent, pin, interruptibleRegion, interactionUse, interaction. States take \"text\" for internal activities (one per line, e.g. \"entry / start timer\"); partitions (swimlanes), states, regions and interruptible regions contain other local nodes via parent. Orthogonal regions: \"region\" nodes with a state as parent (they fill the state, separated by dashed lines). entryPoint / exitPoint sit on the border of their parent state; a \"pin\" sits on the border of its parent action; acceptTimeEvent is the hourglass (name e.g. \"every 5 min\").",
+        "modelDescription": "Add a node that exists only on this diagram: a note, or a state machine / activity node. Kinds: note, state, initial, final, choice, junction, fork, join, history, deepHistory, terminate, region, entryPoint, exitPoint, action, activityFinal, flowFinal, decision, merge, object, partition, sendSignal, acceptEvent, acceptTimeEvent, pin, interruptibleRegion, interactionUse, interaction. States take \"text\" for internal activities (one per line, e.g. \"entry / start timer\"); partitions (swimlanes), states, regions and interruptible regions contain other local nodes via parent; parent can also be an element shown on the diagram (a note inside a component). Orthogonal regions: \"region\" nodes with a state as parent (they fill the state, separated by dashed lines). entryPoint / exitPoint sit on the border of their parent state; a \"pin\" sits on the border of its parent action; acceptTimeEvent is the hourglass (name e.g. \"every 5 min\").",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2862,8 +2895,8 @@
         "displayName": "Auto-layout diagram",
         "toolReferenceName": "archery-auto-layout",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout; containers keep their children; edges become straight).",
-        "modelDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout; containers keep their children; edges become straight). direction: DOWN (default), RIGHT, UP, LEFT.",
+        "userDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset.",
+        "modelDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset. direction: DOWN, RIGHT, UP, LEFT (default: RIGHT for use case diagrams, else DOWN).",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2877,7 +2910,6 @@
               "type": "string"
             },
             "direction": {
-              "default": "DOWN",
               "type": "string",
               "enum": [
                 "DOWN",
@@ -3140,7 +3172,7 @@
         "toolReferenceName": "archery-create-decision",
         "canBeReferencedInPrompt": true,
         "userDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.",
-        "modelDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.",
+        "modelDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences. Change it later with update_decision.",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -3465,6 +3497,258 @@
           "required": [
             "diagram",
             "format"
+          ]
+        }
+      },
+      {
+        "name": "archery_set_line_shape",
+        "displayName": "Set line shape",
+        "toolReferenceName": "archery-set-line-shape",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "How lines are drawn on a canvas diagram: straight, orthogonal (right angles), curved, horizontalFirst / verticalFirst (one corner: across first, or up / down first), or auto (the diagram style decides: straight in Classic, right angles in Modern).",
+        "modelDescription": "How lines are drawn on a canvas diagram: straight, orthogonal (right angles), curved, horizontalFirst / verticalFirst (one corner: across first, or up / down first), or auto (the diagram style decides: straight in Classic, right angles in Modern). `ids`: relationship refs or local edge ids; omit them for every line of the diagram.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "line": {
+              "type": "string",
+              "enum": [
+                "straight",
+                "orthogonal",
+                "curved",
+                "horizontalFirst",
+                "verticalFirst",
+                "auto"
+              ]
+            }
+          },
+          "required": [
+            "diagram",
+            "line"
+          ]
+        }
+      },
+      {
+        "name": "archery_batch",
+        "displayName": "Run several operations at once",
+        "toolReferenceName": "archery-batch",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Run several Archery operations in one call, in order, as one change: when one fails, nothing is changed and the error says which.",
+        "modelDescription": "Run several Archery operations in one call, in order, as one change: when one fails, nothing is changed and the error says which. Each operation is {tool, input}, e.g. {tool: \"add_element\", input: {name: \"Orders\", kind: \"component\"}}; later operations see what earlier ones did. Use it to add many elements, relationships, local nodes or edges at once. Versions and export cannot be batched.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "operations": {
+              "minItems": 1,
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tool": {
+                    "type": "string",
+                    "description": "Tool name, e.g. add_element"
+                  },
+                  "input": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "tool"
+                ]
+              }
+            }
+          },
+          "required": [
+            "operations"
+          ]
+        }
+      },
+      {
+        "name": "archery_set_project",
+        "displayName": "Set project details",
+        "toolReferenceName": "archery-set-project",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change the system name, the document title or the authors in archery.yaml (shown on the title page and in exports).",
+        "modelDescription": "Change the system name, the document title or the authors in archery.yaml (shown on the title page and in exports).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": {
+              "type": "string"
+            },
+            "authors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "archery_delete_diagram",
+        "displayName": "Delete diagram",
+        "toolReferenceName": "archery-delete-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Delete a diagram file.",
+        "modelDescription": "Delete a diagram file. Fails while a chapter shows it or an element links to it (detail), unless force is true, which also removes those chapter directives and links.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "force": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "diagram"
+          ]
+        }
+      },
+      {
+        "name": "archery_rename_diagram",
+        "displayName": "Rename diagram file",
+        "toolReferenceName": "archery-rename-diagram",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Give a diagram a new file name (diagrams/<name>.<type>.json); chapter directives, element detail links and interaction overview references follow.",
+        "modelDescription": "Give a diagram a new file name (diagrams/<name>.<type>.json); chapter directives, element detail links and interaction overview references follow. The title stays (change it with update_diagram).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "diagram": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "New file name without extension, e.g. \"deployment-bench\""
+            }
+          },
+          "required": [
+            "diagram",
+            "name"
+          ]
+        }
+      },
+      {
+        "name": "archery_update_decision",
+        "displayName": "Update an architecture decision",
+        "toolReferenceName": "archery-update-decision",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Change an architecture decision record: its status, title, context, decision, consequences, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded).",
+        "modelDescription": "Change an architecture decision record: its status, title, context, decision, consequences, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded). `decision`: its number (\"3\", \"0003\") or file name.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "decision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "default": "proposed",
+              "type": "string",
+              "enum": [
+                "proposed",
+                "accepted",
+                "rejected",
+                "deprecated",
+                "superseded"
+              ]
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "context": {
+              "type": "string"
+            },
+            "decision_text": {
+              "type": "string",
+              "description": "The \"Decision\" section"
+            },
+            "consequences": {
+              "type": "string"
+            },
+            "qualityGoals": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "supersedes": {
+              "type": "string",
+              "description": "Number of the decision this one replaces"
+            }
+          },
+          "required": [
+            "decision"
           ]
         }
       }

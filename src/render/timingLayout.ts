@@ -32,6 +32,80 @@ const ROW = 24;
 const PAD = 8;
 const VALUE_H = 22;
 const TICK_W = 56;
+/** Height of each further lane of constraints, and the room kept between two of them in a lane. */
+const LANE = 18;
+const LANE_GAP = 8;
+
+/** Where a constraint is drawn: its lane (0 = nearest the timeline) and its text. */
+interface PlacedConstraint {
+  index: number;
+  c: TimingConstraint;
+  text: string;
+  tw: number;
+  /** Lane of the mark or interval, and of the text (higher when the text does not fit its interval). */
+  lane: number;
+  labelLane: number;
+  /** Text position: left end of the text. */
+  lx: number;
+}
+
+/**
+ * Lanes for the constraints of each lifeline. A duration's text sits on its interval when it fits;
+ * otherwise it moves up to a lane of its own, with a leader line down to the interval. Nothing in a
+ * lane overlaps, so no text is cut or covered by another constraint.
+ */
+function placeConstraints(d: TimingDiagram, X: (t: number) => number, lo: number, hi: number): Map<string, PlacedConstraint[]> {
+  const out = new Map<string, PlacedConstraint[]>();
+  // Taken spans per lifeline and lane. `gap`: room kept around it (texts); intervals that only meet at
+  // an instant (P2 then P2*) may share a lane.
+  const busy = new Map<string, [number, number, number][][]>();
+  const free = (ref: string, lane: number, a: number, b: number, gap: number) => !(busy.get(ref)?.[lane] ?? []).some(([p, q, g]) => a < q + Math.max(g, gap) && p < b + Math.max(g, gap));
+  const lowest = (ref: string, from: number, a: number, b: number, gap: number) => {
+    let k = from;
+    while (!free(ref, k, a, b, gap)) k++;
+    return k;
+  };
+  const take = (ref: string, lane: number, a: number, b: number, gap: number) => {
+    const lanes = busy.get(ref) ?? [];
+    (lanes[lane] ??= []).push([a, b, gap]);
+    busy.set(ref, lanes);
+  };
+  /** Left end of a text of width `tw` centered at `x`, kept inside the timeline area. */
+  const centered = (x: number, tw: number) => Math.max(lo, Math.min(x - tw / 2, hi - tw));
+  d.constraints.forEach((c, index) => {
+    if (!d.lifelines.some((l) => l.ref === c.on)) return;
+    const text = constraintText(c);
+    const tw = textWidth(text, 12);
+    let placed: PlacedConstraint;
+    if (c.to === undefined) {
+      // A mark at the instant, the text beside it (on its left near the end of the axis).
+      const x = X(c.from);
+      const lx = x + 6 + tw <= hi ? x + 6 : Math.max(lo, x - 6 - tw);
+      const a = Math.min(x - 5, lx);
+      const b = Math.max(x + 5, lx + tw);
+      const lane = lowest(c.on, 0, a, b, LANE_GAP);
+      take(c.on, lane, a, b, LANE_GAP);
+      placed = { index, c, text, tw, lane, labelLane: lane, lx };
+    } else {
+      const x1 = X(Math.min(c.from, c.to));
+      const x2 = X(Math.max(c.from, c.to));
+      const lx = centered((x1 + x2) / 2, tw);
+      if (tw + 16 <= x2 - x1) {
+        const lane = lowest(c.on, 0, x1, x2, 0);
+        take(c.on, lane, x1, x2, 0);
+        placed = { index, c, text, tw, lane, labelLane: lane, lx };
+      } else {
+        const lane = lowest(c.on, 0, x1, x2, 0);
+        take(c.on, lane, x1, x2, 0);
+        const labelLane = lowest(c.on, lane + 1, lx, lx + tw, LANE_GAP);
+        take(c.on, labelLane, lx, lx + tw, LANE_GAP);
+        placed = { index, c, text, tw, lane, labelLane, lx };
+      }
+    }
+    out.set(c.on, [...(out.get(c.on) ?? []), placed]);
+  });
+  return out;
+}
 
 /** 1, 2 or 5 times a power of ten, at least `raw`. */
 export function niceStep(raw: number): number {
@@ -106,6 +180,9 @@ export function layoutTimingWithHits(d: TimingDiagram, model: Model, ds: Diagram
   const X = (t: number) => tl0 + (Math.min(Math.max(t, 0), end) / end) * W;
   const right = tl0 + W + 28;
 
+  const placed = placeConstraints(d, X, nameW + 4, right - 4);
+  const lanesOf = (ref: string) => Math.max(1, ...(placed.get(ref) ?? []).map((p) => p.labelLane + 1));
+
   const prims: Prim[] = [];
   const hits: TimingHits = { lifelines: [], changes: [], messages: [], constraints: [], axis: { x0: tl0, x1: tl0 + W, end, tick, top: 0, bottom: 0 } };
 
@@ -117,10 +194,12 @@ export function layoutTimingWithHits(d: TimingDiagram, model: Model, ds: Diagram
     if (comps.has(l.ref)) continue;
     const value = l.form === 'value';
     const states = value ? [] : statesOf(l);
-    const h = CON + (value ? VALUE_H + 2 * PAD : Math.max(1, states.length) * ROW + PAD);
+    // Room for the constraints: one lane, plus one per further lane.
+    const con = CON + (lanesOf(l.ref) - 1) * LANE;
+    const h = con + (value ? VALUE_H + 2 * PAD : Math.max(1, states.length) * ROW + PAD);
     const box = { x: 0, y, w: right, h };
-    const rowY = new Map(states.map((s, i) => [s, y + CON + i * ROW + ROW / 2]));
-    const mid = value ? y + CON + PAD + VALUE_H / 2 : y + CON + (Math.max(1, states.length) * ROW) / 2;
+    const rowY = new Map(states.map((s, i) => [s, y + con + i * ROW + ROW / 2]));
+    const mid = value ? y + con + PAD + VALUE_H / 2 : y + con + (Math.max(1, states.length) * ROW) / 2;
     comps.set(l.ref, { l, box, rowY, mid });
     hits.lifelines.push({
       ref: l.ref,
@@ -190,34 +269,44 @@ export function layoutTimingWithHits(d: TimingDiagram, model: Model, ds: Diagram
   }
 
   // --- constraints -----------------------------------------------------------------------------
-  d.constraints.forEach((c, index) => {
-    const comp = comps.get(c.on);
-    if (!comp) return;
-    const text = constraintText(c);
-    const cy = comp.box.y + 13;
-    const tw = textWidth(text, 12);
-    if (c.to === undefined) {
-      // Time constraint / observation: a mark at the instant, the text beside it.
-      const x = X(c.from);
-      prims.push({ t: 'line', x1: x, y1: comp.box.y + 4, x2: x, y2: comp.box.y + comp.box.h - 4, stroke: 'muted', dashed: true });
-      prims.push({ t: 'line', x1: x - 4, y1: cy, x2: x + 4, y2: cy, stroke: 'ink' });
-      prims.push({ t: 'text', x: x + 6, y: cy + 4, text, size: 12, halo: true });
-      hits.constraints.push({ index, box: { x: x - 5, y: cy - 10, w: tw + 14, h: 20 }, label: { x: x + 6, y: cy + 4, anchor: 'start' } });
-      return;
+  for (const [ref, list] of placed) {
+    const comp = comps.get(ref);
+    if (!comp) continue;
+    const lanes = lanesOf(ref);
+    // Lane 0 is the lowest, just above the state rows; further lanes stack upwards.
+    const laneY = (k: number) => comp.box.y + 13 + (lanes - 1 - k) * LANE;
+    for (const { index, c, text, tw, lane, labelLane, lx } of list) {
+      const cy = laneY(lane);
+      const ty = laneY(labelLane);
+      if (c.to === undefined) {
+        // Time constraint / observation: a mark at the instant, the text beside it.
+        const x = X(c.from);
+        prims.push({ t: 'line', x1: x, y1: cy - 9, x2: x, y2: comp.box.y + comp.box.h - 4, stroke: 'muted', dashed: true });
+        prims.push({ t: 'line', x1: x - 4, y1: cy, x2: x + 4, y2: cy, stroke: 'ink' });
+        prims.push({ t: 'text', x: lx, y: cy + 4, text, size: 12, halo: true });
+        hits.constraints.push({ index, box: { x: Math.min(x - 5, lx) - 2, y: cy - 10, w: Math.max(x + 5, lx + tw) - Math.min(x - 5, lx) + 4, h: 20 }, label: { x: lx, y: cy + 4, anchor: 'start' } });
+        continue;
+      }
+      // Duration constraint: the interval with arrowheads, the text in the middle (or above it, with a leader line).
+      const x1 = X(Math.min(c.from, c.to));
+      const x2 = X(Math.max(c.from, c.to));
+      for (const x of [x1, x2]) prims.push({ t: 'line', x1: x, y1: cy - 9, x2: x, y2: comp.box.y + comp.box.h - 4, stroke: 'muted', dashed: true });
+      prims.push({ t: 'line', x1, y1: cy, x2, y2: cy, stroke: 'ink' });
+      if (x2 - x1 > 24) {
+        prims.push({ t: 'path', d: headPath('open', x1, cy, -1, 0, ds), fill: 'none', stroke: 'ink' });
+        prims.push({ t: 'path', d: headPath('open', x2, cy, 1, 0, ds), fill: 'none', stroke: 'ink' });
+      }
+      if (labelLane !== lane) {
+        const mx = (x1 + x2) / 2;
+        const tx = Math.max(lx, Math.min(mx, lx + tw));
+        prims.push({ t: 'line', x1: mx, y1: cy, x2: tx, y2: ty + 5, stroke: 'muted' });
+      }
+      prims.push({ t: 'text', x: lx, y: ty + 4, text, size: 12, halo: true });
+      const bx1 = Math.min(x1, lx) - 4;
+      const bx2 = Math.max(x2, lx + tw) + 4;
+      hits.constraints.push({ index, box: { x: bx1, y: ty - 10, w: bx2 - bx1, h: cy - ty + 20 }, label: { x: lx, y: ty + 4, anchor: 'start' } });
     }
-    // Duration constraint: the interval with arrowheads, the text in the middle.
-    const x1 = X(Math.min(c.from, c.to));
-    const x2 = X(Math.max(c.from, c.to));
-    for (const x of [x1, x2]) prims.push({ t: 'line', x1: x, y1: comp.box.y + 4, x2: x, y2: comp.box.y + comp.box.h - 4, stroke: 'muted', dashed: true });
-    prims.push({ t: 'line', x1, y1: cy, x2, y2: cy, stroke: 'ink' });
-    if (x2 - x1 > 24) {
-      prims.push({ t: 'path', d: headPath('open', x1, cy, -1, 0, ds), fill: 'none', stroke: 'ink' });
-      prims.push({ t: 'path', d: headPath('open', x2, cy, 1, 0, ds), fill: 'none', stroke: 'ink' });
-    }
-    const mx = (x1 + x2) / 2;
-    prims.push({ t: 'text', x: mx, y: cy + 4, text, anchor: 'middle', size: 12, halo: true });
-    hits.constraints.push({ index, box: { x: Math.min(x1, mx - tw / 2) - 4, y: cy - 10, w: Math.max(x2 - x1, tw) + 8, h: 20 }, label: { x: mx, y: cy + 4, anchor: 'middle' } });
-  });
+  }
 
   // --- messages ---------------------------------------------------------------------------------
   const yAt = (ref: string, t: number) => {

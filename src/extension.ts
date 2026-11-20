@@ -4,6 +4,7 @@ import { registerLanguageModelTools } from './ai/lmTools';
 import { Bridge } from './live/bridge';
 import { extensionHost } from './live/host';
 import { followExternal, primeChapters } from './live/liveView';
+import { noteUserActivity, resetUserActivity } from './live/userActivity';
 import { registerChatParticipant } from './ai/participant';
 import { exportDiagramCommand } from './commands/export';
 import { exportDocument, type ExportFormat } from './commands/exportDocument';
@@ -108,6 +109,8 @@ export function activate(context: vscode.ExtensionContext): void {
   projectWatcher.onDidDelete(scheduleRefresh);
 
   const openDocument = async (target?: RevealTarget) => {
+    // A click in the Contents view (the live view's own calls keep the focus where it is).
+    if (target && !target.preserveFocus) noteUserActivity();
     if (!currentRoot) await refresh();
     if (!currentRoot) {
       const choice = await vscode.window.showInformationMessage('Archery: no documentation in this workspace yet.', 'Initialize');
@@ -138,6 +141,7 @@ export function activate(context: vscode.ExtensionContext): void {
     { dispose: () => rootWatcher?.dispose() },
     { dispose: () => tracker?.dispose() },
     { dispose: () => bridge?.dispose() },
+    { dispose: resetUserActivity },
     DiagramToolsView.register(context),
     WebviewDiagramEditorProvider.register(context, 'archery.diagramEditor', 'diagram'),
     WebviewDiagramEditorProvider.registerSerializer(),
@@ -165,6 +169,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand('archery.editDiagram', async (target?: vscode.Uri | { uri?: vscode.Uri }) => {
       const uri = target instanceof vscode.Uri ? target : target?.uri;
+      noteUserActivity();
       if (!currentRoot) await refresh();
       if (!uri) return;
       await DocumentPanel.editDiagram(uri);

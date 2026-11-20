@@ -479,9 +479,25 @@ textarea.rename {
   cursor: pointer;
 }
 
-.menu-item:hover {
+.menu-item:hover,
+.menu-item.open,
+.menu-item:focus-visible {
   background: var(--vscode-menu-selectionBackground, var(--hover));
   color: var(--vscode-menu-selectionForeground, inherit);
+  outline: none;
+}
+
+/* A submenu: opens beside its item. */
+.menu-more {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--diagram-muted);
+}
+.menu-hint + .menu-more {
+  margin-left: 0;
+}
+.ctx-menu.nested {
+  z-index: 51;
 }
 
 .empty-hint {

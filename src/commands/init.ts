@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { scaffold } from '../template/scaffold';
-import { SECTIONS } from '../template/template';
 
 export const DEFAULT_DOCS_DIR = 'docs/architecture';
 
@@ -58,8 +57,6 @@ export async function initCommand(): Promise<vscode.Uri | undefined> {
     await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(content));
   }
 
-  const first = SECTIONS[0];
-  if (first) await vscode.window.showTextDocument(vscode.Uri.joinPath(root, 'sections', first.file));
   void vscode.window.showInformationMessage(
     `Archery: created ${DEFAULT_DOCS_DIR} in ${folder.name}${skipped ? ` (${skipped} existing files kept)` : ''}.`,
   );

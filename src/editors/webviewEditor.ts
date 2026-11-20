@@ -20,6 +20,7 @@ import { applyRecorded, redo, undo } from './history';
 import { deleteFromModel } from './deleteFromModel';
 import { webviewHtml } from './html';
 import { DiagramToolsView } from '../views/toolsView';
+import { noteUserActivity } from '../live/userActivity';
 import type { DiagramStyle } from '../render/scene';
 
 export function canvasSettings(): CanvasSettings {
@@ -67,22 +68,38 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
   /** One provider per webview bundle (diagram | sequence). */
   private static readonly providers = new Map<string, WebviewDiagramEditorProvider>();
 
-  /** Opens a diagram in an Archery panel (or brings its open panel to the front). */
+  /**
+   * The one Archery diagram tab: every diagram opens in it, one at a time (opening another diagram
+   * switches the tab to it), so agents that create many diagrams do not leave a tab for each.
+   */
+  private static shared: vscode.WebviewPanel | undefined;
+  /** What a panel shows now; disposed when it switches to another diagram or closes. */
+  private static readonly bindings = new WeakMap<vscode.WebviewPanel, vscode.Disposable>();
+
+  /** Opens a diagram in the Archery diagram tab (switching it to this diagram), or brings it to the front. */
   static async openPanel(uri: vscode.Uri, options: { viewColumn?: vscode.ViewColumn; preserveFocus?: boolean } = {}): Promise<void> {
     const existing = WebviewDiagramEditorProvider.open.get(uri.toString());
-    if (existing) return existing.panel.reveal(options.viewColumn, options.preserveFocus);
+    if (existing) return existing.panel.reveal(existing.panel === WebviewDiagramEditorProvider.shared ? undefined : options.viewColumn, options.preserveFocus);
     const provider = WebviewDiagramEditorProvider.providers.get(bundleOf(uri.path));
     if (!provider) return;
     const document = await vscode.workspace.openTextDocument(uri);
+    const shared = WebviewDiagramEditorProvider.shared;
+    if (shared) {
+      // The tab stays in its tab group.
+      shared.reveal(undefined, options.preserveFocus);
+      await provider.resolvePanel(document, shared);
+      return;
+    }
     const panel = vscode.window.createWebviewPanel(DIAGRAM_PANEL, titleOf(document), { viewColumn: options.viewColumn ?? vscode.ViewColumn.Active, preserveFocus: options.preserveFocus }, { retainContextWhenHidden: true });
     await provider.resolvePanel(document, panel);
   }
 
-  /** Brings diagram panels back after a window reload (the webview keeps its file in its state). */
+  /** Brings the diagram tab back after a window reload (the webview keeps its file in its state). */
   static registerSerializer(): vscode.Disposable {
     return vscode.window.registerWebviewPanelSerializer(DIAGRAM_PANEL, {
       async deserializeWebviewPanel(panel, state: { fileName?: string } | undefined) {
-        if (!state?.fileName) return panel.dispose();
+        // Tabs from before there was only one: keep the first.
+        if (!state?.fileName || WebviewDiagramEditorProvider.shared) return panel.dispose();
         const uri = vscode.Uri.file(state.fileName);
         const provider = WebviewDiagramEditorProvider.providers.get(bundleOf(uri.path));
         try {
@@ -116,16 +133,34 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
     return this.resolve(document, panel, false);
   }
 
-  /** An Archery panel: titled with the diagram, with its own undo / redo. */
+  /** The Archery diagram tab: titled with the diagram, with its own undo / redo. */
   resolvePanel(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     panel.iconPath = {
       light: vscode.Uri.joinPath(this.context.extensionUri, 'media', 'diagram-light.svg'),
       dark: vscode.Uri.joinPath(this.context.extensionUri, 'media', 'diagram-dark.svg'),
     };
+    if (WebviewDiagramEditorProvider.shared !== panel) {
+      WebviewDiagramEditorProvider.shared = panel;
+      panel.onDidDispose(() => {
+        if (WebviewDiagramEditorProvider.shared === panel) WebviewDiagramEditorProvider.shared = undefined;
+      });
+    }
     return this.resolve(document, panel, true);
   }
 
-  private async resolve(document: vscode.TextDocument, panel: vscode.WebviewPanel, own: boolean): Promise<void> {
+  private async resolve(opened: vscode.TextDocument, panel: vscode.WebviewPanel, own: boolean): Promise<void> {
+    // VS Code may close a document no text editor shows (an Archery panel is not one); edits then land
+    // in a new TextDocument for the same file. Always read the newest one, never the closed one.
+    let document = opened;
+    const current = () => {
+      if (document.isClosed) document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === opened.uri.toString()) ?? document;
+      return document;
+    };
+    // A panel switching to another diagram lets go of the one it showed.
+    const bindings = WebviewDiagramEditorProvider.bindings;
+    const previous = bindings.get(panel);
+    if (previous) previous.dispose();
+    else panel.onDidDispose(() => bindings.get(panel)?.dispose());
     const webview = panel.webview;
     webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
     webview.html = webviewHtml(webview, this.context.extensionUri, this.bundle, 'architecture diagram');
@@ -144,7 +179,7 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
       const out: DiagramUsage[] = [];
       for (const name of (await createReader(root).list('diagrams')).sort()) {
         const file = `diagrams/${name}`;
-        const text = file === diagramPath ? document.getText() : await readText(vscode.Uri.joinPath(root, 'diagrams', name));
+        const text = file === diagramPath ? current().getText() : await readText(vscode.Uri.joinPath(root, 'diagrams', name));
         const usage = text === undefined ? undefined : diagramUsage(file, text);
         if (usage) out.push(usage);
       }
@@ -161,7 +196,16 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
       const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, 'model.yaml'));
       disposables.push(watcher, watcher.onDidChange(sendModel), watcher.onDidCreate(sendModel), watcher.onDidDelete(sendModel));
       const diagramWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, 'diagrams/*.json'));
-      disposables.push(diagramWatcher, diagramWatcher.onDidChange(sendModel), diagramWatcher.onDidCreate(sendModel), diagramWatcher.onDidDelete(sendModel));
+      disposables.push(
+        diagramWatcher,
+        diagramWatcher.onDidChange(sendModel),
+        diagramWatcher.onDidCreate(sendModel),
+        diagramWatcher.onDidDelete((uri) => {
+          // This diagram was deleted (or renamed): its tab closes.
+          if (own && uri.toString() === opened.uri.toString()) panel.dispose();
+          else void sendModel();
+        }),
+      );
       disposables.push(
         vscode.workspace.onDidChangeTextDocument((e) => {
           if (e.document.uri.toString() === modelUri.toString() && e.contentChanges.length > 0) void sendModel();
@@ -171,12 +215,14 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
 
     // --- document -> webview --------------------------------------------------
     const sendDocument = (type: 'init' | 'documentChanged') => {
-      if (own) panel.title = titleOf(document);
-      post({ type, text: document.getText(), fileName: document.fileName, editable });
+      if (own) panel.title = titleOf(current());
+      post({ type, text: current().getText(), fileName: document.fileName, editable });
     };
     disposables.push(
       vscode.workspace.onDidChangeTextDocument((e) => {
-        if (e.document.uri.toString() === document.uri.toString() && e.contentChanges.length > 0) sendDocument('documentChanged');
+        if (e.document.uri.toString() !== document.uri.toString() || e.contentChanges.length === 0) return;
+        document = e.document;
+        sendDocument('documentChanged');
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('archery.canvas') || e.affectsConfiguration('archery.diagramStyle')) post({ type: 'settings', settings: canvasSettings() });
@@ -222,6 +268,9 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
     disposables.push(
       webview.onDidReceiveMessage(async (msg: FromWebview) => {
         switch (msg.type) {
+          case 'activity':
+            noteUserActivity();
+            return;
           case 'ready':
             entry.ready = true;
             post({ type: 'settings', settings: canvasSettings() });
@@ -272,10 +321,15 @@ export class WebviewDiagramEditorProvider implements vscode.CustomTextEditorProv
       }),
     );
 
-    panel.onDidDispose(() => {
-      WebviewDiagramEditorProvider.open.delete(document.uri.toString());
-      tools?.dispose();
-      disposables.forEach((d) => d.dispose());
+    bindings.set(panel, {
+      dispose: () => {
+        if (WebviewDiagramEditorProvider.open.get(document.uri.toString()) === entry) WebviewDiagramEditorProvider.open.delete(document.uri.toString());
+        tools?.dispose();
+        disposables.forEach((d) => d.dispose());
+        pngWaiters.forEach((resolve) => resolve(null));
+        pngWaiters.clear();
+        bindings.delete(panel);
+      },
     });
   }
 }

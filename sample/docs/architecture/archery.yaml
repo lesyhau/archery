@@ -3,7 +3,6 @@
 # Structure and help texts based on the arc42 template (https://arc42.org), © Dr. Peter Hruschka, Dr. Gernot Starke and contributors, licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
 version: 1
 system: Webshop
-title: Webshop - Architecture Documentation
 template: arc42 9.1-EN
 authors: []
 sections:

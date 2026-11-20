@@ -2,9 +2,12 @@
 import { FONT_SIZE, strokeWidthOf, textWidth, type Paint, type Prim, type Scene } from './scene';
 
 export type ExportTheme = 'light' | 'dark';
+/** Black and grays only: diagrams in the exported document. */
+export type SvgTheme = ExportTheme | 'print';
 
-const PALETTE: Record<ExportTheme, Record<Paint, string> & { background: string }> = {
+const PALETTE: Record<SvgTheme, Record<Paint, string> & { background: string }> = {
   light: { none: 'none', surface: '#ffffff', alt: '#f2f2f2', node: '#f1f2f4', ink: '#1f1f1f', muted: '#8a8a8a', error: '#d1242f', background: '#ffffff' },
+  print: { none: 'none', surface: '#ffffff', alt: '#f0f0f0', node: '#f2f2f2', ink: '#000000', muted: '#666666', error: '#000000', background: '#ffffff' },
   dark: { none: 'none', surface: '#1f1f1f', alt: '#2b2b2b', node: '#2c2d30', ink: '#d4d4d4', muted: '#8a8a8a', error: '#f85149', background: '#1f1f1f' },
 };
 
@@ -52,7 +55,7 @@ function prim(p: Prim, c: Record<Paint, string>, link?: (file: string) => string
   }
 }
 
-export function sceneToSvg(scene: Scene, options: { theme?: ExportTheme; title?: string; background?: boolean; link?: (file: string) => string | undefined } = {}): string {
+export function sceneToSvg(scene: Scene, options: { theme?: SvgTheme; title?: string; background?: boolean; link?: (file: string) => string | undefined } = {}): string {
   const c = PALETTE[options.theme ?? 'light'];
   const bg = options.background === false ? '' : `<rect width="100%" height="100%" fill="${c.background}" stroke="none"/>`;
   const title = options.title ? `<title>${esc(options.title)}</title>` : '';

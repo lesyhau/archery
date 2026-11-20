@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { webviewHtml } from '../editors/html';
 import type { ToWebview } from '../protocol';
+import { noteUserActivity } from '../live/userActivity';
 
 interface EditorLink {
   post(msg: ToWebview): void;
@@ -46,7 +47,8 @@ export class DiagramToolsView implements vscode.WebviewViewProvider {
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist')] };
     view.webview.html = webviewHtml(view.webview, this.extensionUri, 'tools', 'Diagram tools');
     view.webview.onDidReceiveMessage((msg: { type?: string; fn?: string; args?: unknown[] }) => {
-      if (msg.type === 'ready') this.pushPanels();
+      if (msg.type === 'activity') noteUserActivity();
+      else if (msg.type === 'ready') this.pushPanels();
       else if (msg.type === 'panelCall' && typeof msg.fn === 'string' && this.activeKey) {
         this.editors.get(this.activeKey)?.post({ type: 'panelCall', fn: msg.fn, args: msg.args ?? [] });
       }
