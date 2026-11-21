@@ -2,7 +2,9 @@
 // and moving rows/columns of Markdown tables.
 import { Extension, type Editor } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import { TableView } from '@tiptap/extension-table';
 import { captionElement } from './Caption';
 import { saveImage } from './context';
 import { tableControls } from './tableControls';
@@ -298,30 +300,40 @@ function freezeColumns(table: HTMLTableElement): void {
   wrapper.dataset.cols = String(cells.length);
 }
 
-/** The "+ Add row" line under a Markdown table; `getPos` is the position right after the table. */
-function addRowFoot(editor: Editor, view: import('@tiptap/pm/view').EditorView, getPos: () => number | undefined): HTMLElement {
-  const foot = document.createElement('div');
-  foot.className = 'md-table-foot';
-  foot.contentEditable = 'false';
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'link-btn';
-  button.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 4v8 M4 8h8"/></svg> Add row';
-  button.addEventListener('mousedown', (e) => e.preventDefault());
-  button.addEventListener('click', () => {
-    const at = getPos();
-    const table = at === undefined ? null : view.state.doc.resolve(at).nodeBefore;
-    if (at === undefined || table?.type.name !== 'table') return;
-    const wrapper = view.nodeDOM(at - table.nodeSize);
-    const el = wrapper instanceof HTMLTableElement ? wrapper : wrapper instanceof HTMLElement ? wrapper.querySelector('table') : null;
-    if (!el) return;
-    inCell(editor, el, el.rows.length - 1, 0, (e) => e.commands.addRowAfter());
-    // The cursor goes into the first cell of the new row.
-    inCell(editor, el, table.childCount, 0, () => false);
-    editor.view.focus();
-  });
-  foot.append(button);
-  return foot;
+/**
+ * Markdown tables drawn with an "+ Add row" line at the bottom of their box, as under the data tables.
+ * The line is part of the table's own frame (the wrapper), so it cannot drift away from the table.
+ */
+export class TableWithFoot extends TableView {
+  readonly foot: HTMLElement;
+
+  constructor(node: PMNode, cellMinWidth: number, view: EditorView, attrs?: Record<string, unknown>) {
+    super(node, cellMinWidth, view, attrs);
+    this.foot = document.createElement('div');
+    this.foot.className = 'md-table-foot';
+    this.foot.contentEditable = 'false';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'link-btn';
+    button.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 4v8 M4 8h8"/></svg> Add row';
+    button.addEventListener('mousedown', (e) => e.preventDefault());
+    button.addEventListener('click', () => {
+      // Tiptap keeps its editor on the editor's element.
+      const editor = (view.dom as HTMLElement & { editor?: Editor }).editor;
+      if (!editor?.isEditable) return;
+      const rows = this.table.rows.length;
+      inCell(editor, this.table, rows - 1, 0, (e) => e.commands.addRowAfter());
+      // The cursor goes into the first cell of the new row.
+      inCell(editor, this.table, rows, 0, () => false);
+      editor.view.focus();
+    });
+    this.foot.append(button);
+    this.dom.append(this.foot);
+  }
+
+  stopEvent(event: Event): boolean {
+    return this.foot.contains(event.target as Node);
+  }
 }
 
 /** Grips and delete buttons around Markdown tables, "+" on the lines between rows / columns (see tableControls.ts). */
@@ -340,17 +352,8 @@ export const TableControls = Extension.create({
             host,
             () => [...view.dom.querySelectorAll<HTMLTableElement>('.tableWrapper > table')],
             {
-              // The bordered box, with the "Add row" line under it.
-              frame: (t) => {
-                const wrapper = (t.closest('.tableWrapper') as HTMLElement | null) ?? t;
-                const foot = wrapper.nextElementSibling;
-                if (!foot?.classList.contains('md-table-foot')) return wrapper;
-                return { getBoundingClientRect: () => {
-                  const a = wrapper.getBoundingClientRect();
-                  const b = foot.getBoundingClientRect();
-                  return new DOMRect(a.left, a.top, a.width, Math.max(a.bottom, b.bottom) - a.top);
-                } };
-              },
+              // The bordered box, with the "Add row" line in it.
+              frame: (t) => (t.closest('.tableWrapper') as HTMLElement | null) ?? t,
               rows: (t) => [...t.rows].slice(headerOffset(t)),
               columns: (t) => (t.rows[0] ? [...t.rows[0].cells] : []),
               moveRow: (t, from, to) => reorderTable(editor, t, 'row', from + headerOffset(t), to + headerOffset(t)),
@@ -375,19 +378,6 @@ export const TableControls = Extension.create({
           const freezeAll = () => view.dom.querySelectorAll<HTMLTableElement>('.tableWrapper > table').forEach(freezeColumns);
           requestAnimationFrame(freezeAll);
           return { update: freezeAll, destroy: () => controls.destroy() };
-        },
-        props: {
-          // "+ Add row" under every Markdown table, as under the data tables.
-          decorations(state) {
-            if (!editor.isEditable) return DecorationSet.empty;
-            const decorations: Decoration[] = [];
-            state.doc.descendants((node, pos) => {
-              if (node.type.name !== 'table') return true;
-              decorations.push(Decoration.widget(pos + node.nodeSize, (view, getPos) => addRowFoot(editor, view, getPos), { side: -2, ignoreSelection: true, stopEvent: () => true, key: 'add-row' }));
-              return false;
-            });
-            return DecorationSet.create(state.doc, decorations);
-          },
         },
       }),
     ];

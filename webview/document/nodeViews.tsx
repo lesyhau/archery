@@ -269,6 +269,7 @@ export function DecisionList({ editor }: NodeViewProps) {
                 {data.decisions.map((d) => (
                   <tr
                     key={d.file}
+                    data-decision={d.file}
                     className="clickable"
                     tabIndex={0}
                     onClick={() => openDecision(d.file)}

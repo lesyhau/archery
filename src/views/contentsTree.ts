@@ -1,10 +1,12 @@
 // Sidebar: the document's chapters and their headings (## and ###), numbered like the document.
-// Clicking one opens the document there; the chapter being read is selected while scrolling.
+// Clicking one opens the document there; the chapter being read is selected while scrolling. The
+// chapter that lists the architecture decisions has one entry per decision, which opens it.
 import * as vscode from 'vscode';
 import type { LoadedWorkspace } from '../model/load';
 import { findSection } from '../template/template';
 import { readText } from '../workspace';
 import { outlineOf } from '../doc/outline';
+import { adrTitle, splitAdrText } from '../doc/adr';
 
 export interface ContentsNode {
   sectionId: string;
@@ -15,6 +17,8 @@ export interface ContentsNode {
   uri?: vscode.Uri;
   /** 0-based line of the heading in the Markdown file. */
   line?: number;
+  /** A decision record (decisions/NNNN-x.md, relative to the root). */
+  decision?: string;
   children: ContentsNode[];
   parent?: ContentsNode;
 }
@@ -38,7 +42,8 @@ export class ContentsTreeProvider implements vscode.TreeDataProvider<ContentsNod
         let major = 0;
         let minor = 0;
         let parent: ContentsNode | undefined;
-        outlineOf((await readText(uri)) ?? '').forEach((h, index) => {
+        const markdown = (await readText(uri)) ?? '';
+        outlineOf(markdown).forEach((h, index) => {
           if (h.level === 2) {
             major++;
             minor = 0;
@@ -49,6 +54,14 @@ export class ContentsTreeProvider implements vscode.TreeDataProvider<ContentsNod
           owner.children.push(node);
           if (h.level === 2) parent = node;
         });
+        if (/<!--\s*archery:decisions\b/.test(markdown)) {
+          for (const file of ws.decisions) {
+            const text = (await readText(vscode.Uri.joinPath(root, ...file.split('/')))) ?? '';
+            const name = file.slice(file.lastIndexOf('/') + 1);
+            const title = adrTitle(splitAdrText(text).body) ?? name.slice(5, -3).replace(/-/g, ' ');
+            chapter.children.push({ sectionId: s.id, number: `ADR-${name.slice(0, 4)}`, title, decision: file, children: [], parent: chapter });
+          }
+        }
         this.nodes.push(chapter);
       }
       // The generated change history is the last chapter of the document.
@@ -68,10 +81,10 @@ export class ContentsTreeProvider implements vscode.TreeDataProvider<ContentsNod
   getTreeItem(node: ContentsNode): vscode.TreeItem {
     const label = node.number ? `${node.number}  ${node.title}` : node.title;
     const item = new vscode.TreeItem(label, node.children.length ? (node.index === undefined ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded) : vscode.TreeItemCollapsibleState.None);
-    item.id = `${node.sectionId}#${node.index ?? ''}`;
+    item.id = node.decision ? `${node.sectionId}#${node.decision}` : `${node.sectionId}#${node.index ?? ''}`;
     item.tooltip = node.title;
-    item.contextValue = node.uri ? 'heading' : 'generated';
-    item.command = { command: 'archery.openDocument', title: 'Open in the document', arguments: [{ sectionId: node.sectionId, index: node.index }] };
+    item.contextValue = node.uri ? 'heading' : node.decision ? 'decision' : 'generated';
+    item.command = { command: 'archery.openDocument', title: 'Open in the document', arguments: [{ sectionId: node.sectionId, index: node.index, decision: node.decision }] };
     return item;
   }
 

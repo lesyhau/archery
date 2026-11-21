@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Contents entries scroll again.** Clicking a chapter or heading in the document's contents panel goes there again (0.2.6 and 0.2.7 caught those clicks as links).
+- **Every decision in the contents.** The chapter with the decision list has an entry per decision, in the document's contents panel and in the Archery sidebar; clicking one opens it.
+- **"Add row" stays with its table.** In tables written in a chapter it is now the bottom line of the table's own box.
+- **Decision window:** the page behind no longer scrolls while it is open (also for the export dialog and maximized diagrams), nothing in it scrolls sideways, quality goals and constraints are a list with the ID over the text, and the date field's calendar button follows the theme.
+- **Status badges** are filled, with white capitals.
+- **One size for controls:** buttons, text boxes and dropdowns share one height, and buttons have a minimum width.
+- **IDs for quality goals, constraints, scenarios and risks** are numbered like the decision records (QG-1, C-1, QS-1, R-1) for new rows, and the ID column shows by default. Existing IDs stay as they are.
+- **Routed lines inside containers.** Parts of a container get the same spacing as the rest of the diagram (it was 20, too little for a line to pass between two parts), and a line entering an end through a narrow gap keeps 12 from the shape in the way.
+- **For agents:** the warnings `auto_layout` returns no longer suggest running `auto_layout` again.
+
 ## 0.2.7
 
 - **Routed lines keep clear of their neighbours.** When the lane beside the shape in the way runs too close to another box, or would enter a wide shape through a narrow gap, automatic layout now takes a lane beside the line's own end and enters it from the side.

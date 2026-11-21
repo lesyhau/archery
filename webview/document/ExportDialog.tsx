@@ -6,6 +6,7 @@ import type { DocumentData } from '../../src/doc/protocol';
 import { fillPlaceholders, marginSlots, resolveExportSettings, type MarginSlot } from '../../src/export/exportSettings';
 import type { ExportSettings } from '../../src/model/schema';
 import { IconClose } from './icons';
+import { useModalScrollLock } from './modal';
 
 const FONTS = ['Segoe UI', 'Calibri', 'Arial', 'Helvetica', 'Inter', 'Verdana', 'Tahoma', 'Georgia', 'Cambria', 'Times New Roman', 'Garamond', 'Consolas'];
 const SIZES = [9, 10, 10.5, 11, 12, 13, 14];
@@ -64,6 +65,7 @@ interface Props {
 }
 
 export function ExportDialog({ data, onClose, onExport }: Props) {
+  useModalScrollLock();
   const [s, setS] = useState<ExportSettings>(() => ({ ...data.exportSettings }));
   const set = (patch: ExportSettings) => setS((cur) => ({ ...cur, ...patch }));
   const r = resolveExportSettings(s);

@@ -19,6 +19,10 @@
   --diagram-muted: var(--vscode-descriptionForeground);
   --radius-card: 8px;
   --radius-control: 6px;
+  /* Controls: one height for buttons, text boxes and dropdowns; buttons at least this wide. */
+  --control-h: 28px;
+  --control-min-w: 76px;
+  --control-font: 13px;
 }
 
 * {
@@ -378,7 +382,9 @@ button {
 
 .link-form input {
   flex: 1;
-  padding: 3px 6px;
+  box-sizing: border-box;
+  height: var(--control-h);
+  padding: 0 8px;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border, var(--doc-line));
@@ -388,13 +394,22 @@ button {
 
 .btn,
 .link-form button {
-  padding: 3px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: var(--control-h);
+  min-width: var(--control-min-w);
+  padding: 0 14px;
   border: 1px solid var(--vscode-button-border, transparent);
   border-radius: var(--radius-control);
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   cursor: pointer;
-  font-size: 13px;
+  font: inherit;
+  font-size: var(--control-font);
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
@@ -597,23 +612,20 @@ button {
   margin-bottom: 30px;
 }
 
-/* "+ Add row" under a written table: the bottom line of the table's box, as under data tables. */
-.section-body > .tableWrapper:has(+ .md-table-foot) {
-  margin-bottom: 0;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.section-body > .md-table-foot {
+/* "+ Add row" at the bottom of a written table's box, as under data tables (only while editable). */
+.section-body .md-table-foot {
+  position: sticky;
+  left: 0;
   display: flex;
   align-items: center;
-  margin-bottom: 30px;
   padding: 4px 6px;
-  border: 1px solid var(--doc-line);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  border-top: 1px solid var(--doc-line);
   font-size: 12px;
   user-select: none;
+}
+
+.section-body[contenteditable='false'] .md-table-foot {
+  display: none;
 }
 
 /* The guidance block itself takes no space: it is shown as an info icon in the heading. */
@@ -812,21 +824,45 @@ button {
   background: var(--doc-hover);
 }
 
+/* Status badges: filled, white capitals, centered, slightly rounded. The fills are dark enough for
+   white text on light and dark themes. */
 .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 88px;
+  height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid var(--doc-line);
-  font-size: 12px;
+  border-radius: 4px;
+  background: #5f6368;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.badge.status-proposed {
+  background: #1f6feb;
 }
 
 .badge.status-accepted {
-  color: var(--vscode-testing-iconPassed, inherit);
+  background: #1a7f37;
 }
 
-.badge.status-rejected,
-.badge.status-deprecated,
+.badge.status-rejected {
+  background: #c62828;
+}
+
+.badge.status-deprecated {
+  background: #9a6700;
+}
+
 .badge.status-superseded {
-  color: var(--doc-muted);
+  background: #5f6368;
 }
 
 /* ------------------------------------------------------------------ figures */
@@ -1942,10 +1978,17 @@ html.tc-dragging * {
 
 /* ------------------------------------------------------------------ UML editor window */
 
+/* A modal is open: the page behind it keeps still; the modal's own parts scroll. */
+html.modal-open,
+html.modal-open body {
+  overflow: hidden;
+}
+
 .dw-backdrop {
   position: fixed;
   inset: 0;
   z-index: 150;
+  overscroll-behavior: contain;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2176,6 +2219,7 @@ html.tc-dragging * {
 }
 
 .xd-body {
+  overscroll-behavior: contain;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 240px;
   gap: 20px;
@@ -2272,15 +2316,17 @@ html.tc-dragging * {
 
 .xd input:not([type='checkbox']),
 .xd select {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 4px 7px;
+  height: var(--control-h);
+  padding: 0 8px;
   border: 1px solid var(--vscode-input-border, var(--doc-line));
   border-radius: 4px;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--control-font);
 }
 
 .xd input:focus-visible,
@@ -2444,8 +2490,15 @@ html.tc-dragging * {
   font-size: 12px;
 }
 
-.xd-foot .btn {
-  padding: 5px 14px;
+/* Native pickers (the date field's calendar button) in the theme's light or dark scheme. */
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  color-scheme: dark;
+}
+
+body.vscode-light,
+body.vscode-high-contrast-light {
+  color-scheme: light;
 }
 
 /* ------------------------------------------------------------------ decision record dialog */
@@ -2462,14 +2515,15 @@ html.tc-dragging * {
 
 .dd-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 14px 18px 18px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .xd input.dd-title {
-  padding: 6px 9px;
-  font-size: 15px;
   font-weight: 600;
 }
 
@@ -2479,40 +2533,54 @@ html.tc-dragging * {
   gap: 12px;
 }
 
-.dd-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.dd-picks {
+  display: grid;
+  gap: 2px;
+  max-height: 260px;
+  padding: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--vscode-input-border, var(--doc-line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
 }
 
-.dd-chip {
-  max-width: 100%;
-  padding: 2px 10px;
-  overflow: hidden;
-  border: 1px solid var(--doc-line);
-  border-radius: 999px;
-  background: none;
-  color: var(--doc-ink);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.dd-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 7px 8px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
-.dd-chip:hover {
+.dd-pick:hover {
   background: var(--doc-hover);
 }
 
-.dd-chip.on {
-  border-color: var(--vscode-button-background);
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+.dd-pick input {
+  margin: 2px 0 0;
 }
 
-.dd-chip:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+.dd-pick-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dd-pick-id {
+  color: var(--doc-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dd-pick-body {
+  color: var(--vscode-input-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .dd-part-head {
@@ -2551,6 +2619,7 @@ html.tc-dragging * {
 }
 
 .dd-rich .dd-rich-body {
+  overflow-wrap: anywhere;
   min-height: 3.2em;
   padding: 6px 9px;
   outline: none;

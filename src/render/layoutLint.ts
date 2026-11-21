@@ -154,7 +154,9 @@ export function labelsCrossed(edge: Pick<DrawnEdge, 'id' | 'local' | 'points'>, 
  * end) or along its border, line labels that cover a shape, another label, or are crossed by another
  * line, and leader lines of moved labels that run through a shape.
  */
-export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic'): string[] {
+export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: DiagramStyle = 'classic', opts: { afterAutoLayout?: boolean } = {}): string[] {
+  // Right after auto_layout, running it again would not help: only the manual fix is named.
+  const fix = (manual: string) => (opts.afterAutoLayout ? manual : `run auto_layout, or ${manual}`);
   const nodes = layoutNodes(diagram, model);
   // Swimlanes share their borders, and fork / join bars cross them: they are not checked.
   const lanes = new Set(diagram.local.nodes.filter((n) => n.kind === 'partition').map((n) => n.id));
@@ -190,20 +192,20 @@ export function layoutProblems(diagram: CanvasDiagram, model: Model, ds: Diagram
     if (e.from === e.to) continue;
     for (const n of shapesCrossed(e, nodes)) {
       if (lanes.has(n.id)) continue;
-      out.push(`The line of ${e.id} runs through ${n.id} ${at(n.box)}; run auto_layout, or route it around with set_edge_waypoints.`);
+      out.push(`The line of ${e.id} runs through ${n.id} ${at(n.box)}; ${fix('route it around with set_edge_waypoints')}.`);
     }
     for (const n of endsCrossed(e, nodes)) {
-      out.push(`The line of ${e.id} runs back across its own end ${n.id} ${at(n.box)}; run auto_layout, or move the bend points of ${e.id} out of ${n.id} with set_edge_waypoints.`);
+      out.push(`The line of ${e.id} runs back across its own end ${n.id} ${at(n.box)}; ${fix(`move the bend points of ${e.id} out of ${n.id} with set_edge_waypoints`)}.`);
     }
     for (const n of shapesAlong(e, nodes)) {
       if (lanes.has(n.id)) continue;
-      out.push(`The line of ${e.id} runs along the border of ${n.id} ${at(n.box)}, closer than ${CLEARANCE}; run auto_layout, or move its bend points with set_edge_waypoints.`);
+      out.push(`The line of ${e.id} runs along the border of ${n.id} ${at(n.box)}, closer than ${CLEARANCE}; ${fix('move its bend points with set_edge_waypoints')}.`);
     }
     for (const n of leaderCrosses(e, all)) {
-      out.push(`The leader line of the label of ${e.id} ${at(e.labelBox!)} runs through ${n.id} ${at(n.box)}; run auto_layout, or move the label with set_label_offset.`);
+      out.push(`The leader line of the label of ${e.id} ${at(e.labelBox!)} runs through ${n.id} ${at(n.box)}; ${fix('move the label with set_label_offset')}.`);
     }
     for (const o of labelsCrossed(e, edges)) {
-      out.push(`The line of ${e.id} runs through the label of ${o.id} ${at(o.labelBox!)}; run auto_layout, or move the label with set_label_offset.`);
+      out.push(`The line of ${e.id} runs through the label of ${o.id} ${at(o.labelBox!)}; ${fix('move the label with set_label_offset')}.`);
     }
   }
   const labels: { id: string; box: Box }[] = [];

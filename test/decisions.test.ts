@@ -125,3 +125,15 @@ describe('document links', () => {
     expect(headingSlug('Quality Goals (top 3)')).toBe('quality-goals-top-3');
   });
 });
+
+describe('data list ids', () => {
+  it('are numbered like the decision records, skipping taken numbers', async () => {
+    const { call, files } = await workspace();
+    await call('write_data_table', {
+      list: 'constraints',
+      rows: [{ constraint: 'Windows only' }, { id: 'C-2', constraint: 'Node 22' }, { constraint: 'No cloud' }],
+    });
+    const yaml = files.get('data/constraints.yaml')!;
+    expect([...yaml.matchAll(/- id: (\S+)/g)].map((m) => m[1])).toEqual(['C-1', 'C-2', 'C-3']);
+  });
+});

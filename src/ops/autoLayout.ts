@@ -19,7 +19,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type { CanvasDiagram, CanvasDiagramType, Model, Relationship } from '../model/schema';
 import { containerInset, displayModel, labelBox, layoutNodes, minSize, relationshipLabel, type Box } from '../render/canvasLayout';
-import { drawnEdges, endsCrossed, leaderCrosses, overlaps, segmentCrossesBox, shapesAlong, shapesCrossed } from '../render/layoutLint';
+import { CLEARANCE, drawnEdges, endsCrossed, leaderCrosses, overlaps, segmentCrossesBox, shapesAlong, shapesCrossed } from '../render/layoutLint';
 import { textWidth } from '../render/scene';
 
 export type LayoutDirection = 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
@@ -124,8 +124,11 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
         'elk.spacing.nodeNode': '0',
         'elk.layered.spacing.nodeNodeBetweenLayers': '0',
       });
-    } else if (kind === 'region') {
-      Object.assign(options, { 'elk.hierarchyHandling': 'INCLUDE_CHILDREN', 'elk.direction': direction });
+    } else {
+      // The diagram's spacing inside containers too: ELK's defaults (20) left too little room between
+      // parts for a line to pass 12 from both (round 5 of the agent report) and for labels.
+      Object.assign(options, spacing());
+      if (kind === 'region') Object.assign(options, { 'elk.hierarchyHandling': 'INCLUDE_CHILDREN', 'elk.direction': direction });
     }
     return { id, layoutOptions: options, children: kids.map((k) => toElk(k.id)) };
   };
@@ -135,6 +138,12 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
   // (ELK's own edge labels would add a layer per label and double the distances.)
   const between = vertical ? 70 : clamp(Math.ceil(widestLabel) + 40, 70, 240);
   const beside = vertical ? clamp(Math.ceil(widestLabel) + 24, 50, 160) : 50;
+  const spacing = () => ({
+    'elk.spacing.nodeNode': String(beside),
+    'elk.layered.spacing.nodeNodeBetweenLayers': String(between),
+    'elk.spacing.edgeNode': '30',
+    'elk.spacing.edgeEdge': '15',
+  });
 
   const graph: ElkNode = {
     id: '__root',
@@ -142,10 +151,7 @@ export async function autoLayout(diagram: CanvasDiagram, model: Model, direction
       'elk.algorithm': 'layered',
       'elk.direction': direction,
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-      'elk.spacing.nodeNode': String(beside),
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(between),
-      'elk.spacing.edgeNode': '30',
-      'elk.spacing.edgeEdge': '15',
+      ...spacing(),
       'elk.spacing.componentComponent': '70',
       // Straight lines are drawn between the boxes: short, straight edges matter more than compact layers.
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
@@ -252,8 +258,10 @@ function laneRoutes(a: Box, b: Box, s: Box, x: number): Waypoints[] {
   const p = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
   const q = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
   const down = q.y >= p.y;
-  // The step stays clear of the shape in the way: half the room between them when that is less.
-  const room = (gap: number) => (gap > 0 ? Math.min(DETOUR_GAP, gap / 2) : DETOUR_GAP);
+  // The step stays clear of the shape in the way: half the room between them when that is less, and
+  // in a gap too narrow for CLEARANCE on both sides, CLEARANCE from the shape in the way (the end it
+  // leaves or enters may be nearer).
+  const room = (gap: number) => (gap <= 0 ? DETOUR_GAP : gap >= 2 * CLEARANCE ? Math.min(DETOUR_GAP, gap / 2) : Math.max(4, gap - CLEARANCE));
   const ya = down ? a.y + a.h + room(s.y - (a.y + a.h)) : a.y - room(a.y - (s.y + s.h));
   const yb = down ? b.y - room(b.y - (s.y + s.h)) : b.y + b.h + room(s.y - (b.y + b.h));
   const starts: Waypoints[] = [[{ x, y: p.y }], [{ x: p.x, y: ya }, { x, y: ya }]];

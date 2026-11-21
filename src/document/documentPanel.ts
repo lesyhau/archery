@@ -18,7 +18,8 @@ import { exportDocumentSettings } from '../commands/exportDocument';
 import { WebviewDiagramEditorProvider } from '../editors/webviewEditor';
 import { noteUserActivity } from '../live/userActivity';
 
-export type RevealTarget = { sectionId: string; heading?: string; index?: number; preserveFocus?: boolean };
+/** `decision`: a decision record (decisions/NNNN-x.md) to open over the document. */
+export type RevealTarget = { sectionId: string; heading?: string; index?: number; decision?: string; preserveFocus?: boolean };
 
 export class DocumentPanel implements vscode.Disposable {
   private static current: DocumentPanel | undefined;

@@ -1380,7 +1380,7 @@ export const TOOLS: ToolDef<any>[] = [
       const path = canvasPath(session, name);
       const laid = await autoLayout(session.canvasDiagram(path), session.model(), direction);
       session.writeJson(path, laid);
-      return { file: session.display(path), nodes: laid.nodes.length + laid.local.nodes.length, warnings: layoutProblems(laid, session.model()) };
+      return { file: session.display(path), nodes: laid.nodes.length + laid.local.nodes.length, warnings: layoutProblems(laid, session.model(), 'classic', { afterAutoLayout: true }) };
     },
   }),
 
@@ -1429,7 +1429,10 @@ export const TOOLS: ToolDef<any>[] = [
         }
         if (item[def.keyField] === undefined) {
           if (!def.idPrefix) throw new OpError(`Row ${i + 1} needs a ${label(def.keyField)}.`);
-          const id = uniqueId(`${def.idPrefix}${i + 1}`, taken);
+          // Numbered like the decision records: QG-1, C-2, ... (the next free number from the row's).
+          let n = i + 1;
+          while (taken.has(`${def.idPrefix}${n}`)) n++;
+          const id = `${def.idPrefix}${n}`;
           taken.add(id);
           item[def.keyField] = id;
         }

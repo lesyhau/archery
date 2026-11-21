@@ -8,7 +8,7 @@ import { jsonToMarkdown, markdownToJson } from '../../src/doc/markdown';
 import type { DocSection } from '../../src/doc/protocol';
 import { useDoc } from './context';
 import { takeEdit } from './follow';
-import { flashBlock, HelpIcons, ImageDrop, LiveFlash, TableCaptions, TableControls } from './editorTools';
+import { flashBlock, HelpIcons, ImageDrop, LiveFlash, TableCaptions, TableControls, TableWithFoot } from './editorTools';
 import { DataTable, DecisionList, DiagramFrame, HelpNote, ImageFigure, RawHtmlView } from './nodeViews';
 
 /** Holds the save function so node views can save after changing attributes. */
@@ -30,7 +30,8 @@ function documentExtensions(): Extensions {
     rawHtml: RawHtml.extend({ addNodeView: () => ReactNodeViewRenderer(RawHtmlView) }),
   };
   cached = [
-    ...sectionExtensions().map((ext) =>
+    // Markdown tables with their "Add row" line.
+    ...sectionExtensions({ tableView: TableWithFoot }).map((ext) =>
       // Images are figures: "Figure N: caption" under the image (the caption is the alt text).
       // Extend the configured extension so its options (inline images) stay.
       ext.name === 'image'

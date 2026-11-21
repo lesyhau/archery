@@ -254,38 +254,61 @@ describe('clearance of routes and leader lines (N-10, N-11)', () => {
 // Round 5 of the report: auto_layout entered a wide target through a 20-unit gap under the shape in the
 // way, so the line ran along that shape's border, and the caller learned it only from validate.
 describe('lines into a wide end below a shape in the way (round 5)', () => {
-  it('enter the end from its side, clear of the shape in the way', async () => {
-    const { files, call } = await workspace();
-    await engine(call);
-    await call('add_element', { id: 'engineThread', name: 'Engine thread', kind: 'component', parent: 'engine' });
-    await call('add_to_diagram', { diagram: 'engine', elements: ['engineThread'] });
-    // The report's boxes: the TX box between the RX threads and the bus drivers, the bus drivers wider
-    // than the lane left of the TX box and only 20 under it, the engine thread where the lane right of
-    // the TX box would run (2 from its border).
-    await call('move_nodes', {
-      diagram: 'engine',
-      nodes: [
-        { id: 'engine', x: 20, y: 300, w: 720, h: 380 },
-        { id: 'rxThreads', x: 218, y: 350, w: 200, h: 82 },
-        { id: 'scheduler', x: 179, y: 485, w: 295, h: 84 },
-        { id: 'busDrivers', x: 120, y: 589, w: 194, h: 70 },
-        { id: 'engineThread', x: 492, y: 395, w: 200, h: 70 },
-      ],
+  // The report's boxes: the TX box between the RX threads and the bus drivers, the bus drivers wider
+  // than the lane left of the TX box and only 20 under it, the engine thread where the lane right of the
+  // TX box would run (2 from its border). Wide container: the lane left of the bus drivers is free.
+  // Narrow container (the report's): that lane would run on the container's wall, so the line steps
+  // into the bus drivers through the 20 gap, 12 from the TX box.
+  const layouts = {
+    wide: { engine: { x: 20, y: 300, w: 720, h: 380 }, busDrivers: { x: 120, y: 589, w: 194, h: 70 } },
+    narrow: { engine: { x: 100, y: 300, w: 620, h: 380 }, busDrivers: { x: 112, y: 589, w: 210, h: 70 } },
+  };
+  for (const [name, layout] of Object.entries(layouts)) {
+    it(`keep clear of the shape in the way (${name} container)`, async () => {
+      const { files, call } = await workspace();
+      await engine(call);
+      await call('add_element', { id: 'engineThread', name: 'Engine thread', kind: 'component', parent: 'engine' });
+      await call('add_to_diagram', { diagram: 'engine', elements: ['engineThread'] });
+      await call('move_nodes', {
+        diagram: 'engine',
+        nodes: [
+          { id: 'engine', ...layout.engine },
+          { id: 'rxThreads', x: 218, y: 350, w: 200, h: 82 },
+          { id: 'scheduler', x: 179, y: 485, w: 295, h: 84 },
+          { id: 'busDrivers', ...layout.busDrivers },
+          { id: 'engineThread', x: 492, y: 395, w: 200, h: 70 },
+        ],
+      });
+      const session = await ArcherySession.load(memoryReader(files), 'docs/architecture');
+      const diagram = session.canvasDiagram('diagrams/engine.uml.json');
+      const model = session.model();
+      const lineOf = (d: typeof diagram, ds: 'classic' | 'modern') => drawnEdges(d, model, ds).find((e) => e.id === 'rxThreads-busDrivers')!;
+      expect(shapesCrossed(lineOf(diagram, 'classic'), layoutNodes(diagram, model)).map((n) => n.id)).toEqual(['scheduler']);
+      const routed = routeAround(diagram, model);
+      const nodes = layoutNodes(routed, model);
+      for (const ds of ['classic', 'modern'] as const) {
+        const line = lineOf(routed, ds);
+        expect(shapesCrossed(line, nodes), ds).toEqual([]);
+        expect(endsCrossed(line, nodes), ds).toEqual([]);
+        expect(shapesAlong(line, nodes).map((n) => n.id), ds).toEqual([]);
+      }
     });
-    const session = await ArcherySession.load(memoryReader(files), 'docs/architecture');
-    const diagram = session.canvasDiagram('diagrams/engine.uml.json');
-    const model = session.model();
-    const lineOf = (d: typeof diagram, ds: 'classic' | 'modern') => drawnEdges(d, model, ds).find((e) => e.id === 'rxThreads-busDrivers')!;
-    expect(shapesCrossed(lineOf(diagram, 'classic'), layoutNodes(diagram, model)).map((n) => n.id)).toEqual(['scheduler']);
-    const routed = routeAround(diagram, model);
-    const nodes = layoutNodes(routed, model);
-    for (const ds of ['classic', 'modern'] as const) {
-      const line = lineOf(routed, ds);
-      expect(shapesCrossed(line, nodes), ds).toEqual([]);
-      expect(endsCrossed(line, nodes), ds).toEqual([]);
-      expect(shapesAlong(line, nodes).map((n) => n.id), ds).toEqual([]);
-    }
+  }
+
+  it('auto_layout spaces the parts of a container like the rest of the diagram', async () => {
+    const { call } = await workspace();
+    await engine(call);
+    await call('add_element', { id: 'service', name: 'Service', kind: 'component' });
+    await call('add_element', { id: 'boa', name: 'BOA', kind: 'externalSystem' });
+    await call('add_relationship', { kind: 'usage', from: 'service', to: 'boa' });
+    await call('add_to_diagram', { diagram: 'engine', elements: ['service', 'boa'] });
+    await call('auto_layout', { diagram: 'engine', direction: 'DOWN' });
+    const d = await call('get_diagram', { diagram: 'engine' });
+    const box = (id: string) => d.nodes.find((n: any) => n.ref === id);
+    const gap = (a: string, b: string) => box(b).y - (box(a).y + box(a).h);
+    expect(gap('rxThreads', 'scheduler')).toBe(gap('service', 'boa'));
   });
+
 
   it('auto_layout returns the warnings that are left', async () => {
     const { call } = await workspace();

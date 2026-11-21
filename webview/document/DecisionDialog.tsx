@@ -12,6 +12,7 @@ import type { DocDecision, DocumentData } from '../../src/doc/protocol';
 import { tableFor } from '../../src/doc/tables';
 import { runOp } from './context';
 import { IconClose, IconPlusSmall } from './icons';
+import { useModalScrollLock } from './modal';
 
 interface Draft {
   title: string;
@@ -65,28 +66,25 @@ function RichField({ id, value, placeholder, onChange, autoFocus }: { id: string
   return <EditorContent editor={editor} className="dd-rich" data-link-base="decisions" />;
 }
 
-/** Ids picked from a data list (quality goals, constraints), as toggle chips. */
+/** Items picked from a data list (quality goals, constraints): a checkbox, the ID, the text under it. */
 function Picks({ label, items, value, onChange }: { label: string; items: { id: string; text: string }[]; value: string[]; onChange(v: string[]): void }) {
   const known = new Set(items.map((i) => i.id));
-  const all = [...items, ...value.filter((v) => !known.has(v)).map((id) => ({ id, text: id }))];
+  const all = [...items, ...value.filter((v) => !known.has(v)).map((id) => ({ id, text: '' }))];
   if (all.length === 0) return null;
   return (
     <div className="xd-field wide">
       <span>{label}</span>
-      <div className="dd-chips" role="group" aria-label={label}>
+      <div className="dd-picks" role="group" aria-label={label}>
         {all.map((item) => {
           const on = value.includes(item.id);
           return (
-            <button
-              type="button"
-              key={item.id}
-              className={`dd-chip${on ? ' on' : ''}`}
-              aria-pressed={on}
-              title={item.text === item.id ? item.id : `${item.id}: ${item.text}`}
-              onClick={() => onChange(on ? value.filter((v) => v !== item.id) : [...value, item.id])}
-            >
-              {item.text}
-            </button>
+            <label key={item.id} className={`dd-pick${on ? ' on' : ''}`}>
+              <input type="checkbox" checked={on} onChange={() => onChange(on ? value.filter((v) => v !== item.id) : [...value, item.id])} />
+              <span className="dd-pick-text">
+                <span className="dd-pick-id">{item.id}</span>
+                {item.text && <span className="dd-pick-body">{item.text}</span>}
+              </span>
+            </label>
           );
         })}
       </div>
@@ -98,6 +96,7 @@ const sameList = (a: string[], b: string[]) => a.length === b.length && a.every(
 const splitNames = (s: string) => s.split(',').map((v) => v.trim()).filter(Boolean);
 
 export function DecisionDialog({ data, file, onClose }: { data: DocumentData; file: string | null; onClose(): void }) {
+  useModalScrollLock();
   const existing = file ? data.decisions.find((d) => d.file === file) : undefined;
   const initial = useMemo(() => draftOf(existing), [file]); // eslint-disable-line react-hooks/exhaustive-deps
   const [draft, setDraft] = useState<Draft>(initial);

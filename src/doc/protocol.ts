@@ -94,7 +94,7 @@ export type DiagramKind = CanvasDiagram['type'] | 'sequence' | 'communication' |
 export type ToDocument =
   | { type: 'load'; data: DocumentData }
   /** Scroll to a chapter, or to one of its headings (by text, or by index among its ## / ### headings). */
-  | { type: 'reveal'; sectionId: string; heading?: string; index?: number }
+  | { type: 'reveal'; sectionId: string; heading?: string; index?: number; decision?: string }
   /** Live view: an agent is about to change (or just changed) this chapter / diagram / table. */
   | { type: 'follow'; sectionId: string; index?: number; src?: string; edit?: boolean }
   | { type: 'diagramCreated'; requestId: number; src: string | null }

@@ -69,8 +69,10 @@ export function followLink(href: string, base: string, t: LinkTargets, from?: El
 export function installLinkHandler(t: LinkTargets): () => void {
   const onClick = (e: MouseEvent) => {
     if (e.type === 'auxclick' && e.button !== 1) return;
+    // Only links written in the content (chapters, decision fields, table cells); the page's own links,
+    // like the contents entries, handle their clicks themselves.
     const a = (e.target as Element | null)?.closest?.('a[href]');
-    if (!a || a.closest('svg')) return;
+    if (!a || a.closest('svg') || !a.closest('[data-link-base]')) return;
     e.preventDefault();
     e.stopPropagation();
     const href = a.getAttribute('href') ?? '';

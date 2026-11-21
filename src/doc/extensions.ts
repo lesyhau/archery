@@ -11,7 +11,7 @@
 // Any other raw HTML block is kept verbatim as rawHtml.
 import { Extension, Node, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
-import { Table, TableKit } from '@tiptap/extension-table';
+import { Table, TableKit, type TableView } from '@tiptap/extension-table';
 import { StarterKit } from '@tiptap/starter-kit';
 
 const atom = { group: 'block', atom: true, selectable: true, draggable: true } as const;
@@ -92,8 +92,11 @@ export const CaptionedTable = Table.extend({
   },
 });
 
-/** The schema-defining extensions (no UI behavior). */
-export function sectionExtensions(): Extensions {
+/**
+ * The schema-defining extensions (no UI behavior). `tableView`: the view that draws Markdown tables
+ * in an editor (the document view adds its "Add row" line with it).
+ */
+export function sectionExtensions(opts: { tableView?: typeof TableView } = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false, // no Markdown equivalent
@@ -101,7 +104,7 @@ export function sectionExtensions(): Extensions {
       trailingNode: false,
     }),
     TableKit.configure({ table: false }),
-    CaptionedTable.configure({ resizable: false }),
+    CaptionedTable.configure({ resizable: false, ...(opts.tableView ? { View: opts.tableView } : {}) }),
     Image.configure({ inline: true }),
     TightLists,
     ArcheryHelp,

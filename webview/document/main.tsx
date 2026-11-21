@@ -104,7 +104,19 @@ function App() {
   const [activeSection, setActiveSection] = useState<string>();
   const editors = useRef(new Map<string, Editor>());
   const [error, setError] = useState<string | null>(null);
-  const pendingReveal = useRef<{ sectionId: string; heading?: string; index?: number } | null>(null);
+  const pendingReveal = useRef<{ sectionId: string; heading?: string; index?: number; decision?: string } | null>(null);
+  /** Scrolls to a decision's row in the decision list and opens the decision over the document. */
+  const showDecision = useCallback((file: string) => {
+    const row = [...document.querySelectorAll<HTMLElement>('tr[data-decision]')].find((r) => r.dataset.decision === file);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setDecision({ file });
+  }, []);
+  const reveal = (target: { sectionId: string; heading?: string; index?: number; decision?: string }) => {
+    if (target.decision) showDecision(target.decision);
+    else scrollToSection(target.sectionId, target.heading, target.index);
+  };
+  const revealRef = useRef(reveal);
+  revealRef.current = reveal;
   // A clicked contents entry stays active until the user scrolls by hand (short chapters near the
   // end can never reach the top of the page).
   const pinned = useRef<{ section: string; heading: number | null } | null>(null);
@@ -145,7 +157,7 @@ function App() {
           setData(msg.data);
           break;
         case 'reveal':
-          if (document.getElementById(`sec-${msg.sectionId}`)) scrollToSection(msg.sectionId, msg.heading, msg.index);
+          if (document.getElementById(`sec-${msg.sectionId}`)) revealRef.current(msg);
           else pendingReveal.current = msg;
           break;
         case 'follow': {
@@ -180,7 +192,7 @@ function App() {
     if (pendingReveal.current) {
       const target = pendingReveal.current;
       pendingReveal.current = null;
-      setTimeout(() => scrollToSection(target.sectionId, target.heading, target.index), 50);
+      setTimeout(() => revealRef.current(target), 50);
     }
   }, [data]);
 
@@ -313,6 +325,7 @@ function App() {
           }}
           onNavigate={navigate}
           onExport={() => setExporting(true)}
+          onDecision={showDecision}
         />
         <main className="content">
           <Toolbar />

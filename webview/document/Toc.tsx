@@ -28,6 +28,8 @@ interface Props {
   onNavigate(sectionId: string, headingIndex?: number): void;
   /** Opens the export dialog. */
   onExport(): void;
+  /** Shows a decision record (decisions/NNNN-x.md). */
+  onDecision(file: string): void;
 }
 
 type Drop = { sectionId: string; index: number | null; place: 'before' | 'after'; level: number };
@@ -92,7 +94,7 @@ function tree(items: OutlineItem[]): { item: OutlineItem; children: OutlineItem[
   return out;
 }
 
-export function Toc({ data, active, activeHeading, editors, historyNumber, width, onWidth, onNavigate, onExport }: Props) {
+export function Toc({ data, active, activeHeading, editors, historyNumber, width, onWidth, onNavigate, onExport, onDecision }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [drag, setDrag] = useState<{ sectionId: string; index: number; drop: Drop | null } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -261,7 +263,9 @@ export function Toc({ data, active, activeHeading, editors, historyNumber, width
             const numbers = outlineNumbers(items, s.number);
             const expanded = !!open[s.id];
             const editor = editors.get(s.id);
-            const hasSubs = items.length > 0;
+            // The chapter that lists the decisions has an entry per decision after its headings.
+            const decisions = /<!--\s*archery:decisions\b/.test(s.markdown) ? data.decisions : [];
+            const hasSubs = items.length > 0 || decisions.length > 0;
             const chapterActive = active === s.id && activeHeading === null;
             const onRowClick = (e: React.MouseEvent) => {
               e.preventDefault();
@@ -323,6 +327,23 @@ export function Toc({ data, active, activeHeading, editors, historyNumber, width
                                 ))}
                               </ol>
                             )}
+                          </li>
+                        ))}
+                        {decisions.map((d) => (
+                          <li key={d.file}>
+                            <div className="toc-item toc-decision" data-level={2}>
+                              <a
+                                href={`#sec-${s.id}`}
+                                draggable={false}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  onDecision(d.file);
+                                }}
+                              >
+                                <span className="toc-subnum">ADR-{d.number}</span>
+                                {d.title}
+                              </a>
+                            </div>
                           </li>
                         ))}
                       </ol>

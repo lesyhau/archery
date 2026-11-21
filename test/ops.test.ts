@@ -395,14 +395,15 @@ describe('write_data_table (in-place table editing)', () => {
     });
     const yaml = files.get('data/quality-goals.yaml')!;
     expect(yaml).toMatch(/^# Section 1.2/);
-    expect(yaml).toContain('- id: qg1\n    priority: 1\n    quality: Availability\n    goal: 24/7\n    owner: Ops');
+    expect(yaml).toContain('- id: QG-1\n    priority: 1\n    quality: Availability\n    goal: 24/7\n    owner: Ops');
     expect(yaml).toContain('views:\n  goals:\n    columns:');
     expect((await call('validate')).ok).toBe(true);
     // Back to the default layout removes the saved view.
     await call('write_data_table', {
       list: 'quality-goals',
-      rows: [{ id: 'qg1', priority: '1', quality: 'Availability', goal: '24/7' }],
+      rows: [{ id: 'QG-1', priority: '1', quality: 'Availability', goal: '24/7' }],
       columns: [
+        { field: 'id', label: 'ID' },
         { field: 'priority', label: '#' },
         { field: 'quality', label: 'Quality' },
         { field: 'goal', label: 'Goal' },

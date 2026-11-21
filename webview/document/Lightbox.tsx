@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Scene } from '../../src/render/scene';
 import { SceneSvg } from '../render/SceneSvg';
 import { IconClose, IconEdit } from './icons';
+import { useModalScrollLock } from './modal';
 import { usePanZoom, ZoomTools } from './panZoom';
 
 /** Matches the leave animation in document.css (.lightbox.closing). */
@@ -12,6 +13,7 @@ const LEAVE_MS = 160;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 export function Lightbox({ scene, title, onClose, onEdit, onLink }: { scene: Scene; title: string; onClose(): void; onEdit(): void; onLink?(file: string): void }) {
+  useModalScrollLock();
   const pz = usePanZoom(scene, { maxFit: 4, margin: 24, wheel: 'always' });
   const [closing, setClosing] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
