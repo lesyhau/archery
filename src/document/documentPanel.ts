@@ -159,8 +159,8 @@ export class DocumentPanel implements vscode.Disposable {
         return;
       case 'openDiagram':
         return this.openDiagram(msg.src);
-      case 'openFile':
-        await vscode.window.showTextDocument(this.uri(msg.file), { viewColumn: vscode.ViewColumn.Beside, preview: false });
+      case 'openLink':
+        await this.openLink(msg.href, msg.base);
         return;
       case 'createDiagram': {
         const src = await this.createDiagram(msg.kind);
@@ -194,9 +194,6 @@ export class DocumentPanel implements vscode.Disposable {
         return;
       case 'exportDiagram':
         await this.exportDiagram(msg.src, msg.format, msg.dataUrl);
-        return;
-      case 'createDecision':
-        await this.createDecision();
         return;
       case 'saveImage':
         this.post({ type: 'imageSaved', requestId: msg.requestId, path: await this.saveImage(msg.name, msg.dataUrl) });
@@ -238,23 +235,46 @@ export class DocumentPanel implements vscode.Disposable {
     void vscode.window.showInformationMessage(`Archery: exported ${vscode.workspace.asRelativePath(target)}.`);
   }
 
-  /** Creates the next ADR (decisions/NNNN-title.md) from a template and opens it. */
-  private async createDecision(): Promise<void> {
-    const title = await vscode.window.showInputBox({
-      title: 'Archery: New architecture decision',
-      prompt: 'What was decided? (short title)',
-      placeHolder: 'e.g. Use PostgreSQL for order data',
-      validateInput: (v) => (v.trim() ? undefined : 'Please enter a title'),
-    });
-    if (!title?.trim()) return;
-    const existing = (await this.list('decisions')).map((n) => Number(/^(\d{4})-/.exec(n)?.[1] ?? 0));
-    const number = String(Math.max(0, ...existing) + 1).padStart(4, '0');
-    const slug = title.trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'decision';
-    const file = `decisions/${number}-${slug}.md`;
-    const today = new Date().toISOString().slice(0, 10);
-    const text = `---\nstatus: proposed\ndate: ${today}\nqualityGoals: []\nconstraints: []\n---\n\n# ${title.trim()}\n\n## Context\n\n## Decision\n\n## Consequences\n`;
-    await applyChanges(this.root, new Map([[file, text]]));
-    await vscode.window.showTextDocument(this.uri(file), { viewColumn: vscode.ViewColumn.Beside, preview: false });
+  /**
+   * A link the page does not handle itself: web pages open in the browser, files of the workspace
+   * (relative to `base`, a folder of the documentation, or to the workspace folder when they start
+   * with "/") open beside the document; "#L12" or "#L12-L20" selects those lines.
+   */
+  private async openLink(href: string, base: string): Promise<void> {
+    if (/^(https?|mailto):/i.test(href)) {
+      await vscode.env.openExternal(vscode.Uri.parse(href, true));
+      return;
+    }
+    const [rawPath = '', fragment = ''] = href.split('#', 2);
+    let path = rawPath;
+    try {
+      path = decodeURIComponent(rawPath);
+    } catch {
+      /* keep it as written */
+    }
+    let uri: vscode.Uri;
+    if (/^file:/i.test(path)) uri = vscode.Uri.parse(path, true);
+    else if (/^[a-z]:[\\/]/i.test(path)) uri = vscode.Uri.file(path);
+    else if (path.startsWith('/')) uri = vscode.Uri.joinPath(vscode.workspace.getWorkspaceFolder(this.root)?.uri ?? this.root, ...path.split('/').filter(Boolean));
+    else uri = vscode.Uri.joinPath(this.root, ...base.split('/').filter(Boolean), ...path.split('/'));
+    let stat: vscode.FileStat;
+    try {
+      stat = await vscode.workspace.fs.stat(uri);
+    } catch {
+      void vscode.window.showErrorMessage(`Archery: ${vscode.workspace.asRelativePath(uri)} was not found.`);
+      return;
+    }
+    if (stat.type & vscode.FileType.Directory) {
+      await vscode.commands.executeCommand('revealInExplorer', uri);
+      return;
+    }
+    if (/\.(md|markdown)$/i.test(uri.path)) {
+      await vscode.commands.executeCommand('markdown.showPreviewToSide', uri);
+      return;
+    }
+    const lines = /^L(\d+)(?:-L?(\d+))?$/i.exec(fragment);
+    const selection = lines ? new vscode.Range(Number(lines[1]) - 1, 0, Number(lines[2] ?? lines[1]) - 1, lines[2] ? Number.MAX_SAFE_INTEGER : 0) : undefined;
+    await vscode.commands.executeCommand('vscode.open', uri, { viewColumn: vscode.ViewColumn.Beside, preview: false, selection });
   }
 
   /** Writes a pasted/dropped image to images/ (unique, readable name); returns its root-relative path. */

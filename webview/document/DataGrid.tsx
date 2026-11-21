@@ -613,6 +613,7 @@ export function DataGrid({
     <div
       ref={hostRef}
       className={`table-figure data-grid${drag ? ' dragging' : ''}${moveKey ? ' move-mode' : ''}`}
+      data-link-base=""
       onPointerMove={(e) => {
         if (isMove(e) !== moveKey) setMoveKey(isMove(e));
         onWrapMove(e);

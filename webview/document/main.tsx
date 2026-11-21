@@ -6,11 +6,13 @@ import type { DiagramKind, DocumentData, ToDocument } from '../../src/doc/protoc
 import type { Scene } from '../../src/render/scene';
 import { createDiagramRequest, DocContext, resolveRequest, vscodeApi, type DocContextValue } from './context';
 import './document.css';
+import { DecisionDialog } from './DecisionDialog';
 import { ExportDialog } from './ExportDialog';
 import { installHelpPopups } from './editorTools';
 import { expectEdit, itemFor, showChange } from './follow';
 import { reportUserActivity } from '../shared/activity';
 import { Lightbox } from './Lightbox';
+import { headingSlug, installLinkHandler } from './links';
 import { showDetail } from './nodeViews';
 import { SectionEditor } from './SectionEditor';
 import { Toc } from './Toc';
@@ -19,13 +21,16 @@ import { Toolbar } from './Toolbar';
 /** The outline headings (## and ###) of a section, in order: index i = outline item i. */
 const outlineHeadings = (section: Element) => [...section.querySelectorAll<HTMLElement>('.section-body > h2, .section-body > h3')];
 
-function scrollToSection(sectionId: string, heading?: string, index?: number) {
+function scrollToSection(sectionId: string, heading?: string, index?: number, slug?: string) {
   const section = document.getElementById(`sec-${sectionId}`);
   if (!section) return;
   let target: Element = section;
   if (index !== undefined) target = outlineHeadings(section)[index] ?? section;
   else if (heading) {
     const match = [...section.querySelectorAll('h2, h3')].find((h) => h.textContent?.trim() === heading.trim());
+    if (match) target = match;
+  } else if (slug) {
+    const match = [...section.querySelectorAll('h1, h2, h3, h4, h5, h6')].find((h) => headingSlug(h.textContent ?? '') === slug.toLowerCase());
     if (match) target = match;
   }
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -94,6 +99,8 @@ function App() {
   const [data, setData] = useState<DocumentData | null>(null);
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [lightbox, setLightbox] = useState<{ scene: Scene; title: string; src: string } | null>(null);
+  /** The decision record being edited: its file, or null for a new one. */
+  const [decision, setDecision] = useState<{ file: string | null } | null>(null);
   const [activeSection, setActiveSection] = useState<string>();
   const editors = useRef(new Map<string, Editor>());
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +115,27 @@ function App() {
 
   // arc42 guidance pop-ups stay open until a click outside them.
   useEffect(() => installHelpPopups(), []);
+  // Links go to their place in the document (or open outside it), never to the browser as a resource URL.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  useEffect(
+    () =>
+      installLinkHandler({
+        data: () => dataRef.current,
+        showSection: (sectionId, slug) => {
+          setDecision(null);
+          pinned.current = null;
+          scrollToSection(sectionId, undefined, undefined, slug);
+        },
+        openDecision: (file) => setDecision({ file }),
+        showDiagram: (src) => {
+          setDecision(null);
+          showDetail(src, (s) => vscodeApi.postMessage({ type: 'openDiagram', src: s }));
+        },
+        openOutside: (href, base) => vscodeApi.postMessage({ type: 'openLink', href, base }),
+      }),
+    [],
+  );
   useEffect(() => {
     const onMessage = (event: MessageEvent<ToDocument>) => {
       const msg = event.data;
@@ -257,6 +285,7 @@ function App() {
           setLightbox(null);
           vscodeApi.postMessage({ type: 'openDiagram', src });
         },
+        openDecision: (file) => setDecision({ file }),
       },
     [data, activeEditor],
   );
@@ -291,7 +320,7 @@ function App() {
             <h1 className="doc-title">{data.title}</h1>
           </header>
           {data.sections.map((s) => (
-            <section key={s.id} id={`sec-${s.id}`} className="doc-section" style={{ '--num': `"${s.number ?? ''}"` } as CSSProperties} data-numbered={s.number !== undefined}>
+            <section key={s.id} id={`sec-${s.id}`} className="doc-section" style={{ '--num': `"${s.number ?? ''}"` } as CSSProperties} data-numbered={s.number !== undefined} data-link-base={s.file.split('/').slice(0, -1).join('/')}>
               <SectionEditor section={s} onEditor={onEditor} />
             </section>
           ))}
@@ -318,6 +347,7 @@ function App() {
           {error}
         </div>
       )}
+      {decision && <DecisionDialog key={decision.file ?? 'new'} data={data} file={decision.file} onClose={() => setDecision(null)} />}
       {lightbox && (
         <Lightbox
           scene={lightbox.scene}

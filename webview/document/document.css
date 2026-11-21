@@ -597,6 +597,25 @@ button {
   margin-bottom: 30px;
 }
 
+/* "+ Add row" under a written table: the bottom line of the table's box, as under data tables. */
+.section-body > .tableWrapper:has(+ .md-table-foot) {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.section-body > .md-table-foot {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--doc-line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  font-size: 12px;
+  user-select: none;
+}
+
 /* The guidance block itself takes no space: it is shown as an info icon in the heading. */
 .section-body > .react-renderer.node-archeryHelp {
   display: none;
@@ -2427,6 +2446,169 @@ html.tc-dragging * {
 
 .xd-foot .btn {
   padding: 5px 14px;
+}
+
+/* ------------------------------------------------------------------ decision record dialog */
+
+.xd.dd {
+  width: min(820px, 94vw);
+}
+
+.dd-num {
+  margin-right: 6px;
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+
+.dd-body {
+  display: grid;
+  gap: 14px;
+  padding: 14px 18px 18px;
+  overflow: auto;
+}
+
+.xd input.dd-title {
+  padding: 6px 9px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dd-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+
+.dd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dd-chip {
+  max-width: 100%;
+  padding: 2px 10px;
+  overflow: hidden;
+  border: 1px solid var(--doc-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--doc-ink);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.dd-chip:hover {
+  background: var(--doc-hover);
+}
+
+.dd-chip.on {
+  border-color: var(--vscode-button-background);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.dd-chip:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.dd-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+}
+
+.dd-part-head label {
+  color: var(--doc-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dd-part-remove {
+  opacity: 0;
+}
+
+.dd-part:hover .dd-part-remove,
+.dd-part-remove:focus-visible {
+  opacity: 1;
+}
+
+.dd-rich {
+  border: 1px solid var(--vscode-input-border, var(--doc-line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  cursor: text;
+}
+
+.dd-rich:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.dd-rich .dd-rich-body {
+  min-height: 3.2em;
+  padding: 6px 9px;
+  outline: none;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.dd-rich .dd-rich-body > :first-child {
+  margin-top: 0;
+}
+
+.dd-rich .dd-rich-body > :last-child {
+  margin-bottom: 0;
+}
+
+.dd-rich .dd-rich-body p {
+  margin: 0 0 0.5em;
+}
+
+.dd-rich .dd-rich-body ul,
+.dd-rich .dd-rich-body ol {
+  margin: 0.2em 0 0.5em;
+  padding-left: 1.4em;
+}
+
+.dd-rich .dd-rich-body a {
+  color: var(--doc-accent);
+}
+
+.dd-rich .dd-rich-body code {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+}
+
+.dd-rich .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--vscode-input-placeholderForeground, var(--doc-muted));
+  pointer-events: none;
+}
+
+.dd-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-left: -8px;
+  font-size: 12.5px;
+}
+
+.dd-error {
+  color: var(--vscode-errorForeground);
+}
+
+@media (max-width: 600px) {
+  .dd-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {

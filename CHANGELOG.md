@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Edit decisions in the document.** Clicking a row of the architecture decision records opens the decision in a window over the document: title, status, date, decision-makers, the decision it supersedes, the quality goals and constraints it addresses, and its context, decision and consequences, with the optional decision drivers, considered options and confirmation of MADR. "Add row" under the list records a new one there.
+- **"Add row" under every table.** Tables written in a chapter now have it too, like the data tables.
+- **Links work in the document.** A link to a chapter, a heading, a decision or a diagram goes there; a link to a file of the workspace opens it beside the document (`#L12` selects that line); a web link opens in the browser. Before, a relative link opened the browser on an internal address.
+- **No Markdown in the way.** The Contents view no longer has a button that opens a chapter's Markdown file.
+- **For agents:** `create_decision` and `update_decision` take `date`, `deciders`, `drivers`, `options` and `confirmation`; `update_decision` with `supersedes: ""` removes the link, and an empty optional part removes it. MADR headings ("Context and Problem Statement", "Decision Outcome") are read as the same parts.
+
 ## 0.2.5
 
 - **Routed lines keep their distance.** A line that automatic layout routes around a shape no longer runs along the border of another box, where it looked like part of that box.

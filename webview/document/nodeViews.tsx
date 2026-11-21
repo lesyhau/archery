@@ -10,7 +10,7 @@ import { SceneSvg } from '../render/SceneSvg';
 import { Caption } from './Caption';
 import { saveNow, useDoc } from './context';
 import { DataGrid } from './DataGrid';
-import { IconEdit, IconInfo, IconMaximize, IconPlus, IconRemove, IconReset } from './icons';
+import { IconEdit, IconInfo, IconMaximize, IconPlusSmall, IconRemove, IconReset } from './icons';
 import { usePanZoom, ZoomTools } from './panZoom';
 
 const MIN_W = 220;
@@ -233,9 +233,8 @@ export function DataTable({ node, editor, deleteNode, updateAttributes }: NodeVi
   );
 }
 
-export function DecisionList({ node }: NodeViewProps) {
-  const { data, post } = useDoc();
-  const dir = String(node.attrs.src || 'decisions');
+export function DecisionList({ editor }: NodeViewProps) {
+  const { data, openDecision } = useDoc();
   return (
     <NodeViewWrapper className="node-table" contentEditable={false}>
       <div className="generated">
@@ -254,13 +253,8 @@ export function DecisionList({ node }: NodeViewProps) {
               </span>
             </span>
           </span>
-          <button type="button" className="link-btn" onClick={() => post({ type: 'createDecision' })} title="Record a new architecture decision">
-            <IconPlus /> New decision
-          </button>
         </div>
-        {data.decisions.length === 0 ? (
-          <div className="generated-empty">No decisions recorded yet.</div>
-        ) : (
+        {data.decisions.length > 0 && (
           <div className="table-wrap">
             <table>
               <thead>
@@ -273,17 +267,36 @@ export function DecisionList({ node }: NodeViewProps) {
               </thead>
               <tbody>
                 {data.decisions.map((d) => (
-                  <tr key={d.file} className="clickable" onClick={() => post({ type: 'openFile', file: d.file })}>
-                    <td>{d.number}</td>
+                  <tr
+                    key={d.file}
+                    className="clickable"
+                    tabIndex={0}
+                    onClick={() => openDecision(d.file)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDecision(d.file);
+                      }
+                    }}
+                  >
+                    <td className="nowrap">ADR-{d.number}</td>
                     <td>{d.title}</td>
                     <td>{d.status && <span className={`badge status-${d.status}`}>{d.status}</span>}</td>
-                    <td>{d.date}</td>
+                    <td className="nowrap">{d.date}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <div className="grid-foot">
+          {editor.isEditable && (
+            <button type="button" className="link-btn" onClick={() => openDecision(null)}>
+              <IconPlusSmall /> Add row
+            </button>
+          )}
+          {data.decisions.length === 0 && <span className="muted">No entries yet.</span>}
+        </div>
       </div>
     </NodeViewWrapper>
   );

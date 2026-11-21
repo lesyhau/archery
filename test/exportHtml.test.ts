@@ -51,7 +51,7 @@ function sampleContent(): ExportContent {
     diagrams,
     model,
     tables: buildTables(data),
-    decisions: [{ file: 'decisions/0001-x.md', number: '0001', title: 'Use PostgreSQL', status: 'accepted', date: '2026-11-01' }],
+    decisions: [{ file: 'decisions/0001-x.md', number: '0001', title: 'Use PostgreSQL', status: 'accepted', date: '2026-11-01', deciders: [], qualityGoals: [], constraints: [], parts: {} }],
   };
 }
 

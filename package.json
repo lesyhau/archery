@@ -223,16 +223,6 @@
           "group": "navigation"
         },
         {
-          "command": "archery.openSectionSource",
-          "when": "view == archery.contents && viewItem == heading",
-          "group": "inline"
-        },
-        {
-          "command": "archery.openSectionSource",
-          "when": "view == archery.contents && viewItem == heading",
-          "group": "navigation"
-        },
-        {
           "command": "archery.openDiagramSource",
           "when": "view == archery.diagrams && viewItem == diagram",
           "group": "inline"
@@ -3199,8 +3189,8 @@
         "displayName": "Record an architecture decision",
         "toolReferenceName": "archery-create-decision",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences.",
-        "modelDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences. Change it later with update_decision.",
+        "userDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences, and optionally the decision drivers, considered options and confirmation (MADR).",
+        "modelDescription": "Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences, and optionally the decision drivers, considered options and confirmation (MADR). Change it later with update_decision.",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -3226,6 +3216,17 @@
                 "superseded"
               ]
             },
+            "date": {
+              "type": "string",
+              "description": "YYYY-MM-DD; default today"
+            },
+            "deciders": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Who made the decision"
+            },
             "context": {
               "type": "string"
             },
@@ -3234,6 +3235,18 @@
             },
             "consequences": {
               "type": "string"
+            },
+            "drivers": {
+              "type": "string",
+              "description": "\"Decision Drivers\": the forces and concerns that shaped the decision (optional)"
+            },
+            "options": {
+              "type": "string",
+              "description": "\"Considered Options\": the alternatives looked at (optional)"
+            },
+            "confirmation": {
+              "type": "string",
+              "description": "\"Confirmation\": how compliance with the decision is checked (optional)"
             },
             "qualityGoals": {
               "description": "Ids of the quality goals it addresses",
@@ -3250,6 +3263,10 @@
                 "type": "string",
                 "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
               }
+            },
+            "supersedes": {
+              "type": "string",
+              "description": "Number of the decision this one replaces (that one then gets status superseded)"
             }
           },
           "required": [
@@ -3716,8 +3733,8 @@
         "displayName": "Update an architecture decision",
         "toolReferenceName": "archery-update-decision",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Change an architecture decision record: its status, title, context, decision, consequences, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded).",
-        "modelDescription": "Change an architecture decision record: its status, title, context, decision, consequences, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded). `decision`: its number (\"3\", \"0003\") or file name.",
+        "userDescription": "Change an architecture decision record: its status, date, deciders, title, context, decision, consequences, decision drivers, considered options, confirmation, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded; \"\" removes the link).",
+        "modelDescription": "Change an architecture decision record: its status, date, deciders, title, context, decision, consequences, decision drivers, considered options, confirmation, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded; \"\" removes the link). An empty drivers / options / confirmation removes that part. `decision`: its number (\"3\", \"0003\") or file name.",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -3742,6 +3759,17 @@
                 "superseded"
               ]
             },
+            "date": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            },
+            "deciders": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Who made the decision"
+            },
             "title": {
               "type": "string",
               "minLength": 1
@@ -3755,6 +3783,18 @@
             },
             "consequences": {
               "type": "string"
+            },
+            "drivers": {
+              "type": "string",
+              "description": "\"Decision Drivers\": the forces and concerns that shaped the decision (optional)"
+            },
+            "options": {
+              "type": "string",
+              "description": "\"Considered Options\": the alternatives looked at (optional)"
+            },
+            "confirmation": {
+              "type": "string",
+              "description": "\"Confirmation\": how compliance with the decision is checked (optional)"
             },
             "qualityGoals": {
               "type": "array",
@@ -3772,7 +3812,7 @@
             },
             "supersedes": {
               "type": "string",
-              "description": "Number of the decision this one replaces"
+              "description": "Number of the decision this one replaces; \"\" for none"
             }
           },
           "required": [

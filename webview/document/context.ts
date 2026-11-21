@@ -85,6 +85,8 @@ export interface DocContextValue {
   showError(message: string): void;
   /** Opens the UML editor window for a diagram. */
   editDiagram(src: string): void;
+  /** Opens the decision record editor for decisions/NNNN-x.md, or for a new decision (null). */
+  openDecision(file: string | null): void;
 }
 
 export const DocContext = createContext<DocContextValue | null>(null);

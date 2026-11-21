@@ -2,6 +2,7 @@
 // architecture document). Everything the page shows is sent in one DocumentData snapshot.
 import type { CanvasDiagram, ExportSettings, Model, SequenceDiagram, TimingDiagram } from '../model/schema';
 import type { CanvasSettings } from '../protocol';
+import type { AdrPart } from './adr';
 
 export interface DocSection {
   id: string;
@@ -56,6 +57,13 @@ export interface DocDecision {
   title: string;
   status?: string;
   date?: string;
+  deciders: string[];
+  /** Number (NNNN) of the decision this one replaces. */
+  supersedes?: string;
+  qualityGoals: string[];
+  constraints: string[];
+  /** The Markdown of each known part (src/doc/adr.ts). */
+  parts: Partial<Record<AdrPart, string>>;
 }
 
 export interface DocumentData {
@@ -102,14 +110,13 @@ export type FromDocument =
   | { type: 'activeSection'; sectionId: string; index: number | null }
   | { type: 'save'; file: string; markdown: string }
   | { type: 'openDiagram'; src: string }
-  | { type: 'openFile'; file: string }
+  /** A link to something outside the document (a source file, a web page); `href` as written, `base` the folder it is relative to. */
+  | { type: 'openLink'; href: string; base: string }
   | { type: 'createDiagram'; requestId: number; kind: DiagramKind }
   | { type: 'release' }
   /** Export the whole document (HTML or PDF); `settings` are saved to archery.yaml first. */
   | { type: 'export'; format: 'html' | 'pdf'; settings?: ExportSettings }
   | { type: 'history' }
-  /** Asks for a title and creates decisions/NNNN-title.md from the ADR template. */
-  | { type: 'createDecision' }
   /** Runs a shared operation (src/ops/tools.ts), e.g. write_data_table. */
   | { type: 'op'; requestId: number; name: string; input: Record<string, unknown>; diagram?: string }
   | { type: 'setting'; key: keyof CanvasSettings; value: boolean | number }

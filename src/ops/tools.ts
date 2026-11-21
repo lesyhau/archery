@@ -49,6 +49,7 @@ import { alignBoxes, ALIGN_MODES, type AlignMode } from './align';
 import { layoutNodes } from '../render/canvasLayout';
 import { parseProject } from '../model/load';
 import { parseDocument as parseYamlDocument } from 'yaml';
+import { setAdrPart, setAdrTitle, splitAdrText, type AdrPart } from '../doc/adr';
 
 export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
   /** snake_case; MCP clients namespace it (mcp__archery__add_element), Copilot gets an `archery_` prefix. */
@@ -362,20 +363,33 @@ function resolveDecision(session: ArcherySession, ref: string): string {
 
 /** An ADR file: its YAML front matter and its Markdown body. */
 function splitAdr(text: string): { front: ReturnType<typeof parseYamlDocument>; body: string } {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-  return { front: parseYamlDocument(m ? m[1]! : ''), body: m ? text.slice(m[0].length) : text };
+  const { front, body } = splitAdrText(text);
+  return { front: parseYamlDocument(front ?? ''), body };
 }
 
 function joinAdr(front: ReturnType<typeof parseYamlDocument>, body: string): string {
-  return `---\n${front.toString({ lineWidth: 0 }).trimEnd()}\n---\n${body.startsWith('\n') ? '' : '\n'}${body}`;
+  const yaml = front.contents ? front.toString({ lineWidth: 0 }).trimEnd() : '';
+  return `---\n${yaml}\n---\n\n${body.replace(/^\s+/, '')}`;
 }
 
-/** Replaces the text of a "## <heading>" section (adds the section when there is none). */
-function setAdrSection(body: string, heading: string, text: string): string {
-  const re = new RegExp(`(^## ${heading}[ \\t]*\\r?\\n)([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm');
-  const content = `\n${text.trim()}\n\n`;
-  if (re.test(body)) return body.replace(re, (_, h: string) => `${h}${content}`).replace(/\n{3,}/g, '\n\n');
-  return `${body.trimEnd()}\n\n## ${heading}\n${content}`.replace(/\n{3,}/g, '\n\n');
+/** The optional ADR parts (MADR 4.0) as tool inputs; the core parts are `context`, `decision`/`decision_text`, `consequences`. */
+const adrPartInputs = {
+  drivers: z.string().describe('"Decision Drivers": the forces and concerns that shaped the decision (optional)').optional(),
+  options: z.string().describe('"Considered Options": the alternatives looked at (optional)').optional(),
+  confirmation: z.string().describe('"Confirmation": how compliance with the decision is checked (optional)').optional(),
+};
+
+function markSuperseded(session: ArcherySession, file: string): void {
+  const old = splitAdr(session.read(file)!);
+  old.front.set('status', 'superseded');
+  session.write(file, joinAdr(old.front, old.body));
+}
+
+/** Sets a front matter list; an empty list removes the key unless `keepEmpty`. */
+function setFrontList(front: ReturnType<typeof parseYamlDocument>, key: string, value: string[] | undefined, keepEmpty: boolean): void {
+  if (value === undefined) return;
+  if (!value.length && !keepEmpty) front.delete(key);
+  else front.set(key, front.createNode(value, { flow: true }));
 }
 
 export const TOOLS: ToolDef<any>[] = [
@@ -1537,15 +1551,19 @@ export const TOOLS: ToolDef<any>[] = [
   tool({
     name: 'create_decision',
     title: 'Record an architecture decision',
-    description: 'Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences. Change it later with update_decision.',
+    description: 'Create an architecture decision record (decisions/NNNN-title.md, chapter 9) with status, context, decision and consequences, and optionally the decision drivers, considered options and confirmation (MADR). Change it later with update_decision.',
     input: z.object({
       title: z.string().min(1).describe('What was decided, e.g. "Use PostgreSQL for order data"'),
       status: AdrFrontMatterSchema.shape.status.optional(),
+      date: z.string().describe('YYYY-MM-DD; default today').optional(),
+      deciders: z.array(z.string()).describe('Who made the decision').optional(),
       context: z.string().optional(),
       decision: z.string().optional(),
       consequences: z.string().optional(),
+      ...adrPartInputs,
       qualityGoals: z.array(IdSchema).optional().describe('Ids of the quality goals it addresses'),
       constraints: z.array(IdSchema).optional().describe('Ids of the constraints it addresses'),
+      supersedes: z.string().describe('Number of the decision this one replaces (that one then gets status superseded)').optional(),
     }),
     readOnly: false,
     confirm: (i) => `Record decision "${i.title}"?`,
@@ -1554,10 +1572,27 @@ export const TOOLS: ToolDef<any>[] = [
       const number = String(Math.max(0, ...numbers) + 1).padStart(4, '0');
       const slug = fileSlug(input.title, 60) || 'decision';
       const file = `decisions/${number}-${slug}.md`;
-      const list = (v?: string[]) => (v?.length ? `[${v.join(', ')}]` : '[]');
-      const text = `---\nstatus: ${input.status ?? 'proposed'}\ndate: ${new Date().toISOString().slice(0, 10)}\nqualityGoals: ${list(input.qualityGoals)}\nconstraints: ${list(input.constraints)}\n---\n\n# ${input.title.trim()}\n\n## Context\n\n${input.context?.trim() ?? ''}\n\n## Decision\n\n${input.decision?.trim() ?? ''}\n\n## Consequences\n\n${input.consequences?.trim() ?? ''}\n`.replace(/\n{3,}/g, '\n\n');
-      session.write(file, text);
-      return { file: session.display(file), number };
+      const superseded = input.supersedes?.trim() ? resolveDecision(session, input.supersedes) : undefined;
+      const front = parseYamlDocument('');
+      front.set('status', input.status ?? 'proposed');
+      front.set('date', input.date?.trim() || new Date().toISOString().slice(0, 10));
+      setFrontList(front, 'deciders', input.deciders?.map((d) => d.trim()).filter(Boolean), false);
+      if (superseded) front.set('supersedes', /(\d{4})-/.exec(superseded)![1]!);
+      setFrontList(front, 'qualityGoals', input.qualityGoals ?? [], true);
+      setFrontList(front, 'constraints', input.constraints ?? [], true);
+      let body = `# ${input.title.trim()}\n\n## Context\n\n## Decision\n\n## Consequences\n`;
+      const parts: [AdrPart, string | undefined][] = [
+        ['context', input.context],
+        ['drivers', input.drivers],
+        ['options', input.options],
+        ['decision', input.decision],
+        ['consequences', input.consequences],
+        ['confirmation', input.confirmation],
+      ];
+      for (const [key, text] of parts) if (text?.trim()) body = setAdrPart(body, key, text);
+      session.write(file, joinAdr(front, body));
+      if (superseded) markSuperseded(session, superseded);
+      return { file: session.display(file), number, ...(superseded ? { superseded: session.display(superseded) } : {}) };
     },
   }),
 
@@ -1781,17 +1816,20 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'update_decision',
     title: 'Update an architecture decision',
     description:
-      'Change an architecture decision record: its status, title, context, decision, consequences, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded). `decision`: its number ("3", "0003") or file name.',
+      'Change an architecture decision record: its status, date, deciders, title, context, decision, consequences, decision drivers, considered options, confirmation, the quality goals / constraints it addresses, or which earlier decision it supersedes (that one then gets status superseded; "" removes the link). An empty drivers / options / confirmation removes that part. `decision`: its number ("3", "0003") or file name.',
     input: z.object({
       decision: z.string().min(1),
       status: AdrFrontMatterSchema.shape.status.optional(),
+      date: z.string().describe('YYYY-MM-DD').optional(),
+      deciders: z.array(z.string()).describe('Who made the decision').optional(),
       title: z.string().min(1).optional(),
       context: z.string().optional(),
       decision_text: z.string().describe('The "Decision" section').optional(),
       consequences: z.string().optional(),
+      ...adrPartInputs,
       qualityGoals: z.array(IdSchema).optional(),
       constraints: z.array(IdSchema).optional(),
-      supersedes: z.string().describe('Number of the decision this one replaces').optional(),
+      supersedes: z.string().describe('Number of the decision this one replaces; "" for none').optional(),
     }),
     readOnly: false,
     confirm: (i) => `Update decision ${i.decision}?`,
@@ -1799,25 +1837,33 @@ export const TOOLS: ToolDef<any>[] = [
       const file = resolveDecision(session, input.decision);
       const adr = splitAdr(session.read(file)!);
       if (input.status) adr.front.set('status', input.status);
-      if (input.qualityGoals) adr.front.set('qualityGoals', adr.front.createNode(input.qualityGoals, { flow: true }));
-      if (input.constraints) adr.front.set('constraints', adr.front.createNode(input.constraints, { flow: true }));
+      if (input.date !== undefined) {
+        if (input.date.trim()) adr.front.set('date', input.date.trim());
+        else adr.front.delete('date');
+      }
+      setFrontList(adr.front, 'deciders', input.deciders?.map((d) => d.trim()).filter(Boolean), false);
+      setFrontList(adr.front, 'qualityGoals', input.qualityGoals, true);
+      setFrontList(adr.front, 'constraints', input.constraints, true);
       let superseded: string | undefined;
-      if (input.supersedes) {
+      if (input.supersedes !== undefined && !input.supersedes.trim()) adr.front.delete('supersedes');
+      else if (input.supersedes) {
         superseded = resolveDecision(session, input.supersedes);
         if (superseded === file) throw new OpError('A decision cannot supersede itself.');
         adr.front.set('supersedes', /(\d{4})-/.exec(superseded)![1]!);
       }
       let body = adr.body;
-      if (input.title) body = /^# .*$/m.test(body) ? body.replace(/^# .*$/m, `# ${input.title.trim()}`) : `# ${input.title.trim()}\n\n${body}`;
-      if (input.context !== undefined) body = setAdrSection(body, 'Context', input.context);
-      if (input.decision_text !== undefined) body = setAdrSection(body, 'Decision', input.decision_text);
-      if (input.consequences !== undefined) body = setAdrSection(body, 'Consequences', input.consequences);
+      if (input.title) body = setAdrTitle(body, input.title);
+      const parts: [AdrPart, string | undefined][] = [
+        ['context', input.context],
+        ['drivers', input.drivers],
+        ['options', input.options],
+        ['decision', input.decision_text],
+        ['consequences', input.consequences],
+        ['confirmation', input.confirmation],
+      ];
+      for (const [key, text] of parts) if (text !== undefined) body = setAdrPart(body, key, text);
       session.write(file, joinAdr(adr.front, body));
-      if (superseded) {
-        const old = splitAdr(session.read(superseded)!);
-        old.front.set('status', 'superseded');
-        session.write(superseded, joinAdr(old.front, old.body));
-      }
+      if (superseded) markSuperseded(session, superseded);
       return { file: session.display(file), ...(superseded ? { superseded: session.display(superseded) } : {}) };
     },
   }),

@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { parse as parseYamlText } from 'yaml';
 import { findSection } from '../template/template';
 import { LISTS } from '../doc/dataLists';
+import { adrTitle, readAdrParts, splitAdrText } from '../doc/adr';
 import type { DocDecision, DocDiagram, DocumentData } from '../doc/protocol';
 import { buildTables } from '../doc/tables';
 import { parseCanvasDiagram, parseModel, parseProject, parseSequenceDiagram, parseTimingDiagram } from '../model/load';
@@ -77,21 +78,26 @@ export async function loadDocumentContent(root: vscode.Uri, tracker?: VersionTra
   const decisions: DocDecision[] = [];
   for (const name of (await list('decisions')).filter((n) => /^\d{4}-.+\.md$/.test(n)).sort()) {
     const file = `decisions/${name}`;
-    const text = (await read(file)) ?? '';
-    const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+    const { front, body } = splitAdrText((await read(file)) ?? '');
     let meta: Record<string, unknown> = {};
     try {
-      meta = (front ? parseYamlText(front[1]!) : {}) ?? {};
+      meta = (front ? parseYamlText(front) : {}) ?? {};
     } catch {
       meta = {};
     }
-    const heading = /^#\s+(.+)$/m.exec(front ? text.slice(front[0].length) : text);
+    const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : typeof v === 'string' && v.trim() ? v.split(',').map((s) => s.trim()) : []);
+    const date = meta.date instanceof Date ? meta.date.toISOString().slice(0, 10) : meta.date != null ? String(meta.date) : undefined;
     decisions.push({
       file,
       number: name.slice(0, 4),
-      title: heading?.[1]?.trim() ?? name.slice(5, -3).replace(/-/g, ' '),
+      title: adrTitle(body) ?? name.slice(5, -3).replace(/-/g, ' '),
       status: typeof meta.status === 'string' ? meta.status : undefined,
-      date: meta.date !== undefined ? String(meta.date) : undefined,
+      date,
+      deciders: strings(meta.deciders ?? meta['decision-makers']),
+      supersedes: meta.supersedes != null && String(meta.supersedes).trim() ? String(meta.supersedes).trim().padStart(4, '0') : undefined,
+      qualityGoals: strings(meta.qualityGoals),
+      constraints: strings(meta.constraints),
+      parts: readAdrParts(body),
     });
   }
 

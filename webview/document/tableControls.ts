@@ -9,7 +9,7 @@
 
 export interface TableActions {
   /** The frame the controls sit around (the bordered box); defaults to the table. */
-  frame?(table: HTMLTableElement): HTMLElement;
+  frame?(table: HTMLTableElement): HTMLElement | { getBoundingClientRect(): DOMRect };
   /** Rows with controls, in order; callbacks get indices into this list. */
   rows(table: HTMLTableElement): HTMLElement[];
   /** Header cells, one per column; callbacks get indices into this list. */
