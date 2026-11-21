@@ -268,7 +268,7 @@ function laneRoutes(a: Box, b: Box, s: Box, x: number): Waypoints[] {
  * bends: ELK's route, one corner, or a lane beside a shape in the way. (ELK has no usable route for a
  * line that ends on a port: it routes it to the port's parent.)
  */
-function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, Waypoints>): CanvasDiagram {
+export function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, Waypoints> = new Map()): CanvasDiagram {
   const nodes = layoutNodes(diagram, model);
   /** How many shapes the line `id` runs through, and along, in the worse of the two styles. */
   const fit = (d: CanvasDiagram, id: string) => {
@@ -300,9 +300,13 @@ function routeAround(diagram: CanvasDiagram, model: Model, routes: Map<string, W
     }
     const walls = (w: Waypoints) => holders.filter((h) => w.some((pt) => pt.x < h.x + WALL || pt.x > h.x + h.w - WALL || pt.y < h.y + WALL || pt.y > h.y + h.h - WALL)).length;
     const options: Waypoints[] = [routes.get(id) ?? [], [{ x: p.x, y: q.y }], [{ x: q.x, y: p.y }]];
+    // Lanes beside the shape in the way, and beside either end: an end wider than the lane can then be
+    // entered from its side instead of through a narrow gap under the shape in the way, where the line
+    // would run along that shape's border (round 5 of the agent report).
+    const sides = (o: Box) => [o.x - DETOUR_GAP, o.x + o.w + DETOUR_GAP];
     for (const s of shapesCrossed(e, nodes)) {
-      for (const x of [s.box.x - DETOUR_GAP, s.box.x + s.box.w + DETOUR_GAP]) options.push(...laneRoutes(a, b, s.box, x));
-      for (const y of [s.box.y - DETOUR_GAP, s.box.y + s.box.h + DETOUR_GAP]) options.push(...laneRoutes(swap(a), swap(b), swap(s.box), y).map(flip));
+      for (const x of new Set([...sides(s.box), ...sides(a), ...sides(b)])) options.push(...laneRoutes(a, b, s.box, x));
+      for (const y of new Set([...sides(swap(s.box)), ...sides(swap(a)), ...sides(swap(b))])) options.push(...laneRoutes(swap(a), swap(b), swap(s.box), y).map(flip));
     }
     let best: { waypoints: Waypoints; n: number; along: number } | undefined;
     for (const option of options) {

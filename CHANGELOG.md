@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Routed lines keep clear of their neighbours.** When the lane beside the shape in the way runs too close to another box, or would enter a wide shape through a narrow gap, automatic layout now takes a lane beside the line's own end and enters it from the side.
+- **For agents:** `auto_layout` returns the layout warnings that are left (`warnings`), so no separate `validate` is needed to check it; new `insert_text` adds Markdown at the end of the part under a heading (or of the chapter), also when that part is the chapter's last.
+
 ## 0.2.6
 
 - **Edit decisions in the document.** Clicking a row of the architecture decision records opens the decision in a window over the document: title, status, date, decision-makers, the decision it supersedes, the quality goals and constraints it addresses, and its context, decision and consequences, with the optional decision drivers, considered options and confirmation of MADR. "Add row" under the list records a new one there.

@@ -44,6 +44,7 @@ import { findSection, SECTIONS } from '../template/template';
 import { camelSlug, fileSlug, kebabSlug, uniqueId } from './ids';
 import { defaultColumns, listByName, parseCell } from '../doc/dataLists';
 import { autoLayout } from './autoLayout';
+import { layoutProblems } from '../render/layoutLint';
 import { appendItem, OpError, type ArcherySession, type ToolHost } from './session';
 import { alignBoxes, ALIGN_MODES, type AlignMode } from './align';
 import { layoutNodes } from '../render/canvasLayout';
@@ -230,6 +231,36 @@ function resolveSection(session: ArcherySession, ref: string): { id: string; num
   const found = all.find((s) => String(s.number) === q || s.id.toLowerCase() === q || s.title.toLowerCase() === q);
   if (!found) throw new OpError(`Unknown chapter "${ref}". Chapters: ${all.map((s) => `${s.number ?? ''} ${s.title}`.trim()).join(', ')}.`);
   return found;
+}
+
+/**
+ * Inserts lines into a chapter as a block of their own: at the end of the part under `afterHeading`
+ * (up to the next heading of the same or a higher level, subsections included), else at the end of the
+ * chapter. Headings inside code blocks do not count.
+ */
+function insertInChapter(session: ArcherySession, s: { id: string; number?: number; file: string }, block: string[], afterHeading?: string): void {
+  const lines = (session.read(s.file) ?? '').replace(/\r\n/g, '\n').replace(/\s+$/, '').split('\n');
+  let at = lines.length;
+  if (afterHeading) {
+    let fence: string | null = null;
+    const levels = lines.map((l) => {
+      const f = /^\s*(```|~~~)/.exec(l);
+      if (f) {
+        fence = fence === null ? f[1]! : fence === f[1] ? null : fence;
+        return 0;
+      }
+      return fence === null ? (/^(#{1,6})\s/.exec(l)?.[1]?.length ?? 0) : 0;
+    });
+    const name = (l: string) => l.replace(/^#+\s*/, '').replace(/\s+#+\s*$/, '').trim().toLowerCase();
+    const want = afterHeading.trim().replace(/^#+\s*/, '').toLowerCase();
+    const start = lines.findIndex((l, i) => levels[i]! > 0 && name(l) === want);
+    if (start < 0) throw new OpError(`No heading "${afterHeading}" in chapter ${s.number ?? s.id}.`);
+    const end = levels.findIndex((lv, i) => i > start && lv > 0 && lv <= levels[start]!);
+    at = end < 0 ? lines.length : end;
+    while (at > start + 1 && lines[at - 1]!.trim() === '') at--;
+  }
+  lines.splice(at, 0, '', ...block, ...(at < lines.length ? [''] : []));
+  session.write(s.file, `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`);
 }
 
 /** Versions and export run in VS Code. */
@@ -424,7 +455,7 @@ export const TOOLS: ToolDef<any>[] = [
           warnings: issues.filter((i) => i.severity === 'warning').length,
         },
         conventions:
-          'Change chapters with get_section / edit_section / write_section (call get_section_guide first) and place diagrams and tables with insert_into_section: the open document follows these edits live. Change model.yaml, diagrams and data/*.yaml only through these tools. Directives like <!-- archery:diagram ... --> embed generated content; keep them.',
+          'Change chapters with get_section / edit_section / write_section / insert_text (call get_section_guide first) and place diagrams and tables with insert_into_section: the open document follows these edits live. Change model.yaml, diagrams and data/*.yaml only through these tools. Directives like <!-- archery:diagram ... --> embed generated content; keep them.',
       };
     },
   }),
@@ -1341,7 +1372,7 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'auto_layout',
     title: 'Auto-layout diagram',
     description:
-      'Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset. direction: DOWN, RIGHT, UP, LEFT (default: RIGHT for use case diagrams, else DOWN).',
+      'Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset. direction: DOWN, RIGHT, UP, LEFT (default: RIGHT for use case diagrams, else DOWN). Returns `warnings`: the layout warnings validate would still give for this diagram (empty when there are none).',
     input: z.object({ diagram: z.string(), direction: z.enum(['DOWN', 'RIGHT', 'UP', 'LEFT']).optional() }),
     readOnly: false,
     confirm: (i) => `Re-arrange ${i.diagram} automatically?`,
@@ -1349,7 +1380,7 @@ export const TOOLS: ToolDef<any>[] = [
       const path = canvasPath(session, name);
       const laid = await autoLayout(session.canvasDiagram(path), session.model(), direction);
       session.writeJson(path, laid);
-      return { file: session.display(path), nodes: laid.nodes.length + laid.local.nodes.length };
+      return { file: session.display(path), nodes: laid.nodes.length + laid.local.nodes.length, warnings: layoutProblems(laid, session.model()) };
     },
   }),
 
@@ -1531,20 +1562,29 @@ export const TOOLS: ToolDef<any>[] = [
         const src = shared ? `${def.file}#${def.key}` : def.file;
         directive = `<!-- archery:table ${src}${input.caption ? ` caption=${JSON.stringify(input.caption.replaceAll('-->', '- ->'))}` : ''} -->`;
       } else directive = '<!-- archery:decisions decisions -->';
-      const lines = (session.read(s.file) ?? '').replace(/\s+$/, '').split('\n');
-      let at = lines.length;
-      if (input.after_heading) {
-        const want = input.after_heading.trim().toLowerCase();
-        const level = (l: string) => /^(#{1,6})\s/.exec(l)?.[1]?.length ?? 0;
-        const start = lines.findIndex((l) => level(l) > 0 && l.replace(/^#+\s*/, '').trim().toLowerCase() === want);
-        if (start < 0) throw new OpError(`No heading "${input.after_heading}" in chapter ${s.number ?? s.id}.`);
-        const end = lines.findIndex((l, i) => i > start && level(l) > 0 && level(l) <= level(lines[start]!));
-        at = end < 0 ? lines.length : end;
-        while (at > start + 1 && lines[at - 1]!.trim() === '') at--;
-      }
-      lines.splice(at, 0, '', directive, ...(at < lines.length ? [''] : []));
-      session.write(s.file, `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`);
+      insertInChapter(session, s, [directive], input.after_heading);
       return { file: session.display(s.file), inserted: directive };
+    },
+  }),
+
+  tool({
+    name: 'insert_text',
+    title: 'Add text to a chapter',
+    description:
+      'Add Markdown to a chapter: at the end of the part under `after_heading` (a heading text of the chapter; the part ends at the next heading of the same or a higher level), else at the end of the chapter. The rest of the chapter, its archery:help comments included, stays as it is.',
+    input: z.object({
+      section: z.string(),
+      markdown: z.string().min(1),
+      after_heading: z.string().optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => `Add text to chapter ${i.section}${i.after_heading ? ` under "${i.after_heading}"` : ''}?`,
+    run(session, input) {
+      const s = resolveSection(session, input.section);
+      const text = input.markdown.replace(/\r\n/g, '\n').trim();
+      if (!text) throw new OpError('markdown is empty.');
+      insertInChapter(session, s, text.split('\n'), input.after_heading);
+      return { file: session.display(s.file), where: input.after_heading ? `end of "${input.after_heading}"` : 'end of the chapter' };
     },
   }),
 
@@ -1884,7 +1924,7 @@ export const INITIALIZE_TOOL = {
 export const ALL_TOOL_NAMES = [INITIALIZE_TOOL.name, ...TOOLS.map((t) => t.name)];
 
 export const SERVER_INSTRUCTIONS = `Tools for architecture documentation (docs-as-code, https://arc42.org).
-- Start with overview. Before writing a chapter, call get_section_guide for it; read and change chapters with get_section, edit_section and write_section (the open document then shows each change live), and place diagrams and tables in them with insert_into_section.
+- Start with overview. Before writing a chapter, call get_section_guide for it; read and change chapters with get_section, edit_section and write_section (the open document then shows each change live), add text under a heading with insert_text, and place diagrams and tables in them with insert_into_section.
 - Change model.yaml, diagrams/*.json and data/*.yaml only through these tools: they keep ids stable, update references across files and validate the result.
 - Model elements are defined once and referenced by id from diagrams; renaming an element (update_element) renames it everywhere.
 - Section 6 runtime scenarios: write_sequence_diagram (or an activity diagram). Sections 5/7: create_diagram with type component/deployment; place elements with add_element(diagram, x, y) or add_to_diagram, nest with parent, then auto_layout.

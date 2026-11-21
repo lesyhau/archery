@@ -308,3 +308,47 @@ describe('validate reports layout problems with coordinates (L-6)', () => {
     expect((await call('validate')).problems.filter((p: any) => /overlap/.test(p.message))).toEqual([]);
   });
 });
+
+// Round 5 of the report: adding prose under a heading needed edit_section with a unique `find` on the
+// next heading, which fails for the last part of a chapter.
+describe('insert_text', () => {
+  const CHAPTER = [
+    '# Solution Strategy',
+    '',
+    '<!-- archery:help Contents: the fundamental decisions. -->',
+    '',
+    '## Technology',
+    '',
+    'Node 22.',
+    '',
+    '### Runtime',
+    '',
+    'One process.',
+    '',
+    '```text',
+    '## not a heading',
+    '```',
+    '',
+    '## Organisation',
+    '',
+    '<!-- archery:help How the team works. -->',
+    '',
+  ].join('\n');
+
+  it('adds text at the end of a part (subsections included), of the last part, or of the chapter', async () => {
+    const { call } = await workspace();
+    await call('write_section', { section: '4', markdown: CHAPTER });
+    await call('insert_text', { section: '4', after_heading: 'Technology', markdown: 'TypeScript everywhere.' });
+    await call('insert_text', { section: '4', after_heading: '## Organisation', markdown: 'One team.\n\n- reviews' });
+    await call('insert_text', { section: '4', markdown: 'Closing words.' });
+    const text: string = (await call('get_section', { section: '4' })).markdown;
+    expect(text).toContain('```text\n## not a heading\n```\n\nTypeScript everywhere.\n\n## Organisation\n\n<!-- archery:help How the team works. -->\n\nOne team.\n\n- reviews\n\nClosing words.\n');
+    expect(text).toContain('<!-- archery:help Contents: the fundamental decisions. -->');
+  });
+
+  it('refuses a heading that is only in a code block', async () => {
+    const { call } = await workspace();
+    await call('write_section', { section: '4', markdown: CHAPTER });
+    await expect(call('insert_text', { section: '4', after_heading: 'not a heading', markdown: 'x' })).rejects.toThrow(/No heading "not a heading"/);
+  });
+});

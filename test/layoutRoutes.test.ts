@@ -5,8 +5,9 @@ import { scaffold } from '../src/template/scaffold';
 import { ArcherySession, DELETED } from '../src/ops/session';
 import { TOOLS } from '../src/ops/tools';
 import type { WorkspaceReader } from '../src/model/load';
-import { relationshipLabel } from '../src/render/canvasLayout';
-import { drawnEdges, segmentCrossesBox } from '../src/render/layoutLint';
+import { layoutNodes, relationshipLabel } from '../src/render/canvasLayout';
+import { routeAround } from '../src/ops/autoLayout';
+import { drawnEdges, endsCrossed, segmentCrossesBox, shapesAlong, shapesCrossed } from '../src/render/layoutLint';
 
 function memoryReader(files: Map<string, string>): WorkspaceReader {
   return {
@@ -247,5 +248,50 @@ describe('clearance of routes and leader lines (N-10, N-11)', () => {
       await call('auto_layout', { diagram: 'engine', direction });
       expect(await warnings(/./), direction).toEqual([]);
     }
+  });
+});
+
+// Round 5 of the report: auto_layout entered a wide target through a 20-unit gap under the shape in the
+// way, so the line ran along that shape's border, and the caller learned it only from validate.
+describe('lines into a wide end below a shape in the way (round 5)', () => {
+  it('enter the end from its side, clear of the shape in the way', async () => {
+    const { files, call } = await workspace();
+    await engine(call);
+    await call('add_element', { id: 'engineThread', name: 'Engine thread', kind: 'component', parent: 'engine' });
+    await call('add_to_diagram', { diagram: 'engine', elements: ['engineThread'] });
+    // The report's boxes: the TX box between the RX threads and the bus drivers, the bus drivers wider
+    // than the lane left of the TX box and only 20 under it, the engine thread where the lane right of
+    // the TX box would run (2 from its border).
+    await call('move_nodes', {
+      diagram: 'engine',
+      nodes: [
+        { id: 'engine', x: 20, y: 300, w: 720, h: 380 },
+        { id: 'rxThreads', x: 218, y: 350, w: 200, h: 82 },
+        { id: 'scheduler', x: 179, y: 485, w: 295, h: 84 },
+        { id: 'busDrivers', x: 120, y: 589, w: 194, h: 70 },
+        { id: 'engineThread', x: 492, y: 395, w: 200, h: 70 },
+      ],
+    });
+    const session = await ArcherySession.load(memoryReader(files), 'docs/architecture');
+    const diagram = session.canvasDiagram('diagrams/engine.uml.json');
+    const model = session.model();
+    const lineOf = (d: typeof diagram, ds: 'classic' | 'modern') => drawnEdges(d, model, ds).find((e) => e.id === 'rxThreads-busDrivers')!;
+    expect(shapesCrossed(lineOf(diagram, 'classic'), layoutNodes(diagram, model)).map((n) => n.id)).toEqual(['scheduler']);
+    const routed = routeAround(diagram, model);
+    const nodes = layoutNodes(routed, model);
+    for (const ds of ['classic', 'modern'] as const) {
+      const line = lineOf(routed, ds);
+      expect(shapesCrossed(line, nodes), ds).toEqual([]);
+      expect(endsCrossed(line, nodes), ds).toEqual([]);
+      expect(shapesAlong(line, nodes).map((n) => n.id), ds).toEqual([]);
+    }
+  });
+
+  it('auto_layout returns the warnings that are left', async () => {
+    const { call } = await workspace();
+    await engine(call);
+    const result = await call('auto_layout', { diagram: 'engine', direction: 'DOWN' });
+    expect(result.warnings).toEqual([]);
+    expect((await call('validate')).problems.filter((p: any) => p.file.includes('engine.uml.json'))).toEqual([]);
   });
 });

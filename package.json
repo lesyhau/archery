@@ -2914,7 +2914,7 @@
         "toolReferenceName": "archery-auto-layout",
         "canBeReferencedInPrompt": true,
         "userDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset.",
-        "modelDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset. direction: DOWN, RIGHT, UP, LEFT (default: RIGHT for use case diagrams, else DOWN).",
+        "modelDescription": "Arrange all nodes of a canvas diagram automatically (ELK layered layout): clients above what they use, superclasses / interfaces above their specializations, initial nodes first and final nodes last, few crossings, room for edge labels; containers fit their children, regions stack in their state, ports stay on their component; bend points and moved labels are reset. direction: DOWN, RIGHT, UP, LEFT (default: RIGHT for use case diagrams, else DOWN). Returns `warnings`: the layout warnings validate would still give for this diagram (empty when there are none).",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -3181,6 +3181,39 @@
           "required": [
             "section",
             "kind"
+          ]
+        }
+      },
+      {
+        "name": "archery_insert_text",
+        "displayName": "Add text to a chapter",
+        "toolReferenceName": "archery-insert-text",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add Markdown to a chapter: at the end of the part under `after_heading` (a heading text of the chapter; the part ends at the next heading of the same or a higher level), else at the end of the chapter.",
+        "modelDescription": "Add Markdown to a chapter: at the end of the part under `after_heading` (a heading text of the chapter; the part ends at the next heading of the same or a higher level), else at the end of the chapter. The rest of the chapter, its archery:help comments included, stays as it is.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string"
+            },
+            "markdown": {
+              "type": "string",
+              "minLength": 1
+            },
+            "after_heading": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "section",
+            "markdown"
           ]
         }
       },
