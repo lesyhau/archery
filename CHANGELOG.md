@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.8
 
 - **Contents entries scroll again.** Clicking a chapter or heading in the document's contents panel goes there again (0.2.6 and 0.2.7 caught those clicks as links).
 - **Every decision in the contents.** The chapter with the decision list has an entry per decision, in the document's contents panel and in the Archery sidebar; clicking one opens it.
