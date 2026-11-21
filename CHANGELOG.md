@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.7
 
 - **Routed lines keep clear of their neighbours.** When the lane beside the shape in the way runs too close to another box, or would enter a wide shape through a narrow gap, automatic layout now takes a lane beside the line's own end and enters it from the side.
 - **For agents:** `auto_layout` returns the layout warnings that are left (`warnings`), so no separate `validate` is needed to check it; new `insert_text` adds Markdown at the end of the part under a heading (or of the chapter), also when that part is the chapter's last.
