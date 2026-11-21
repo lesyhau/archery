@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.6
 
 - **Edit decisions in the document.** Clicking a row of the architecture decision records opens the decision in a window over the document: title, status, date, decision-makers, the decision it supersedes, the quality goals and constraints it addresses, and its context, decision and consequences, with the optional decision drivers, considered options and confirmation of MADR. "Add row" under the list records a new one there.
 - **"Add row" under every table.** Tables written in a chapter now have it too, like the data tables.
