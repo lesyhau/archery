@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.9
 
 - **Balanced table column widths.** New agent tool `fit_table_columns` balances a data table's column widths: as few wrapped lines as possible and no word wider than its column, measured in Edge / Chrome / Chromium with the export's own fonts and layout, on the exported page and on the printed page (page size, orientation and margins from the export settings). It proposes the widths, or saves them with `apply: true` (only the widths change); limits per column (`min`, `max`, `fixed`). New `get_table_layout` shows how a table is laid out: column widths, lines per cell, overflowing cells, table height.
 - **`fit: auto` for tables.** With `fit: auto` in a table's view (`write_data_table` sets it), every export fits the column widths to the content; columns with a width keep it.
