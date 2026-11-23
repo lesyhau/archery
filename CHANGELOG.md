@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.11
 
 - **Several documentations in one repository.** Each folder with an `archery.yaml` is a documentation of its own (one per service, for example). **New Architecture Documentation...** (the + in the Project view) adds another in a folder you name. The Project view lists them; click one, or run **Switch Documentation...**, to show it in the Contents, the Diagrams and the document. Every documentation keeps its own version history, and its problems are in the Problems view.
 - **Agents pick the documentation.** Every agent tool (Claude Code and Copilot) takes `doc`: a documentation's folder or system name. Without it they work on the one the window shows. `overview` lists the documentations when there are several, and `initialize` takes a `folder` for another one. An agent changing another documentation than the one shown switches the window to it while it works.
