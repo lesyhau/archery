@@ -2106,10 +2106,11 @@ export const INITIALIZE_TOOL = {
   name: 'initialize',
   title: 'Initialize architecture documentation',
   description:
-    'Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet. Existing files are never overwritten.',
+    'Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet, or another documentation in its own folder. Existing files are never overwritten.',
   input: z.object({
     system: z.string().min(1).describe('Name of the system being documented'),
     includeHelp: z.boolean().default(true).describe('Embed the arc42 help texts as hidden comments in the section files'),
+    folder: z.string().optional().describe('Folder for the documentation, relative to the project (default docs/architecture). Required when the project already has one, e.g. "services/billing/docs/architecture".'),
   }),
 };
 
@@ -2126,7 +2127,8 @@ export const SERVER_INSTRUCTIONS = `Tools for architecture documentation (docs-a
 - Container and parts on one diagram: create_diagram / add_to_diagram leave out a container's relationship when a part has it (relationships: "all" to keep them).
 - Check a layout without an image: get_diagram returns every node's drawn box; validate reports overlapping shapes and labels with coordinates.
 - Table column widths: fit_table_columns balances them (measured as exported, on screen and in print), get_table_layout shows how a table wraps; write_data_table without rows changes only the layout, fit: "auto" keeps them fitted at every export.
-- Call validate after a series of changes and fix reported problems.`;
+- Call validate after a series of changes and fix reported problems.
+- A project can hold several documentations (one folder with archery.yaml each): overview lists them, and every tool takes doc (the folder or the system name) to work on one other than the one open in VS Code.`;
 
 export type { DataListName };
 export { DATA_LISTS };

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { SECTIONS } from '../template/template';
 import { ArcherySession } from '../ops/session';
 import { SERVER_INSTRUCTIONS, TOOLS } from '../ops/tools';
-import { createReader, findArcheryRoots, readText } from '../workspace';
+import { createReader, readText, resolveDoc } from '../workspace';
 import { COPILOT_PREFIX } from './toolManifest';
 
 const MAX_TOOL_ROUNDS = 12;
@@ -17,13 +17,16 @@ async function runTool(name: string, session: ArcherySession, input: unknown = {
 /** Context text: conventions, workspace overview and (per command) extra material. */
 async function buildContext(request: vscode.ChatRequest): Promise<string> {
   const parts = [SERVER_INSTRUCTIONS.replace(/\b(overview|get_section_guide|validate|update_element|write_sequence_diagram|create_diagram)\b/g, `${COPILOT_PREFIX}$1`)];
-  const root = (await findArcheryRoots())[0];
+  const { root, docs } = await resolveDoc(undefined);
   if (!root) {
     parts.push(`There is no architecture documentation in this workspace yet. Offer to create it with ${COPILOT_PREFIX}initialize.`);
     return parts.join('\n\n');
   }
   const session = await ArcherySession.load(createReader(root), vscode.workspace.asRelativePath(root));
   parts.push(`Current documentation (overview):\n${JSON.stringify(await runTool('overview', session), null, 2)}`);
+  if (docs.length > 1) {
+    parts.push(`This workspace has several architecture documentations: ${docs.map((d) => `"${d.path}"${d.system ? ` (${d.system})` : ''}`).join(', ')}. The one above is open in the window; pass doc to the tools to work on another.`);
+  }
 
   if (request.command === 'check') {
     parts.push(`Validation result:\n${JSON.stringify(await runTool('validate', session), null, 2)}`);

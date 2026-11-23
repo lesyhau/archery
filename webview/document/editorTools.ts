@@ -8,6 +8,7 @@ import { TableView } from '@tiptap/extension-table';
 import { captionElement } from './Caption';
 import { saveImage } from './context';
 import { tableControls } from './tableControls';
+import { codiconHtml } from '../shared/codicon';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -27,7 +28,7 @@ function helpWidget(text: string): HTMLElement {
       return `<p>${m ? `<strong>${esc(m[1]!)}:</strong> ` : ''}${body}</p>`;
     })
     .join('');
-  el.innerHTML = `<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13z M8 7.5v4 M8 5v.01"/></svg><span class="help-pop" role="tooltip"><span class="help-pop-title">arc42 guidance</span>${paragraphs}</span>`;
+  el.innerHTML = `${codiconHtml('info')}<span class="help-pop" role="tooltip"><span class="help-pop-title">arc42 guidance</span>${paragraphs}</span>`;
   // Keep clicks on the icon from moving the caret into the heading.
   el.addEventListener('mousedown', (e) => e.preventDefault());
   return el;
@@ -315,7 +316,7 @@ export class TableWithFoot extends TableView {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'link-btn';
-    button.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 4v8 M4 8h8"/></svg> Add row';
+    button.innerHTML = `${codiconHtml('add')} Add row`;
     button.addEventListener('mousedown', (e) => e.preventDefault());
     button.addEventListener('click', () => {
       // Tiptap keeps its editor on the editor's element.

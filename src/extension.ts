@@ -24,7 +24,20 @@ import { TOOLS } from './ops/tools';
 import { applyChanges } from './workspaceEdit';
 import { DiagramToolsView } from './views/toolsView';
 import { DiagramsTreeProvider } from './views/diagramsTree';
-import { createReader, findArcheryRoots } from './workspace';
+import { ProjectViewProvider, type ProjectDetails } from './views/projectView';
+
+/** workspaceState key: the documentation the window shows, when the workspace has several. */
+const ACTIVE_DOC_KEY = 'archery.activeDoc';
+
+/** A documentation in the workspace: its version history, its file watcher and its agent bridge. */
+interface Doc {
+  root: vscode.Uri;
+  tracker: VersionTracker;
+  disposables: vscode.Disposable[];
+  bridge: Bridge;
+}
+import { createReader, findArcheryRoots, setActiveDocRoot, systemOf } from './workspace';
+import type { LoadedWorkspace } from './model/load';
 
 export function activate(context: vscode.ExtensionContext): void {
   const tree = new DiagramsTreeProvider();
@@ -48,81 +61,132 @@ export function activate(context: vscode.ExtensionContext): void {
     const node = contents.findHeading(want.sectionId, want.title, want.level);
     if (node && contentsView.visible) void contentsView.reveal(node, { select: true, focus: true }).then(undefined, () => undefined);
   };
+  const project = new ProjectViewProvider();
+  const projectView = vscode.window.createTreeView('archery.project', { treeDataProvider: project });
   const diagnostics = vscode.languages.createDiagnosticCollection('archery');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'archery.versionMenu';
   status.tooltip = 'Archery';
 
-  let rootWatcher: vscode.Disposable | undefined;
-  let bridge: Bridge | undefined;
+  // Every documentation in the workspace keeps its version history and takes agents' changes; the
+  // one the window shows (currentRoot) fills the Contents, the Diagrams and the document.
+  const docs = new Map<string, Doc>();
   let currentRoot: vscode.Uri | undefined;
   let tracker: VersionTracker | undefined;
+  const isCurrent = (root: vscode.Uri) => currentRoot?.toString() === root.toString();
 
-  // The status bar shows the product name only; the documentation version is in the tooltip and the menu.
-  let versionLabel = '';
-  // The Contents view's heading: the documentation's version and folder.
-  const describeContents = () => {
-    const folder = currentRoot ? vscode.workspace.asRelativePath(currentRoot) : undefined;
-    contentsView.description = [tracker ? versionLabel : '', folder].filter(Boolean).join(' · ') || undefined;
+  const openDoc = (root: vscode.Uri): Doc => {
+    const doc: Doc = { root, tracker: new VersionTracker(root), disposables: [], bridge: undefined! };
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, '**/*'));
+    const onEvent = (uri: vscode.Uri) => {
+      doc.tracker.notice(uri);
+      if (!uri.path.endsWith(HISTORY_FILE)) scheduleRefresh();
+      if (isCurrent(root)) DocumentPanel.scheduleUpdate();
+    };
+    // Changes made outside Archery (an agent editing a chapter file directly) are followed in the document.
+    const onChange = (uri: vscode.Uri) => {
+      onEvent(uri);
+      if (isCurrent(root)) void followExternal(root, uri);
+    };
+    doc.disposables.push(
+      watcher,
+      watcher.onDidCreate(onChange),
+      watcher.onDidDelete(onEvent),
+      watcher.onDidChange(onChange),
+      doc.tracker.onDidChange(() => (isCurrent(root) ? void showVersion() : scheduleRefresh())),
+      doc.tracker,
+    );
+    // Claude Code's MCP server hands its changes to this window (shown live, undoable).
+    doc.bridge = new Bridge(root, extensionHost(context, root, () => doc.tracker));
+    doc.bridge.start();
+    doc.disposables.push(doc.bridge);
+    return doc;
   };
+  const closeDoc = (doc: Doc) => doc.disposables.forEach((d) => d.dispose());
+
+  // The status bar shows the product name only; the documentation version is in the tooltip, the
+  // menu and the Project view.
+  let versionLabel = '';
+  let unreleased = false;
+  /** Each documentation's details for the Project view (the current one's version comes from showVersion). */
+  let details: Omit<ProjectDetails, 'active'>[] = [];
+  const describeProject = () =>
+    project.update(
+      details.map((d) => (isCurrent(d.root) ? { ...d, active: true, version: versionLabel || d.version, unreleased } : { ...d, active: false })),
+    );
   const showVersion = async () => {
-    describeContents();
+    describeProject();
     if (!tracker) return status.hide();
     versionLabel = `v${(await tracker.history()).current}`;
-    describeContents();
+    unreleased = await tracker.canRelease();
+    describeProject();
+    const system = details.length > 1 ? details.find((d) => isCurrent(d.root))?.workspace.project?.system : undefined;
     status.text = '$(archery-logo) Archery';
-    status.tooltip = `Archery ${versionLabel}`;
+    status.tooltip = system ? `Archery ${versionLabel} - ${system}` : `Archery ${versionLabel}`;
     status.show();
   };
 
+  /** Shows a documentation in the window: the Contents, the Diagrams, the document and agents' default. */
+  const selectDoc = async (root: vscode.Uri) => {
+    await context.workspaceState.update(ACTIVE_DOC_KEY, root.toString());
+    await refresh();
+  };
+
   const refresh = async () => {
-    const root = (await findArcheryRoots())[0];
-    await vscode.commands.executeCommand('setContext', 'archery.hasRoot', !!root);
+    const roots = await findArcheryRoots();
+    await vscode.commands.executeCommand('setContext', 'archery.hasRoot', roots.length > 0);
+    await vscode.commands.executeCommand('setContext', 'archery.multipleDocs', roots.length > 1);
+    for (const [key, doc] of docs) {
+      if (roots.some((r) => r.toString() === key)) continue;
+      closeDoc(doc);
+      docs.delete(key);
+    }
+    for (const r of roots) if (!docs.has(r.toString())) docs.set(r.toString(), openDoc(r));
+    const preferred = context.workspaceState.get<string>(ACTIVE_DOC_KEY);
+    const root = roots.find((r) => r.toString() === preferred) ?? roots.find((r) => isCurrent(r)) ?? roots[0];
     if (!root) {
       await tree.update(undefined, undefined);
       await contents.update(undefined, undefined);
       diagnostics.clear();
-      rootWatcher?.dispose();
-      tracker?.dispose();
-      bridge?.dispose();
-      currentRoot = tracker = rootWatcher = bridge = undefined;
+      currentRoot = tracker = undefined;
+      setActiveDocRoot(undefined);
+      details = [];
+      versionLabel = '';
       await showVersion();
       return;
     }
-    if (root.toString() !== currentRoot?.toString()) {
+    if (!isCurrent(root)) {
       currentRoot = root;
-      rootWatcher?.dispose();
-      tracker?.dispose();
-      tracker = new VersionTracker(root);
-      tracker.onDidChange(() => void showVersion());
-      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, '**/*'));
-      const onEvent = (uri: vscode.Uri) => {
-        tracker?.notice(uri);
-        if (!uri.path.endsWith(HISTORY_FILE)) scheduleRefresh();
-        DocumentPanel.scheduleUpdate();
-      };
-      // Changes made outside Archery (an agent editing a chapter file directly) are followed in the document.
-      const onChange = (uri: vscode.Uri) => {
-        onEvent(uri);
-        void followExternal(root, uri);
-      };
-      watcher.onDidCreate(onChange);
-      watcher.onDidDelete(onEvent);
-      watcher.onDidChange(onChange);
-      rootWatcher = watcher;
+      tracker = docs.get(root.toString())!.tracker;
+      setActiveDocRoot(root);
+      for (const doc of docs.values()) doc.bridge.setActive(doc.root.toString() === root.toString());
+      versionLabel = '';
       void primeChapters(root);
-      // Claude Code's MCP server hands its changes to this window (shown live, undoable).
-      bridge?.dispose();
-      bridge = new Bridge(root, extensionHost(context, root, () => tracker));
-      bridge.start();
-      await showVersion();
+      // The open document follows the switch.
+      const shown = DocumentPanel.shownRoot();
+      if (shown && shown.toString() !== root.toString()) await DocumentPanel.show(context, root, tracker, undefined, true);
     }
-    const { workspace, issues } = await validateWorkspace(createReader(root));
-    const count = await tree.update(root, workspace);
-    await contents.update(root, workspace);
+    // Every documentation is checked (the Problems view, the Project view); the current one fills the sidebar.
+    const checked = await Promise.all(roots.map(async (r) => ({ root: r, ...(await validateWorkspace(createReader(r))) })));
+    const current = checked.find((c) => isCurrent(c.root))!;
+    const count = await tree.update(root, current.workspace);
+    await contents.update(root, current.workspace);
     reselect();
     await vscode.commands.executeCommand('setContext', 'archery.hasDiagrams', count > 0);
-    publishDiagnostics(diagnostics, root, issues);
+    diagnostics.clear();
+    for (const c of checked) publishDiagnostics(diagnostics, c.root, c.issues);
+    details = await Promise.all(
+      checked
+        .filter((c): c is typeof c & { workspace: LoadedWorkspace } => !!c.workspace)
+        .map(async (c) => ({
+          root: c.root,
+          workspace: c.workspace,
+          issues: c.issues,
+          diagrams: c.workspace.diagrams.length,
+          version: `v${(await docs.get(c.root.toString())!.tracker.history()).current}`,
+        })),
+    );
+    await showVersion();
   };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -140,6 +204,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // A click in the Contents view (the live view's own calls keep the focus where it is).
     if (target && !target.preserveFocus) noteUserActivity();
     if (!currentRoot) await refresh();
+    // An agent working on another documentation: the window switches to it.
+    const other = target?.root ? docs.get(target.root) : undefined;
+    if (other && !isCurrent(other.root)) await selectDoc(other.root);
     if (!currentRoot) {
       const choice = await vscode.window.showInformationMessage('Archery: no documentation in this workspace yet.', 'Initialize');
       if (choice) await vscode.commands.executeCommand('archery.init');
@@ -161,14 +228,13 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     contentsView,
+    projectView,
     openOnShow,
     followReader,
     diagnostics,
     status,
     projectWatcher,
-    { dispose: () => rootWatcher?.dispose() },
-    { dispose: () => tracker?.dispose() },
-    { dispose: () => bridge?.dispose() },
+    { dispose: () => docs.forEach(closeDoc) },
     { dispose: resetUserActivity },
     DiagramToolsView.register(context),
     WebviewDiagramEditorProvider.register(context, 'archery.diagramEditor', 'diagram'),
@@ -176,9 +242,25 @@ export function activate(context: vscode.ExtensionContext): void {
     WebviewDiagramEditorProvider.register(context, 'archery.sequenceEditor', 'sequence'),
     WebviewDiagramEditorProvider.register(context, 'archery.timingEditor', 'sequence'),
     vscode.commands.registerCommand('archery.init', async () => {
-      const root = await initCommand();
-      await refresh();
+      const root = await initCommand(await findArcheryRoots());
+      if (root) await selectDoc(root);
+      else await refresh();
       if (root) await openDocument();
+    }),
+    // The Project view's documentation rows, its title button and the command palette.
+    vscode.commands.registerCommand('archery.selectDoc', async (target?: vscode.Uri | string | { root?: vscode.Uri }) => {
+      const given = typeof target === 'string' ? vscode.Uri.parse(target) : target instanceof vscode.Uri ? target : target?.root;
+      let root = given && docs.get(given.toString())?.root;
+      if (!root) {
+        const roots = await findArcheryRoots();
+        const items = await Promise.all(
+          roots.map(async (r) => ({ label: (await systemOf(r)) ?? vscode.workspace.asRelativePath(r, false), description: vscode.workspace.asRelativePath(r, false), picked: isCurrent(r), root: r })),
+        );
+        root = (await vscode.window.showQuickPick(items, { title: 'Switch Documentation', placeHolder: 'Documentation to show' }))?.root;
+      }
+      if (!root) return;
+      await selectDoc(root);
+      await openDocument();
     }),
     vscode.commands.registerCommand('archery.refresh', refresh),
     vscode.commands.registerCommand('archery.openDocument', openDocument),
@@ -287,7 +369,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('archery.setupClaudeCode', () => setupClaudeCodeCommand(context)),
     // AI integrations: Copilot uses the language model tools + @archery; Claude Code uses the MCP server.
-    ...registerLanguageModelTools((root) => extensionHost(context, root, () => (currentRoot?.toString() === root.toString() ? tracker : undefined))),
+    ...registerLanguageModelTools((root) => extensionHost(context, root, () => docs.get(root.toString())?.tracker)),
     ...registerChatParticipant(context),
     vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
   );
@@ -300,7 +382,6 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 function publishDiagnostics(collection: vscode.DiagnosticCollection, root: vscode.Uri, issues: Issue[]): void {
-  collection.clear();
   const byFile = new Map<string, vscode.Diagnostic[]>();
   for (const issue of issues) {
     const line = Math.max(0, (issue.line ?? 1) - 1);

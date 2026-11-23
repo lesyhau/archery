@@ -77,7 +77,7 @@ const webviewOptions = {
   target: 'es2022',
   jsx: 'automatic',
   define: { 'process.env.NODE_ENV': production ? '"production"' : '"development"' },
-  loader: { '.svg': 'dataurl' },
+  loader: { '.svg': 'dataurl', '.ttf': 'file' },
 };
 
 if (watch) {

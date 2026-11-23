@@ -1116,3 +1116,11 @@ textarea.mono {
     box-shadow: 0 0 0 4px transparent;
   }
 }
+
+.rail .rail-btn > .codicon {
+  flex: none;
+}
+
+.chip .codicon {
+  font-size: 13px;
+}

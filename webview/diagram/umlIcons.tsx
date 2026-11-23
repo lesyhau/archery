@@ -1,5 +1,6 @@
 // Small line icons (16 x 16, currentColor) for the UML editor: element kinds, diagram-local
 // nodes, relationships, diagram types, and the editor's view / layout actions.
+import { codicon } from '../shared/codicon';
 import type { ReactNode } from 'react';
 import type { CanvasDiagramType, ElementKind, LocalNodeKind, RelationshipKind } from '../../src/model/schema';
 
@@ -69,7 +70,7 @@ export const IconLineOrthogonal = icon(<path d="M2 13.5h5v-11h7" />);
 export const IconLineCurved = icon(<path d="M2 13.5c7 0 5-11 12-11" />);
 export const IconLineHorizontalFirst = icon(<path d="M2 3h11.5v10.5" />);
 export const IconLineVerticalFirst = icon(<path d="M2.5 2.5v11H14" />);
-export const IconCheck = icon(<path d="M3 8.5l3.2 3.2L13 4.8" />);
+export const IconCheck = codicon('check');
 export const IconReverse = icon(<path d="M2.5 5.5h10 M10 3l2.5 2.5L10 8 M13.5 10.5h-10 M6 8l-2.5 2.5L6 13" />);
 export const IconNote = icon(<path d="M2.5 2.5h7.5l3.5 3.5v7.5h-11z M10 2.5V6h3.5" />);
 
@@ -205,26 +206,26 @@ export const TYPE_LABELS: Record<CanvasDiagramType | 'sequence' | 'communication
 };
 
 // --- editor actions --------------------------------------------------------------------------
-export const IconZoomIn = icon(<path d="M8 3v10 M3 8h10" />);
-export const IconZoomOut = icon(<path d="M3 8h10" />);
+export const IconZoomIn = codicon('zoom-in');
+export const IconZoomOut = codicon('zoom-out');
 export const IconFit = icon(<path d="M2.5 6V2.5H6 M10 2.5h3.5V6 M13.5 10v3.5H10 M6 13.5H2.5V10" />);
 export const IconFill = icon(<path d="M8 1.5v13 M1.5 8h13 M6 3.5l2-2 2 2 M6 12.5l2 2 2-2 M3.5 6l-2 2 2 2 M12.5 6l2 2-2 2" />);
 export const IconActualSize = icon(<path d="M3.5 5l1.5-1.2V12 M10.5 5L12 3.8V12 M8 6.8v.01 M8 9.8v.01" />);
 export const IconCenter = icon(<><circle cx="8" cy="8" r="2.2" /><path d="M8 1.5v2.5 M8 12v2.5 M1.5 8H4 M12 8h2.5" /></>);
 export const IconGrid = icon(<path d="M2.5 2.5h11v11h-11z M6.2 2.5v11 M9.8 2.5v11 M2.5 6.2h11 M2.5 9.8h11" />);
-export const IconSnap = icon(<><path d="M2.5 2.5v11h11" strokeDasharray="1.2 1.4" /><path d="M5.5 10.5V7.5a2.5 2.5 0 0 1 5 0v3 M5.5 10.5h1.6 M8.9 10.5h1.6" /></>);
-export const IconMinimap = icon(<><rect x="1.8" y="2.5" width="12.4" height="11" rx="1" /><rect x="8" y="8" width="4.5" height="3.8" rx="0.5" /></>);
+export const IconSnap = codicon('magnet');
+export const IconMinimap = codicon('map');
 export const IconLayoutDown = icon(<><rect x="5.5" y="1.5" width="5" height="3" rx="0.5" /><rect x="1.5" y="11.5" width="5" height="3" rx="0.5" /><rect x="9.5" y="11.5" width="5" height="3" rx="0.5" /><path d="M8 4.5v3.5 M4 11.5V8h8v3.5" /></>);
 export const IconLayoutRight = icon(<><rect x="1.5" y="5.5" width="3" height="5" rx="0.5" /><rect x="11.5" y="1.5" width="3" height="5" rx="0.5" /><rect x="11.5" y="9.5" width="3" height="5" rx="0.5" /><path d="M4.5 8H8 M11.5 4H8v8h3.5" /></>);
 export const IconExportSvg = icon(<><path d="M3.5 1.8h6l3 3v9.4h-9z M9.5 1.8v3h3" /><path d="M5.6 11.5l1.4-4 1.4 4 1.4-4" /></>);
 export const IconExportPng = icon(<><rect x="1.8" y="2.5" width="12.4" height="11" rx="1.2" /><circle cx="5.5" cy="6.2" r="1.2" /><path d="M2 12l4-3.5 3 2.5 2-1.5 3 2.5" /></>);
-export const IconExisting = icon(<><ellipse cx="8" cy="3.8" rx="5.5" ry="1.8" /><path d="M2.5 3.8v8.4c0 1 2.5 1.8 5.5 1.8s5.5-.8 5.5-1.8V3.8 M2.5 8c0 1 2.5 1.8 5.5 1.8s5.5-.8 5.5-1.8" /></>);
+export const IconExisting = codicon('database');
 export const IconSelectTool = icon(<path d="M3.5 2.5l9 5-4 1.2 2.4 4.3-1.6.9-2.4-4.3L4 12.4z" />);
-export const IconTrash = icon(<path d="M2.8 4.2h10.4 M6.2 4.2V2.7h3.6v1.5 M4 4.2l.7 9.3h6.6l.7-9.3 M6.6 6.6v4.6 M9.4 6.6v4.6" />);
-export const IconRemove = icon(<path d="M4 4l8 8 M12 4l-8 8" />);
-export const IconRename = icon(<path d="M10.5 2.5l3 3L6 13H3v-3z M9 4l3 3" />);
-export const IconOpen = icon(<path d="M9 2.5h4.5V7 M13.5 2.5L7.5 8.5 M11.5 9.5v4h-9v-9h4" />);
-export const IconPlus = icon(<path d="M8 3.5v9 M3.5 8h9" />);
+export const IconTrash = codicon('trash');
+export const IconRemove = codicon('close');
+export const IconRename = codicon('edit');
+export const IconOpen = codicon('link-external');
+export const IconPlus = codicon('add');
 
 export const IconAlignLeft = icon(<path d="M2 1.5v13 M4 4h8v3H4z M4 9h5v3H4z" />);
 export const IconAlignCenterH = icon(<path d="M8 1.5v13 M3.5 4h9v3h-9z M5 9h6v3H5z" />);
@@ -250,10 +251,10 @@ export const IconConstraint = icon(<path d="M6 3c-1.5 0-2 .7-2 2v1.3c0 .8-.6 1.4
 export const IconLifeline = icon(<><rect x="3.5" y="1.5" width="9" height="4" rx="0.6" /><path d="M8 5.5v9" strokeDasharray="1.6 1.4" /></>);
 export const IconWrap = icon(<><path d="M1.5 2.5h13v11h-13z M1.5 5.5h4l1.2-1.2V2.5" /><path d="M4.5 9h7 M9.5 7.3L11.5 9l-2 1.7" /></>);
 export const IconUnwrap = icon(<><path d="M1.5 2.5h13v11h-13z" strokeDasharray="1.6 1.4" /><path d="M4.5 8h7 M9.5 6.3L11.5 8l-2 1.7" /></>);
-export const IconUp = icon(<path d="M8 13V3 M4 7l4-4 4 4" />);
-export const IconDown = icon(<path d="M8 3v10 M4 9l4 4 4-4" />);
-export const IconLeft = icon(<path d="M13 8H3 M7 4L3 8l4 4" />);
-export const IconRight = icon(<path d="M3 8h10 M9 4l4 4-4 4" />);
+export const IconUp = codicon('arrow-up');
+export const IconDown = codicon('arrow-down');
+export const IconLeft = codicon('arrow-left');
+export const IconRight = codicon('arrow-right');
 
 export const MESSAGE_ICONS: Record<'sync' | 'async' | 'reply' | 'create' | 'destroy' | 'self' | 'lost' | 'found', () => JSX.Element> = {
   sync: IconMsgSync,

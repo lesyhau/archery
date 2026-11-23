@@ -12,6 +12,8 @@ export class Bridge implements vscode.Disposable {
   private server: Server | undefined;
   private readonly token = randomBytes(24).toString('hex');
   private file: string | undefined;
+  private port: number | undefined;
+  private active = false;
 
   constructor(
     private readonly root: vscode.Uri,
@@ -45,16 +47,29 @@ export class Bridge implements vscode.Disposable {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
       if (!address || typeof address === 'string') return;
-      this.file = bridgeFile(this.root.fsPath);
-      try {
-        mkdirSync(dirname(this.file), { recursive: true });
-        writeFileSync(this.file, JSON.stringify({ port: address.port, token: this.token, pid: process.pid }), { mode: 0o600 });
-      } catch {
-        this.file = undefined; // no temp folder: agents write files directly (not shown live)
-      }
+      this.port = address.port;
+      this.announce();
     });
     server.on('error', () => undefined);
     this.server = server;
+  }
+
+  /** Marks this documentation as the one the window shows (agents default to it). */
+  setActive(active: boolean): void {
+    if (active === this.active) return;
+    this.active = active;
+    this.announce();
+  }
+
+  private announce(): void {
+    if (this.port === undefined) return;
+    this.file = bridgeFile(this.root.fsPath);
+    try {
+      mkdirSync(dirname(this.file), { recursive: true });
+      writeFileSync(this.file, JSON.stringify({ port: this.port, token: this.token, pid: process.pid, active: this.active }), { mode: 0o600 });
+    } catch {
+      this.file = undefined; // no temp folder: agents write files directly (not shown live)
+    }
   }
 
   dispose(): void {

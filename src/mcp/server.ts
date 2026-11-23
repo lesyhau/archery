@@ -14,6 +14,9 @@ import { scaffold } from '../template/scaffold';
 import type { WorkspaceReader } from '../model/load';
 import { ArcherySession, DELETED, OpError } from '../ops/session';
 import { INITIALIZE_TOOL, SERVER_INSTRUCTIONS, TOOLS } from '../ops/tools';
+import { DOC_PARAM, docsListing, pickDoc, type DocRef } from '../ops/docs';
+import { parseProject } from '../model/load';
+import { readBridge } from '../live/bridgeProtocol';
 import { connectBridge } from './bridgeClient';
 
 declare const __VERSION__: string;
@@ -23,9 +26,14 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.vsc
 
 /** Finds the folder containing archery.yaml: `docs/architecture` first, then a shallow search. */
 export function findRoot(cwd: string): string | undefined {
-  for (const candidate of [join(cwd, 'docs', 'architecture'), cwd]) {
-    if (existsSync(join(candidate, 'archery.yaml'))) return candidate;
-  }
+  return findRoots(cwd)[0];
+}
+
+/** Every folder containing archery.yaml below cwd: `docs/architecture` first, then the shallowest. */
+export function findRoots(cwd: string): string[] {
+  const found: string[] = [];
+  const preferred = join(cwd, 'docs', 'architecture');
+  if (existsSync(join(preferred, 'archery.yaml'))) found.push(preferred);
   const queue: { dir: string; depth: number }[] = [{ dir: cwd, depth: 0 }];
   while (queue.length > 0) {
     const { dir, depth } = queue.shift()!;
@@ -35,7 +43,11 @@ export function findRoot(cwd: string): string | undefined {
     } catch {
       continue;
     }
-    if (entries.includes('archery.yaml')) return dir;
+    // A documentation's own folders (diagrams, sections, ...) hold no other documentation.
+    if (entries.includes('archery.yaml')) {
+      if (dir !== preferred) found.push(dir);
+      continue;
+    }
     if (depth >= 4) continue;
     for (const name of entries.sort()) {
       if (name.startsWith('.') || SKIP_DIRS.has(name)) continue;
@@ -47,7 +59,20 @@ export function findRoot(cwd: string): string | undefined {
       }
     }
   }
-  return undefined;
+  return found;
+}
+
+/** The documentations below cwd with their system names. */
+function docsIn(cwd: string): (DocRef & { root: string })[] {
+  return findRoots(cwd).map((root) => {
+    let system: string | undefined;
+    try {
+      system = parseProject(readFileSync(join(root, 'archery.yaml'), 'utf8')).value?.system;
+    } catch {
+      // unreadable archery.yaml
+    }
+    return { root, path: toPosix(relative(cwd, root)), system };
+  });
 }
 
 export function fsReader(root: string): WorkspaceReader {
@@ -111,7 +136,20 @@ export interface ServerOptions {
 export function createArcheryMcpServer(options: ServerOptions): McpServer {
   const server = new McpServer({ name: 'archery', version: VERSION }, { instructions: SERVER_INSTRUCTIONS });
 
-  const locateRoot = () => (options.root ? resolve(options.cwd, options.root) : findRoot(options.cwd));
+  /**
+   * The documentation a call works on: the one `doc` names, else --root, else the only one, else the
+   * one a VS Code window shows, else the first (docs/architecture).
+   */
+  const locate = (doc: string | undefined): { root?: string; error?: string; docs: (DocRef & { root: string })[] } => {
+    const docs = docsIn(options.cwd);
+    if (doc) {
+      const picked = pickDoc(docs, doc);
+      return typeof picked === 'string' ? { error: picked, docs } : { root: picked.root, docs };
+    }
+    if (options.root) return { root: resolve(options.cwd, options.root), docs };
+    const shown = docs.length > 1 ? docs.find((d) => readBridge(d.root)?.active) : undefined;
+    return { root: (shown ?? docs[0])?.root, docs };
+  };
 
   server.registerTool(
     INITIALIZE_TOOL.name,
@@ -122,11 +160,13 @@ export function createArcheryMcpServer(options: ServerOptions): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
-      const existing = locateRoot();
-      if (existing && existsSync(join(existing, 'archery.yaml'))) {
-        return fail(`architecture documentation already exists in ${toPosix(relative(options.cwd, existing)) || '.'}.`);
+      const { docs } = locate(undefined);
+      if (!args.folder && docs.length) {
+        return fail(`architecture documentation already exists in ${docs.map((d) => d.path || '.').join(', ')}. To add another one, pass folder.`);
       }
-      const root = existing ?? join(options.cwd, 'docs', 'architecture');
+      const root = args.folder ? resolve(options.cwd, args.folder) : options.root ? resolve(options.cwd, options.root) : join(options.cwd, 'docs', 'architecture');
+      if (relative(options.cwd, root).startsWith('..')) return fail('folder must be inside the project.');
+      if (existsSync(join(root, 'archery.yaml'))) return fail(`architecture documentation already exists in ${toPosix(relative(options.cwd, root)) || '.'}.`);
       const files = scaffold({ system: args.system, includeHelp: args.includeHelp ?? true });
       const created: string[] = [];
       for (const [path, text] of files) {
@@ -144,11 +184,13 @@ export function createArcheryMcpServer(options: ServerOptions): McpServer {
       {
         title: def.title,
         description: def.description,
-        inputSchema: def.input.shape,
+        inputSchema: { ...def.input.shape, doc: DOC_PARAM },
         annotations: { readOnlyHint: def.readOnly, destructiveHint: def.name.startsWith('delete') || def.name.startsWith('remove') },
       },
       async (args: unknown) => {
-        const root = locateRoot();
+        const doc = (args as { doc?: unknown } | undefined)?.doc;
+        const { root, error, docs } = locate(typeof doc === 'string' && doc.trim() ? doc : undefined);
+        if (error) return fail(error);
         if (!root || !existsSync(join(root, 'archery.yaml'))) {
           return fail(`No architecture documentation found below ${options.cwd}. Call ${INITIALIZE_TOOL.name} to create docs/architecture.`);
         }
@@ -161,6 +203,8 @@ export function createArcheryMcpServer(options: ServerOptions): McpServer {
           const result = await def.run(session, input);
           if (session.changes.size && !(bridge && (await bridge.apply(session.changes)))) writeFiles(root, session.changes);
           ensureDeleted(root, session.changes);
+          const current = docs.find((d) => resolve(d.root) === resolve(root));
+          if (def.name === 'overview' && docs.length > 1 && current && result && typeof result === 'object') return ok({ ...result, ...docsListing(docs, current) });
           return ok(result);
         } catch (e) {
           if (e instanceof OpError) return fail(e.message);

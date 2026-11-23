@@ -3,6 +3,7 @@
 // by `npm run gen:tools` and a test checks that package.json is up to date.
 import { z } from 'zod';
 import { INITIALIZE_TOOL, TOOLS } from '../ops/tools';
+import { withDoc } from '../ops/docs';
 
 export const COPILOT_PREFIX = 'archery_';
 
@@ -25,7 +26,8 @@ export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 export function languageModelTools(): LanguageModelToolContribution[] {
-  const defs = [{ ...INITIALIZE_TOOL, readOnly: false }, ...TOOLS];
+  // Every tool but initialize can name the documentation it works on.
+  const defs = [{ ...INITIALIZE_TOOL, readOnly: false }, ...TOOLS.map((t) => ({ ...t, input: withDoc(t.input) }))];
   return defs.map((def) => ({
     name: `${COPILOT_PREFIX}${def.name}`,
     displayName: def.title,

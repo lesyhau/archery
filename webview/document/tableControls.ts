@@ -6,6 +6,7 @@
 //  - near a line between rows / columns (when the table offers it): the line lights up with a "+" in its
 //    middle that inserts a row / column there
 // Plain DOM (a layer inside `host`), so it works inside the ProseMirror view as well as in React.
+import { codiconHtml } from '../shared/codicon';
 
 export interface TableActions {
   /** The frame the controls sit around (the bordered box); defaults to the table. */
@@ -33,7 +34,7 @@ const dots = (vertical: boolean) => {
   const pts = vertical ? [[6, 4], [10, 4], [6, 8], [10, 8], [6, 12], [10, 12]] : [[4, 6], [8, 6], [12, 6], [4, 10], [8, 10], [12, 10]];
   return `<svg xmlns="${NS}" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1" fill="currentColor"/>`).join('')}</svg>`;
 };
-const cross = `<svg xmlns="${NS}" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5l7 7 M11.5 4.5l-7 7"/></svg>`;
+const cross = codiconHtml('close');
 
 /** How far around the frame the controls (and the hover zone) reach. */
 const GUTTER = 26;
@@ -66,7 +67,7 @@ export function tableControls(host: HTMLElement, tables: () => HTMLTableElement[
   const edgeLine = document.createElement('div');
   edgeLine.className = 'tc-edge';
   layer.append(edgeLine);
-  const plus = button('tc-plus', `<svg xmlns="${NS}" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9 M3.5 8h9"/></svg>`, 'Insert');
+  const plus = button('tc-plus', codiconHtml('add'), 'Insert');
   host.append(layer);
 
   type Edge = { kind: 'row' | 'col'; index: number; pos: number };

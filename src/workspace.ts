@@ -1,6 +1,7 @@
 // VS Code-side helpers for locating and reading documentation workspaces.
 import * as vscode from 'vscode';
-import type { WorkspaceReader } from './model/load';
+import { parseProject, type WorkspaceReader } from './model/load';
+import { pickDoc, type DocRef } from './ops/docs';
 
 export const PROJECT_FILE = 'archery.yaml';
 
@@ -56,4 +57,38 @@ export function createReader(root: vscode.Uri): WorkspaceReader {
       }
     },
   };
+}
+
+// --- several documentations ---------------------------------------------------------------
+
+let activeRoot: vscode.Uri | undefined;
+
+/** The documentation the window shows (set by the extension); agents work on it when they name none. */
+export const activeDocRoot = (): vscode.Uri | undefined => activeRoot;
+export function setActiveDocRoot(root: vscode.Uri | undefined): void {
+  activeRoot = root;
+}
+
+/** The system name in a documentation's archery.yaml. */
+export async function systemOf(root: vscode.Uri): Promise<string | undefined> {
+  const text = await readText(vscode.Uri.joinPath(root, PROJECT_FILE));
+  return text === undefined ? undefined : parseProject(text).value?.system;
+}
+
+export async function docRefs(roots: vscode.Uri[]): Promise<(DocRef & { root: vscode.Uri })[]> {
+  return Promise.all(roots.map(async (root) => ({ root, path: vscode.workspace.asRelativePath(root, false), system: await systemOf(root) })));
+}
+
+/**
+ * The documentation an agent's call works on: the one `doc` names (folder or system name), else the
+ * one the window shows, else the first. A string is an error for the agent.
+ */
+export async function resolveDoc(doc: string | undefined): Promise<{ root?: vscode.Uri; error?: string; docs: (DocRef & { root: vscode.Uri })[] }> {
+  const docs = await docRefs(await findArcheryRoots());
+  if (doc?.trim()) {
+    const picked = pickDoc(docs, doc);
+    return typeof picked === 'string' ? { error: picked, docs } : { root: picked.root, docs };
+  }
+  const active = activeRoot && docs.find((d) => d.root.toString() === activeRoot!.toString());
+  return { root: (active ?? docs[0])?.root, docs };
 }

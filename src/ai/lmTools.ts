@@ -7,7 +7,8 @@ import { DEFAULT_DOCS_DIR } from '../commands/init';
 import { ArcherySession, OpError, type ToolHost } from '../ops/session';
 import { applyLive } from '../live/liveView';
 import { INITIALIZE_TOOL, TOOLS, type ToolDef } from '../ops/tools';
-import { createReader, findArcheryRoots } from '../workspace';
+import { docsListing } from '../ops/docs';
+import { createReader, findArcheryRoots, resolveDoc } from '../workspace';
 import { applyChanges } from '../workspaceEdit';
 import { COPILOT_PREFIX } from './toolManifest';
 
@@ -32,7 +33,9 @@ class SessionTool implements vscode.LanguageModelTool<unknown> {
   }
 
   async invoke(options: vscode.LanguageModelToolInvocationOptions<unknown>): Promise<vscode.LanguageModelToolResult> {
-    const root = (await findArcheryRoots())[0];
+    const doc = (options.input as { doc?: unknown } | undefined)?.doc;
+    const { root, error, docs } = await resolveDoc(typeof doc === 'string' ? doc : undefined);
+    if (error) return textResult(`Error: ${error}`);
     if (!root) {
       return textResult(`No architecture documentation found in the workspace. Use the ${COPILOT_PREFIX}${INITIALIZE_TOOL.name} tool first.`);
     }
@@ -43,6 +46,8 @@ class SessionTool implements vscode.LanguageModelTool<unknown> {
       session.host = this.hostFor?.(root);
       const result = await this.def.run(session, parsed.data);
       await applyLive(root, session.changes);
+      const current = docs.find((d) => d.root.toString() === root.toString());
+      if (this.def.name === 'overview' && docs.length > 1 && current && result && typeof result === 'object') return textResult({ ...result, ...docsListing(docs, current) });
       return textResult(result);
     } catch (e) {
       // Errors are returned to the model so it can correct itself.
@@ -59,19 +64,24 @@ class InitializeTool implements vscode.LanguageModelTool<unknown> {
       invocationMessage: 'Archery: Initialize documentation',
       confirmationMessages: {
         title: 'Archery: Initialize documentation',
-        message: `Create ${DEFAULT_DOCS_DIR} for "${parsed.success ? parsed.data.system : '?'}"?`,
+        message: `Create ${(parsed.success && parsed.data.folder) || DEFAULT_DOCS_DIR} for "${parsed.success ? parsed.data.system : '?'}"?`,
       },
     };
   }
 
   async invoke(options: vscode.LanguageModelToolInvocationOptions<unknown>): Promise<vscode.LanguageModelToolResult> {
-    const existing = (await findArcheryRoots())[0];
-    if (existing) return textResult(`architecture documentation already exists in ${vscode.workspace.asRelativePath(existing)}.`);
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!folder) return textResult('Error: no folder is open in VS Code.');
     const parsed = INITIALIZE_TOOL.input.safeParse(options.input);
     if (!parsed.success) return textResult(`Invalid arguments: ${parsed.error.message}`);
-    const root = vscode.Uri.joinPath(folder.uri, ...DEFAULT_DOCS_DIR.split('/'));
+    const existing = await findArcheryRoots();
+    const wanted = parsed.data.folder?.trim().replace(/\\/g, '/').replace(/^\.?\/+|\/+$/g, '');
+    if (existing.length && !wanted) {
+      return textResult(`architecture documentation already exists in ${existing.map((r) => vscode.workspace.asRelativePath(r, false)).join(', ')}. To add another one, pass folder.`);
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return textResult('Error: no folder is open in VS Code.');
+    if (wanted?.split('/').includes('..')) return textResult('Error: folder must be inside the project.');
+    const root = vscode.Uri.joinPath(folder.uri, ...(wanted || DEFAULT_DOCS_DIR).split('/'));
+    if (existing.some((r) => r.toString() === root.toString())) return textResult(`architecture documentation already exists in ${vscode.workspace.asRelativePath(root, false)}.`);
     const files = scaffold({ system: parsed.data.system, includeHelp: parsed.data.includeHelp ?? true });
     await applyChanges(root, files);
     return textResult({ root: vscode.workspace.asRelativePath(root), created: [...files.keys()] });

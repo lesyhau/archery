@@ -125,6 +125,8 @@ export type ToDocument =
   | { type: 'outline'; edit: OutlineEdit }
   /** Shows the export dialog (the sidebar's Export button). */
   | { type: 'exportDialog' }
+  /** Opens the page's find widget (with its replace row). */
+  | { type: 'find'; replace?: boolean }
   | { type: 'diagramCreated'; requestId: number; src: string | null }
   | { type: 'opResult'; requestId: number; ok: boolean; result?: unknown; error?: string }
   /** Answer to saveImage: the image path relative to the documentation root (null if it failed). */

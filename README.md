@@ -13,16 +13,23 @@ Documents follow the structure of the [arc42](https://arc42.org) template. Arche
 - **From VS Code:** open the Extensions view (`Ctrl+Shift+X`), search for **Archery**, and click **Install**. Or run `ext install lesyhau.archery` from the Quick Open (`Ctrl+P`).
 - **From a VSIX:** download `archery-<version>.vsix` from [Releases](https://github.com/lesyhau/archery/releases), then run **Extensions: Install from VSIX…** in VS Code.
 
-Open a folder and run **Archery: Initialize Architecture Documentation**. It creates `docs/architecture/` with the twelve arc42 chapters, a model and the data lists. Click the **Archery** icon in the activity bar to open the document.
+Open a folder and run **Archery: New Architecture Documentation...**. It creates `docs/architecture/` with the twelve arc42 chapters, a model and the data lists. Click the **Archery** icon in the activity bar to open the document.
 
-The sidebar has three views:
+The sidebar has four views:
 - **Contents:** the chapters and their headings. Click one to go there; the chapter you are reading is selected while you scroll. Its title bar has **Find**, **Export**, **Release** and **Restore a Release**.
 - **Diagrams:** every diagram, also those no chapter shows yet. Right-click one for **Open Source**.
 - **Diagram Tools:** the palette and properties of the diagram you are editing, so the diagram tab can use its full width.
+- **Project:** the system name, version, folder, number of diagrams and decisions, and problems. Click a row to rename the system, release or restore, or show the folder or the problems.
+
+### Several documentations in one repository
+
+A repository can hold several documentations, one folder with its own `archery.yaml` each (for example one per service). Run **New Architecture Documentation...** again and give it a folder such as `services/billing/docs/architecture`. The **Project** view lists them all; click one, or run **Archery: Switch Documentation...**, to show it in the Contents, the Diagrams and the document. Problems from all of them are in the Problems view.
+
+AI agents work on the documentation the window shows. To work on another one, they pass `doc`: its folder or its system name (`overview` lists them).
 
 ## Features
 
-- **The whole document on one page,** laid out like a published architecture document. **Ctrl+F** finds text in it. Click any text to edit it in place; every chapter is a Markdown file. The toolbar has paragraph styles, lists, quotes, code, links, tables, images and diagrams, with undo and redo.
+- **The whole document on one page,** laid out like a published architecture document. **Ctrl+F** finds text in it and **Ctrl+H** replaces it, with Match Case, Whole Word and regular expressions as in the editor. Click any text to edit it in place; every chapter is a Markdown file. The toolbar has paragraph styles, lists, quotes, code, links, tables, images and diagrams, with undo and redo.
 - **arc42 guidance where you write.** Every heading has an info icon with what belongs in that chapter. It stays open until you click elsewhere.
 - **Contents in the Archery sidebar** with numbered chapters and subsections (`1.2`, `5.2.1`), following the chapter you read. Drag a heading onto another to move it there, also into another chapter, and the numbers follow. The arrows on a heading's row move it up or down and promote or demote it (also **Alt+Shift+Arrow** keys); right-click to add headings.
 - **Diagrams anywhere in the text,** with a numbered caption below. Hover one for zoom, edit, maximize and remove. **Edit** (or a double-click) opens it in its own tab, named after the diagram.

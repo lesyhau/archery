@@ -19,7 +19,8 @@ import { WebviewDiagramEditorProvider } from '../editors/webviewEditor';
 import { noteUserActivity } from '../live/userActivity';
 
 /** `decision`: a decision record (decisions/NNNN-x.md) to open over the document. */
-export type RevealTarget = { sectionId: string; heading?: string; index?: number; decision?: string; preserveFocus?: boolean };
+/** `root`: the documentation (a URI string), when it may not be the one the window shows. */
+export type RevealTarget = { sectionId: string; heading?: string; index?: number; decision?: string; preserveFocus?: boolean; root?: string };
 
 export class DocumentPanel implements vscode.Disposable {
   private static current: DocumentPanel | undefined;
@@ -52,8 +53,6 @@ export class DocumentPanel implements vscode.Disposable {
     const panel = vscode.window.createWebviewPanel('archery.document', 'Archery', { viewColumn: vscode.ViewColumn.One, preserveFocus }, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      // Ctrl+F finds text in the document.
-      enableFindWidget: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist'), root],
     });
     DocumentPanel.current = new DocumentPanel(context, panel, root, tracker);
@@ -72,24 +71,9 @@ export class DocumentPanel implements vscode.Disposable {
     else current.pending.push(msg);
   }
 
-  /** Opens the document (with the keyboard in it) and its find box, as Ctrl+F there does. */
+  /** Opens the document (with the keyboard in it) and its find widget, as Ctrl+F there does. */
   static async find(context: vscode.ExtensionContext, root: vscode.Uri, tracker: VersionTracker | undefined): Promise<void> {
-    await DocumentPanel.show(context, root, tracker, undefined, false);
-    const panel = DocumentPanel.current?.panel;
-    if (!panel) return;
-    // The find box belongs to the active editor: wait until the document is it.
-    if (!panel.active) {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(done, 1000);
-        const sub = panel.onDidChangeViewState((e) => e.webviewPanel.active && done());
-        function done() {
-          clearTimeout(timer);
-          sub.dispose();
-          resolve();
-        }
-      });
-    }
-    await vscode.commands.executeCommand('editor.action.webvieweditor.showFind');
+    await DocumentPanel.send(context, root, tracker, { type: 'find' }, false);
   }
 
   /** Opens a diagram in its UML editor, as a tab of the active editor group. */
@@ -99,6 +83,11 @@ export class DocumentPanel implements vscode.Disposable {
 
   static isOpen(): boolean {
     return !!DocumentPanel.current;
+  }
+
+  /** The documentation the open document shows. */
+  static shownRoot(): vscode.Uri | undefined {
+    return DocumentPanel.current?.root;
   }
 
   /** The tab group the document is in, if it is open. */
@@ -114,7 +103,8 @@ export class DocumentPanel implements vscode.Disposable {
   static async follow(root: vscode.Uri, target: { sectionId: string; index?: number; src?: string; edit?: boolean }): Promise<void> {
     const current = DocumentPanel.current;
     if (!current || current.root.toString() !== root.toString()) {
-      await vscode.commands.executeCommand('archery.openDocument', { sectionId: target.sectionId, index: target.index, preserveFocus: true });
+      // Another documentation than the one shown: the window switches to it.
+      await vscode.commands.executeCommand('archery.openDocument', { sectionId: target.sectionId, index: target.index, preserveFocus: true, root: root.toString() });
       return;
     }
     if (!current.panel.visible || !current.panel.active) current.panel.reveal(undefined, true);

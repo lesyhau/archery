@@ -61,3 +61,8 @@ body {
   padding: 24px;
   color: var(--vscode-descriptionForeground);
 }
+
+/* Codicons sit on the text line like the inline SVG icons they replaced. */
+.codicon {
+  vertical-align: middle;
+}

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Several documentations in one repository.** Each folder with an `archery.yaml` is a documentation of its own (one per service, for example). **New Architecture Documentation...** (the + in the Project view) adds another in a folder you name. The Project view lists them; click one, or run **Switch Documentation...**, to show it in the Contents, the Diagrams and the document. Every documentation keeps its own version history, and its problems are in the Problems view.
+- **Agents pick the documentation.** Every agent tool (Claude Code and Copilot) takes `doc`: a documentation's folder or system name. Without it they work on the one the window shows. `overview` lists the documentations when there are several, and `initialize` takes a `folder` for another one. An agent changing another documentation than the one shown switches the window to it while it works.
+- **Find and replace like the editor's.** Ctrl+F in the document opens a find widget laid out like VS Code's: Match Case, Match Whole Word and Use Regular Expression (Alt+C / W / R), "3 of 12", previous / next (Enter, Shift+Enter, F3, Shift+F3). Ctrl+H, or the arrow at its left, opens the replace row: Replace (Enter) and Replace All (Ctrl+Alt+Enter); Ctrl+Z undoes a replace.
+- **Project view.** A new Project section under Diagram Tools shows the system name (click to rename), the version (click for release and restore), the documentation folder, the number of diagrams and decisions, and the problems. The Contents title no longer shows the version and folder.
+- **VS Code's own icons.** The document's toolbar, table and diagram controls and the UML editors' buttons use VS Code's codicons wherever one fits; UML shapes and table tools keep their own drawings.
+
 ## 0.2.10
 
 - **Find in the document.** Ctrl+F in the document opens a find box; so does the new search button in the Contents view.

@@ -2419,3 +2419,157 @@ body.vscode-high-contrast-light {
   outline: 2px solid var(--doc-focus);
   outline-offset: 1px;
 }
+
+.edge-plus .codicon {
+  font-size: 14px;
+}
+
+.codicon {
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ find widget */
+
+/* Laid out and colored like VS Code's editor find widget (theme variables of the same names). */
+.find-widget {
+  position: fixed;
+  right: 20px;
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  padding: 4px 4px 4px 0;
+  margin-top: 4px;
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground, var(--doc-ink));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, transparent));
+  border-radius: 4px;
+  box-shadow: 0 0 8px 2px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  font-size: 13px;
+  line-height: normal;
+}
+
+.fw-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  margin: -4px 3px -4px 0;
+  padding: 0;
+  border: none;
+  border-radius: 3px 0 0 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.fw-expand:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.fw-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.fw-row {
+  display: flex;
+  align-items: center;
+}
+
+.fw-input {
+  display: flex;
+  align-items: center;
+  width: 250px;
+  height: 26px;
+  padding: 0 2px 0 0;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+}
+
+.fw-input:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.fw-input.invalid {
+  border-color: var(--vscode-inputValidation-errorBorder);
+}
+
+.fw-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.fw-input input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.fw-option,
+.fw-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fw-option {
+  margin-left: 1px;
+  border-radius: 3px;
+}
+
+.fw-option:hover {
+  background: var(--vscode-inputOption-hoverBackground);
+}
+
+.fw-option.on {
+  background: var(--vscode-inputOption-activeBackground);
+  border-color: var(--vscode-inputOption-activeBorder);
+  color: var(--vscode-inputOption-activeForeground);
+}
+
+.fw-action {
+  margin-left: 3px;
+  border-radius: 5px;
+}
+
+.fw-action:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.fw-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.fw-count {
+  min-width: 72px;
+  padding: 0 4px 0 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fw-count.none {
+  color: var(--vscode-errorForeground);
+}
+
+::highlight(archery-find) {
+  background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+}
+
+::highlight(archery-find-current) {
+  background-color: var(--vscode-editor-findMatchBackground, rgba(81, 92, 106, 0.8));
+}

@@ -8,6 +8,7 @@ import { createDiagramRequest, DocContext, resolveRequest, runOp, useDoc, vscode
 import './document.css';
 import { DecisionDialog } from './DecisionDialog';
 import { ExportDialog } from './ExportDialog';
+import { FindWidget, installFindKeys, type FindWidgetHandle } from './FindWidget';
 import { installHelpPopups } from './editorTools';
 import { expectEdit, itemFor, showChange } from './follow';
 import { reportUserActivity } from '../shared/activity';
@@ -159,6 +160,7 @@ function App() {
   const [activeSection, setActiveSection] = useState<string>();
   const [exporting, setExporting] = useState(false);
   const editors = useRef(new Map<string, Editor>());
+  const find = useRef<FindWidgetHandle>(null);
   const [error, setError] = useState<string | null>(null);
   const pendingReveal = useRef<{ sectionId: string; heading?: string; index?: number; decision?: string } | null>(null);
   /** Scrolls to a decision's row in the decision list and opens the decision over the document. */
@@ -184,6 +186,8 @@ function App() {
 
   // arc42 guidance pop-ups stay open until a click outside them.
   useEffect(() => installHelpPopups(), []);
+  // Ctrl+F / Ctrl+H / F3 open the page's own find widget.
+  useEffect(() => installFindKeys(() => find.current), []);
   // Links go to their place in the document (or open outside it), never to the browser as a resource URL.
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -222,6 +226,9 @@ function App() {
           break;
         case 'exportDialog':
           setExporting(true);
+          break;
+        case 'find':
+          find.current?.open(!!msg.replace);
           break;
         case 'follow': {
           // Live view: an agent is about to change this chapter / diagram / table.
@@ -383,6 +390,7 @@ function App() {
           </section>
         </main>
       </div>
+      <FindWidget ref={find} />
       {exporting && (
         <ExportDialog
           data={data}

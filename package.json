@@ -70,8 +70,16 @@
     "commands": [
       {
         "command": "archery.init",
-        "title": "Initialize Architecture Documentation",
-        "category": "Archery"
+        "title": "New Architecture Documentation...",
+        "category": "Archery",
+        "icon": "$(add)"
+      },
+      {
+        "command": "archery.selectDoc",
+        "title": "Switch Documentation...",
+        "category": "Archery",
+        "icon": "$(arrow-swap)",
+        "enablement": "archery.hasRoot"
       },
       {
         "command": "archery.refresh",
@@ -221,6 +229,11 @@
           "type": "webview",
           "id": "archery.diagramTools",
           "name": "Diagram Tools"
+        },
+        {
+          "id": "archery.project",
+          "name": "Project",
+          "when": "archery.hasRoot"
         }
       ]
     },
@@ -277,6 +290,21 @@
           "command": "archery.refresh",
           "when": "view == archery.contents",
           "group": "z@9"
+        },
+        {
+          "command": "archery.selectDoc",
+          "when": "view == archery.project && archery.multipleDocs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archery.init",
+          "when": "view == archery.project",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archery.selectDoc",
+          "when": "view == archery.contents && archery.multipleDocs",
+          "group": "project@0"
         }
       ],
       "view/item/context": [
@@ -400,6 +428,10 @@
         {
           "command": "archery.contents.moveDown",
           "when": "false"
+        },
+        {
+          "command": "archery.selectDoc",
+          "when": "archery.multipleDocs"
         }
       ],
       "editor/title": [
@@ -494,8 +526,8 @@
         "displayName": "Initialize architecture documentation",
         "toolReferenceName": "archery-initialize",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet.",
-        "modelDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet. Existing files are never overwritten.",
+        "userDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet, or another documentation in its own folder.",
+        "modelDescription": "Create the architecture documentation skeleton (docs/architecture: archery.yaml, model.yaml, 12 section files, data lists, starter diagrams) when none exists yet, or another documentation in its own folder. Existing files are never overwritten.",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -514,6 +546,10 @@
               "default": true,
               "description": "Embed the arc42 help texts as hidden comments in the section files",
               "type": "boolean"
+            },
+            "folder": {
+              "description": "Folder for the documentation, relative to the project (default docs/architecture). Required when the project already has one, e.g. \"services/billing/docs/architecture\".",
+              "type": "string"
             }
           },
           "required": [
@@ -536,7 +572,12 @@
         ],
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
+            }
+          }
         }
       },
       {
@@ -558,6 +599,10 @@
             "section": {
               "type": "string",
               "description": "Section number (\"5\"), id (\"building-block-view\") or title (\"Building Block View\")"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -604,6 +649,10 @@
                 "collaborationUse"
               ],
               "description": "Only return elements of this kind"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           }
         }
@@ -930,6 +979,10 @@
             "h": {
               "type": "number",
               "exclusiveMinimum": 0
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1390,6 +1443,10 @@
                   "type": "null"
                 }
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1420,6 +1477,10 @@
             "cascade": {
               "default": false,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1547,6 +1608,10 @@
             "addToDiagrams": {
               "default": true,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1575,6 +1640,10 @@
             "id": {
               "type": "string",
               "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1601,6 +1670,10 @@
             "diagram": {
               "type": "string",
               "description": "File name with or without extension, e.g. \"building-blocks-l1\""
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1687,6 +1760,10 @@
                 }
               },
               "description": "What the diagram shows: tags (tagged values in the boxes, default false), keywords (relationship keywords such as «use» on the lines: true on every line, false on none, \"auto\" (default) on every line except «use» on a line that has a label). Change it later with update_diagram"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1734,6 +1811,10 @@
                 "mostSpecific",
                 "all"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1769,6 +1850,10 @@
                 "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
               },
               "description": "Element, relationship, local node or local edge ids"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -1860,6 +1945,10 @@
             "overwrite": {
               "default": false,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2212,6 +2301,10 @@
             "overwrite": {
               "default": false,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2247,6 +2340,10 @@
                 "risks",
                 "glossary"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2289,6 +2386,10 @@
               },
               "additionalProperties": {},
               "description": "Fields of the item, including its key field"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2328,6 +2429,10 @@
             "key": {
               "type": "string",
               "minLength": 1
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2351,7 +2456,12 @@
         ],
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
+            }
+          }
         }
       },
       {
@@ -2505,6 +2615,10 @@
             },
             "reverse": {
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2569,6 +2683,10 @@
                 }
               },
               "description": "Canvas diagrams only; given fields are changed, the others stay"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2626,6 +2744,10 @@
                   "y"
                 ]
               }
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2672,6 +2794,10 @@
                   "type": "null"
                 }
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2764,6 +2890,10 @@
             "diagram_ref": {
               "type": "string",
               "description": "interactionUse / interaction nodes: the diagram they stand for, e.g. \"diagrams/checkout.seq.json\""
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2857,6 +2987,10 @@
                 "string",
                 "null"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2907,6 +3041,10 @@
             "id": {
               "type": "string",
               "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -2954,6 +3092,10 @@
                 "anchor",
                 "interrupt"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3002,6 +3144,10 @@
                   "y"
                 ]
               }
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3055,6 +3201,10 @@
                   "type": "null"
                 }
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3091,6 +3241,10 @@
                 "UP",
                 "LEFT"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3210,6 +3364,10 @@
                 }
               ],
               "description": "\"auto\": the export fits the column widths to the content; null: widths as set; omit to keep"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3285,6 +3443,10 @@
             "apply": {
               "type": "boolean",
               "description": "true: save the widths; false (default): only propose them"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3331,6 +3493,10 @@
                 ]
               },
               "description": "screen: the exported page; print: the printed page (page size, orientation and margins from the export settings). Default both"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3357,6 +3523,10 @@
             "section": {
               "type": "string",
               "description": "Chapter number (\"5\"), id (\"building-block-view\") or title"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3384,6 +3554,10 @@
               "type": "string"
             },
             "markdown": {
+              "type": "string"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
               "type": "string"
             }
           },
@@ -3422,6 +3596,10 @@
             "all": {
               "default": false,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3467,6 +3645,10 @@
             },
             "after_heading": {
               "type": "string"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3499,6 +3681,10 @@
               "minLength": 1
             },
             "after_heading": {
+              "type": "string"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
               "type": "string"
             }
           },
@@ -3591,6 +3777,10 @@
             "supersedes": {
               "type": "string",
               "description": "Number of the decision this one replaces (that one then gets status superseded)"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3637,6 +3827,10 @@
                 "distributeH",
                 "distributeV"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3661,7 +3855,12 @@
         ],
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
+            }
+          }
         }
       },
       {
@@ -3684,6 +3883,10 @@
               "type": "string",
               "minLength": 1,
               "description": "Change log entry, e.g. \"Added the deployment view\""
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3710,6 +3913,10 @@
             "version": {
               "type": "string",
               "description": "e.g. \"2.0\""
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3812,6 +4019,10 @@
                   "type": "boolean"
                 }
               }
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3854,6 +4065,10 @@
               ]
             },
             "file": {
+              "type": "string"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
               "type": "string"
             }
           },
@@ -3899,6 +4114,10 @@
                 "verticalFirst",
                 "auto"
               ]
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3947,6 +4166,10 @@
                   "tool"
                 ]
               }
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -3982,6 +4205,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           }
         }
@@ -4008,6 +4235,10 @@
             "force": {
               "default": false,
               "type": "boolean"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -4038,6 +4269,10 @@
               "type": "string",
               "minLength": 1,
               "description": "New file name without extension, e.g. \"deployment-bench\""
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -4131,6 +4366,10 @@
             "supersedes": {
               "type": "string",
               "description": "Number of the decision this one replaces; \"\" for none"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
             }
           },
           "required": [
@@ -4198,6 +4437,7 @@
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@types/vscode": "~1.95.0",
+    "@vscode/codicons": "^0.0.36",
     "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.28.2",
     "svg2ttf": "^6.1.0",
