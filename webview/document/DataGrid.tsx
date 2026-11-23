@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import type { DocTable, TableMerge } from '../../src/doc/protocol';
 import { Caption } from './Caption';
 import { resolveMerges, type Span } from '../../src/doc/tables';
+import { shownValue } from '../../src/doc/dataLists';
 import { fromSections, runOp, saveImage, useDoc } from './context';
 import { IconPlusSmall } from './icons';
 import { tableControls, type TableActions } from './tableControls';
@@ -688,6 +689,7 @@ export function DataGrid({
                   const span = spanAt(r, c);
                   if (span && (span.r !== r || span.c !== c)) return null; // covered by a merged cell
                   const value = row[col.field] ?? '';
+                  const shown = shownValue(value, fieldInfo.get(col.field)?.values);
                   const active = editing?.row === r && editing.col === c;
                   return (
                     <td
@@ -707,7 +709,7 @@ export function DataGrid({
                               copy follows the text so the cell grows with it. */}
                           {draft === null ? (
                             value ? (
-                              <span className="cell-text cell-ghost" dangerouslySetInnerHTML={{ __html: renderCell(value) }} />
+                              <span className="cell-text cell-ghost" dangerouslySetInnerHTML={{ __html: renderCell(shown) }} />
                             ) : (
                               <span className="cell-empty cell-ghost">—</span>
                             )
@@ -729,7 +731,7 @@ export function DataGrid({
                         />
                         </>
                       ) : value ? (
-                        <span className="cell-text" dangerouslySetInnerHTML={{ __html: renderCell(value) }} />
+                        <span className="cell-text" dangerouslySetInnerHTML={{ __html: renderCell(shown) }} />
                       ) : (
                         <span className="cell-empty">—</span>
                       )}

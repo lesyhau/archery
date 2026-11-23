@@ -7,6 +7,7 @@ import type { Token } from 'markdown-it';
 import { parseDirective, type Directive } from '../doc/markdown';
 import type { DocTable, DocumentData } from '../doc/protocol';
 import { resolveMerges, tableFor } from '../doc/tables';
+import { shownValue } from '../doc/dataLists';
 import type { ExportSettings } from '../model/schema';
 import { fillPlaceholders, marginSlots, resolveExportSettings, type ResolvedExportSettings } from './exportSettings';
 import { docDiagramScene } from '../render/docDiagram';
@@ -42,7 +43,7 @@ export function tocEntries(html: string): { id: string; number: string; title: s
 
 export { EXPORT_DEFAULTS, resolveExportSettings, type ResolvedExportSettings } from './exportSettings';
 
-const MARGINS: Record<ResolvedExportSettings['margins'], string> = { narrow: '12mm 12mm 14mm', normal: '18mm 16mm 20mm', wide: '25mm 25mm 27mm' };
+export const MARGINS: Record<ResolvedExportSettings['margins'], string> = { narrow: '12mm 12mm 14mm', normal: '18mm 16mm 20mm', wide: '25mm 25mm 27mm' };
 
 /** A font family stack with fallbacks. */
 const fontStack = (name: string) => `'${name.replace(/['\\;{}<>]/g, '')}', 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif`;
@@ -57,15 +58,24 @@ export function cssContent(template: string, values: Record<string, string>): st
   return out.length ? out.join(' ') : '""';
 }
 
-/** @page rules: size, margins and the margin boxes (header, footer, page numbers). */
-export function pageCss(set: ResolvedExportSettings, values: Record<string, string>): string {
-  const slots = marginSlots(set);
+/** A part of the document on pages of its own (the contents, each chapter): its page name and what {chapter} shows there. */
+export interface PagedPart {
+  page: string;
+  chapter: string;
+}
+
+/**
+ * @page rules: size, margins and the margin boxes (header, footer, page numbers). The boxes that show
+ * {chapter} are repeated per part, as named pages (the parts carry `page: <name>`).
+ */
+export function pageCss(set: ResolvedExportSettings, values: Record<string, string>, parts: PagedPart[] = []): string {
+  const slots = Object.entries(marginSlots(set)) as [string, string][];
   const boxStyle = `font-family: ${fontStack(set.font)}; font-size: ${Math.max(7, set.fontSize - 2.5)}pt; color: #555555;`;
-  const boxes = Object.entries(slots)
-    .map(([slot, text]) => `@${slot} { content: ${cssContent(text!, values)}; ${boxStyle} }`)
-    .join(' ');
-  const first = set.cover ? `@page :first { ${Object.keys(slots).map((slot) => `@${slot} { content: none; }`).join(' ')} }` : '';
-  return `@page { size: ${set.pageSize} ${set.orientation}; margin: ${MARGINS[set.margins]}; ${boxes} } ${first}`;
+  const boxes = (list: [string, string][], chapter: string) => list.map(([slot, text]) => `@${slot} { content: ${cssContent(text, { ...values, chapter })}; ${boxStyle} }`).join(' ');
+  const perChapter = slots.filter(([, text]) => text.includes('{chapter}'));
+  const named = perChapter.length ? parts.map((p) => `@page ${p.page} { ${boxes(perChapter, p.chapter)} }`).join(' ') : '';
+  const first = set.cover ? `@page :first { ${slots.map(([slot]) => `@${slot} { content: none; }`).join(' ')} }` : '';
+  return `@page { size: ${set.pageSize} ${set.orientation}; margin: ${MARGINS[set.margins]}; ${boxes(slots, '')} } ${named} ${first}`;
 }
 
 const COMMENT = /<!--([\s\S]*?)-->/g;
@@ -153,23 +163,24 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     const covered = new Set<string>();
     for (const s of spans) for (let i = s.r; i < s.r + s.rows; i++) for (let j = s.c; j < s.c + s.cols; j++) if (i !== s.r || j !== s.c) covered.add(`${i}:${j}`);
     const widths = table.columns.some((c) => c.width) ? `<colgroup>${table.columns.map((c) => `<col${c.width ? ` style="width:${c.width}%"` : ''}>`).join('')}</colgroup>` : '';
-    const head = `<thead><tr>${table.columns.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>`;
+    // data-list / data-row / data-field: which list, row and field (src/export/tableFit.ts measures by them).
+    const head = `<thead><tr>${table.columns.map((c) => `<th data-field="${esc(c.field)}">${esc(c.label)}</th>`).join('')}</tr></thead>`;
     const body = table.rows.length
       ? table.rows
           .map(
             (row, r) =>
-              `<tr>${table.columns
+              `<tr data-row="${esc(row[table.keyField] ?? String(r + 1))}">${table.columns
                 .map((col, c) => {
                   if (covered.has(`${r}:${c}`)) return '';
                   const s = spans.find((x) => x.r === r && x.c === c);
                   const attrs = s ? `${s.rows > 1 ? ` rowspan="${s.rows}"` : ''}${s.cols > 1 ? ` colspan="${s.cols}"` : ''}` : '';
-                  return `<td${attrs}>${cellMd.renderInline(row[col.field] ?? '')}</td>`;
+                  return `<td data-field="${esc(col.field)}"${attrs}>${cellMd.renderInline(shownValue(row[col.field] ?? '', table.fields.find((f) => f.field === col.field)?.values))}</td>`;
                 })
                 .join('')}</tr>`,
           )
           .join('')
       : `<tr><td class="empty" colspan="${table.columns.length || 1}">No entries yet.</td></tr>`;
-    return `<figure class="table">${caption('Table', n, title || table.title, 'figcaption')}<table>${widths}${head}<tbody>${body}</tbody></table></figure>`;
+    return `<figure class="table" data-list="${esc(table.list)}">${caption('Table', n, title || table.title, 'figcaption')}<table>${widths}${head}<tbody>${body}</tbody></table></figure>`;
   };
 
   const decisionsHtml = () => {
@@ -181,6 +192,14 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
   };
 
   const toc: TocEntry[] = [];
+  // Every part on pages of its own is a named page, so the header can show its chapter ({chapter}).
+  const parts: PagedPart[] = [];
+  const part = (chapter: string) => {
+    const page = `part-${parts.length + 1}`;
+    parts.push({ page, chapter });
+    return page;
+  };
+  const contentsPage = part('Contents');
 
   const renderSection = (section: ExportContent['sections'][number]) => {
     const tokens = md.parse(section.markdown, {});
@@ -195,7 +214,8 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     let h2 = 0;
     let h3 = 0;
     let h4 = 0;
-    const chapter = set.numberHeadings && section.number !== undefined ? String(section.number) : '';
+    const chapter = section.number !== undefined ? String(section.number) : '';
+    let chapterTitle = section.title;
     for (let i = 0; i < tokens.length; i++) {
       const t = tokens[i]!;
       if (t.type === 'html_block' && TokenCtor) {
@@ -259,6 +279,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
           h4++;
           number = chapter && `${chapter}.${h2}.${h3}.${h4}`;
         }
+        if (level === 1) chapterTitle = text;
         const id = level === 1 ? uniqueId(`sec-${section.id}`) : uniqueId(`${section.id}-${slug(text)}`);
         t.attrSet('id', id);
         if (level <= set.tocDepth) toc.push({ id, number, title: text, level });
@@ -271,19 +292,21 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
       }
       out.push(t);
     }
-    return `<section class="chapter" id="chapter-${esc(section.id)}">${md.renderer.render(out, md.options, {})}</section>`;
+    const page = part(chapter ? `${chapter} ${chapterTitle}` : chapterTitle);
+    return `<section class="chapter" id="chapter-${esc(section.id)}" style="page: ${page}">${md.renderer.render(out, md.options, {})}</section>`;
   };
 
   const chapters = content.sections.map(renderSection).join('\n');
 
-  const historyNumber = set.numberHeadings ? String(Math.max(0, ...content.sections.map((s) => s.number ?? 0)) + 1) : '';
+  // The change history is the last numbered chapter.
+  const historyNumber = String(Math.max(0, ...content.sections.map((s) => s.number ?? 0)) + 1);
   const historyId = uniqueId('sec-change-history');
-  if (set.changeHistory && set.tocDepth >= 1) toc.push({ id: historyId, number: historyNumber, title: 'Change history', level: 1 });
+  if (set.tocDepth >= 1) toc.push({ id: historyId, number: historyNumber, title: 'Change history', level: 1 });
   const released = content.changeHistory.at(-1)?.version;
   const historyRows = content.changeHistory.length
     ? content.changeHistory.map((r) => `<tr><td class="nowrap">${esc(r.version)}</td><td class="nowrap">${esc(r.date)}</td><td class="nowrap">${esc(r.author ?? '')}</td><td>${esc(r.changes)}</td></tr>`).join('')
     : '<tr><td class="empty" colspan="4">No releases yet.</td></tr>';
-  const history = !set.changeHistory ? '' : `<section class="chapter" id="chapter-change-history"><h1 id="${historyId}">${historyNumber ? `<span class="num">${historyNumber}</span> ` : ''}Change history</h1>
+  const history = `<section class="chapter" id="chapter-change-history" style="page: ${part(`${historyNumber} Change history`)}"><h1 id="${historyId}"><span class="num">${historyNumber}</span> Change history</h1>
 <p>Current version: v${esc(content.version)}${released && released !== content.version ? ` (unreleased changes since v${esc(released)})` : ''}</p>
 <figure class="table">${caption('Table', ++counters.table, 'Change history', 'figcaption')}<table><thead><tr><th>Version</th><th>Date</th><th>Author</th><th>Changes</th></tr></thead><tbody>${historyRows}</tbody></table></figure></section>`;
 
@@ -297,7 +320,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     ...count(content.model?.elements.length ?? 0, 'model element', 'model elements'),
     ...count(content.decisions.length, 'architecture decision', 'architecture decisions'),
   ];
-  const about = `<section class="chapter about" id="chapter-about"><h1 id="${aboutId}">About this document</h1>
+  const about = `<section class="chapter about" id="chapter-about" style="page: ${part('About this document')}"><h1 id="${aboutId}">About this document</h1>
 <p>This document describes the software architecture of <strong>${esc(content.system)}</strong>, version ${esc(content.version)}, as of ${esc(options.date)}.</p>
 <h2>Structure: arc42</h2>
 <p>The chapters follow <a href="https://arc42.org">arc42</a>, a template for communicating and documenting software architectures: from the goals and constraints (chapters 1 and 2) through the context, the solution strategy and the building blocks, runtime and deployment views (chapters 3 to 7) to the concepts, decisions, quality requirements, risks and glossary (chapters 8 to 12). Chapters that do not apply to the system may be short or left out.</p>
@@ -307,7 +330,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <p>This edition${stats.length ? ` (${stats.join(', ')})` : ''} was generated from those files with <a href="${ARCHERY_URL}">${esc(options.generator)}</a>.</p>
 </section>`;
 
-  const tocHtml = !toc.length ? '' : `<nav class="toc" aria-label="Contents"><h2>Contents</h2><ol>${toc
+  const tocHtml = !toc.length ? '' : `<nav class="toc" aria-label="Contents" style="page: ${contentsPage}"><h2>Contents</h2><ol>${toc
     .map((e) => {
       const page = options.tocPages?.[e.id];
       // PDF: the page number on the right, after a dotted leader.
@@ -326,11 +349,10 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <title>${esc(docTitle)}</title>
 <style>${EXPORT_CSS}
 :root { --font: ${fontStack(set.font)}; --heading-font: ${fontStack(set.headingFont)}; --size: ${set.fontSize}pt; }
-${pageCss(set, { title: docTitle, system: content.system, version: content.version, date: options.date })}
-${set.chapterBreaks ? '' : '@media print { .chapter { break-before: auto; } .chapter h1 { margin-top: 28px; } }'}</style>
+${pageCss(set, { title: docTitle, system: content.system, version: content.version, date: options.date }, parts)}</style>
 </head>
 <body>
-<header class="cover${set.cover ? '' : ' compact'}">
+<header class="cover${set.cover ? '' : ' compact'}"${set.cover ? '' : ` style="page: ${contentsPage}"`}>
 <h1 class="doc-title">${esc(docTitle)}</h1>
 <p class="doc-kind">Architecture Design Document</p>
 <p class="doc-meta">${esc(content.system)} · Version ${esc(content.version)} · ${esc(options.date)}</p>
@@ -429,7 +451,8 @@ td.nowrap { white-space: nowrap; }
   .cover:not(.compact) { padding-top: 30vh; border-bottom: 0; break-after: page; }
   .toc { break-after: page; }
   .chapter { break-before: page; }
-  .chapter h1 { margin-top: 0; }
+  /* Not 0: Chromium then writes each text of the heading twice into its PDF bookmark ("11 Introduction ..."). */
+  .chapter h1 { margin-top: 1px; }
   h1, h2, h3, h4 { break-after: avoid; }
   figure, tr, .figure { break-inside: avoid; }
   a { color: inherit; }

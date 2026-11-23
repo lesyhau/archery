@@ -12,6 +12,8 @@ import { applyChanges } from '../workspaceEdit';
 import { loadDocumentContent } from '../document/content';
 import { imageReferences, renderDocumentHtml, tocEntries, type ExportContent } from '../export/documentHtml';
 import { outlinePages, tocPages } from '../export/pdfOutline';
+import { findBrowsers } from '../export/browsers';
+import { fitAutoTables } from '../export/tableMeasure';
 import type { ExportSettings } from '../model/schema';
 import { diagramStyle } from '../editors/webviewEditor';
 import type { VersionTracker } from '../versions/tracker';
@@ -44,25 +46,7 @@ async function embedImages(root: vscode.Uri, content: ExportContent): Promise<Ma
 
 /** Installed Chromium-based browsers that can print to PDF, in order of preference. */
 export function pdfBrowsers(): string[] {
-  const configured = vscode.workspace.getConfiguration('archery').get<string>('export.browserPath')?.trim();
-  const list: string[] = configured ? [configured] : [];
-  if (process.platform === 'win32') {
-    for (const base of [process.env['PROGRAMFILES(X86)'], process.env.PROGRAMFILES, process.env.LOCALAPPDATA]) {
-      if (!base) continue;
-      list.push(
-        join(base, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-        join(base, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        join(base, 'Chromium', 'Application', 'chrome.exe'),
-        join(base, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
-      );
-    }
-  } else if (process.platform === 'darwin') {
-    for (const app of ['Google Chrome', 'Microsoft Edge', 'Chromium', 'Brave Browser']) list.push(`/Applications/${app}.app/Contents/MacOS/${app}`);
-  } else {
-    for (const bin of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable', 'brave-browser']) list.push(`/usr/bin/${bin}`);
-    list.push('/snap/bin/chromium');
-  }
-  return [...new Set(list)].filter((p) => existsSync(p));
+  return findBrowsers(vscode.workspace.getConfiguration('archery').get<string>('export.browserPath'));
 }
 
 function printToPdf(browser: string, htmlFile: string, pdfFile: string, profileDir: string): Promise<void> {
@@ -122,6 +106,11 @@ export async function writeDocumentFile(
     date: new Date().toISOString().slice(0, 10),
     settings: settings ?? content.exportSettings,
     diagramStyle: diagramStyle(),
+  };
+  // Tables whose view says `fit: auto` get column widths fitted to their content (src/export/tableFit.ts).
+  content = {
+    ...content,
+    tables: await fitAutoTables(browsers.length ? browsers : pdfBrowsers(), { system: content.system, title: content.title, version: content.version, tables: content.tables, exportSettings: options.settings }),
   };
   let html = renderDocumentHtml(content, options);
   if (picked === 'html') {

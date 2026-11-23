@@ -3,7 +3,8 @@ import { checkReferences, type CheckInput } from './checks';
 import { loadWorkspace, parseCanvasDiagram, parseSequenceDiagram, parseTimingDiagram, parseYaml, type Issue, type LoadedWorkspace, type WorkspaceReader } from './load';
 import { QualityGoalsSchema, QualityRequirementsSchema } from './schema';
 import { layoutProblems } from '../render/layoutLint';
-import { listForSrc } from '../doc/dataLists';
+import { LISTS, listForSrc } from '../doc/dataLists';
+import { parse as parseYamlText } from 'yaml';
 
 export async function validateWorkspace(reader: WorkspaceReader): Promise<{ workspace: LoadedWorkspace; issues: Issue[] }> {
   const workspace = await loadWorkspace(reader);
@@ -47,10 +48,22 @@ export async function validateWorkspace(reader: WorkspaceReader): Promise<{ work
 const DIRECTIVE = /<!--\s*archery:(diagram|table)\s+((?:(?!-->)\S)+)/g;
 const FENCE = /^(```|~~~)[\s\S]*?^\1/gm;
 
-/** Chapter directives that show a diagram or table that does not exist (deleted, renamed, mistyped). */
+/**
+ * Chapter directives that show a diagram or table that does not exist (deleted, renamed, mistyped),
+ * a table of a file with several lists that names none (it shows the first, maybe not the one meant),
+ * and an empty table whose file's other list has rows (shown as "No entries yet").
+ */
 async function directiveProblems(reader: WorkspaceReader, workspace: LoadedWorkspace): Promise<Issue[]> {
   const issues: Issue[] = [];
   const diagrams = new Set(workspace.diagrams.map((d) => d.file));
+  const rowsOf = async (file: string, key: string) => {
+    try {
+      const items = (parseYamlText((await reader.readText(file)) ?? '') as Record<string, unknown> | null)?.[key];
+      return Array.isArray(items) ? items.length : 0;
+    } catch {
+      return undefined; // the file's own syntax error is reported with it
+    }
+  };
   for (const section of workspace.project?.sections ?? []) {
     const text = await reader.readText(section.file);
     if (text === undefined) continue;
@@ -58,8 +71,26 @@ async function directiveProblems(reader: WorkspaceReader, workspace: LoadedWorks
       const [, kind, src = ''] = m;
       if (kind === 'diagram' && !diagrams.has(src.split('#')[0]!)) {
         issues.push({ file: section.file, message: `Shows diagram "${src}", which does not exist`, severity: 'error' });
-      } else if (kind === 'table' && !listForSrc(src)) {
-        issues.push({ file: section.file, message: `Shows table "${src}", which is not a data list`, severity: 'error' });
+      } else if (kind === 'table') {
+        const list = listForSrc(src);
+        if (!list) {
+          issues.push({ file: section.file, message: `Shows table "${src}", which is not a data list`, severity: 'error' });
+          continue;
+        }
+        const [file, key] = src.split('#');
+        const lists = LISTS.filter((l) => l.file === file);
+        if (!key && lists.length > 1) {
+          const options = lists.map((l) => `${file}#${l.key}`).join(' or ');
+          issues.push({ file: section.file, message: `Shows table "${src}", a file with ${lists.length} lists; it shows the first (${list.key}). Name the list: ${options}`, severity: 'warning' });
+        }
+        // An empty table is normal in a new document; it is a problem when its file's other list has the
+        // rows, i.e. the chapter most likely shows the wrong list.
+        if ((await rowsOf(list.file, list.key)) === 0) {
+          for (const other of lists.filter((l) => l.key !== list.key)) {
+            const rows = await rowsOf(other.file, other.key);
+            if (rows) issues.push({ file: section.file, message: `Shows table "${src}", which has no rows (shown as "No entries yet"), while ${other.file}#${other.key} has ${rows}`, severity: 'warning' });
+          }
+        }
       }
     }
   }

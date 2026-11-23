@@ -2,9 +2,9 @@
 import type { Editor } from '@tiptap/core';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { DiagramKind, DocumentData, ToDocument } from '../../src/doc/protocol';
+import type { DiagramKind, DocumentData, OutlineEdit, ToDocument } from '../../src/doc/protocol';
 import type { Scene } from '../../src/render/scene';
-import { createDiagramRequest, DocContext, resolveRequest, vscodeApi, type DocContextValue } from './context';
+import { createDiagramRequest, DocContext, resolveRequest, runOp, useDoc, vscodeApi, type DocContextValue } from './context';
 import './document.css';
 import { DecisionDialog } from './DecisionDialog';
 import { ExportDialog } from './ExportDialog';
@@ -15,7 +15,7 @@ import { Lightbox } from './Lightbox';
 import { headingSlug, installLinkHandler } from './links';
 import { showDetail } from './nodeViews';
 import { SectionEditor } from './SectionEditor';
-import { Toc } from './Toc';
+import { applyOutlineEdit } from './outline';
 import { Toolbar } from './Toolbar';
 
 /** The outline headings (## and ###) of a section, in order: index i = outline item i. */
@@ -36,19 +36,74 @@ function scrollToSection(sectionId: string, heading?: string, index?: number, sl
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/** Runs an outline edit from the sidebar once the chapters it touches are in the page (they mount after a load). */
+function runOutlineEdit(editors: Map<string, Editor>, edit: OutlineEdit, tries = 30): void {
+  const chapters = edit.kind === 'add' ? [edit.sectionId] : [edit.heading.sectionId, edit.kind === 'move' ? (edit.before?.sectionId ?? edit.into) : undefined];
+  if (chapters.some((id) => id && !editors.has(id))) {
+    if (tries > 0) setTimeout(() => runOutlineEdit(editors, edit, tries - 1), 100);
+    return;
+  }
+  applyOutlineEdit(editors, edit);
+}
+
 /** The change history is the chapter after the last numbered arc42 section (13 in a full document). */
 function historyNumber(data: DocumentData): number {
   return Math.max(0, ...data.sections.map((s) => s.number ?? 0)) + 1;
 }
 
-const TOC_WIDTH = 260;
-function savedTocWidth(): number {
-  try {
-    const w = Number(localStorage.getItem('archery.tocWidth'));
-    return w >= 180 && w <= 560 ? w : TOC_WIDTH;
-  } catch {
-    return TOC_WIDTH;
+/**
+ * The document's title, edited in place: a click turns it into a text field (Enter or leaving it
+ * saves, Escape cancels). It is the project's own title, else the system name, and saves to the same.
+ */
+function DocTitle({ data }: { data: DocumentData }) {
+  const { showError } = useDoc();
+  const [draft, setDraft] = useState<string | null>(null);
+  // Shown from saving until the reloaded document carries the new title.
+  const [pending, setPending] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const shown = pending ?? data.title;
+
+  useEffect(() => setPending(null), [data.title]);
+  useEffect(() => {
+    if (draft !== null) input.current?.select();
+  }, [draft !== null]);
+
+  const save = () => {
+    if (draft === null) return;
+    const name = draft.trim();
+    setDraft(null);
+    if (!name || name === data.title) return;
+    setPending(name);
+    const field = data.title === data.system ? 'system' : 'title';
+    runOp('set_project', { [field]: name }).catch((e: unknown) => {
+      setPending(null);
+      showError(e instanceof Error ? e.message : String(e));
+    });
+  };
+
+  if (draft !== null) {
+    return (
+      <input
+        ref={input}
+        className="doc-title doc-title-input"
+        aria-label="Document title"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save();
+          else if (e.key === 'Escape') setDraft(null);
+        }}
+      />
+    );
   }
+  return (
+    <h1 className="doc-title">
+      <button type="button" className="doc-title-btn" title="Rename" onClick={() => setDraft(shown)}>
+        {shown}
+      </button>
+    </h1>
+  );
 }
 
 /** Read-only change history: one row per release, filled in by "Release" (which asks for the change log). */
@@ -102,6 +157,7 @@ function App() {
   /** The decision record being edited: its file, or null for a new one. */
   const [decision, setDecision] = useState<{ file: string | null } | null>(null);
   const [activeSection, setActiveSection] = useState<string>();
+  const [exporting, setExporting] = useState(false);
   const editors = useRef(new Map<string, Editor>());
   const [error, setError] = useState<string | null>(null);
   const pendingReveal = useRef<{ sectionId: string; heading?: string; index?: number; decision?: string } | null>(null);
@@ -112,18 +168,19 @@ function App() {
     setDecision({ file });
   }, []);
   const reveal = (target: { sectionId: string; heading?: string; index?: number; decision?: string }) => {
-    if (target.decision) showDecision(target.decision);
-    else scrollToSection(target.sectionId, target.heading, target.index);
+    if (target.decision) return showDecision(target.decision);
+    // The entry clicked in the sidebar stays selected there (see pinned).
+    pinned.current = { section: target.sectionId, heading: target.index ?? null };
+    setActiveSection(target.sectionId);
+    setActiveHeading(target.index ?? null);
+    scrollToSection(target.sectionId, target.heading, target.index);
   };
   const revealRef = useRef(reveal);
   revealRef.current = reveal;
-  // A clicked contents entry stays active until the user scrolls by hand (short chapters near the
-  // end can never reach the top of the page).
+  // A contents entry clicked in the sidebar stays active until the user scrolls by hand (short
+  // chapters near the end can never reach the top of the page).
   const pinned = useRef<{ section: string; heading: number | null } | null>(null);
   const [activeHeading, setActiveHeading] = useState<number | null>(null);
-  const [tocWidth, setTocWidth] = useState(savedTocWidth);
-  // Re-render the contents panel when a section's headings change (typing, outline edits).
-  const [, setOutlineTick] = useState(0);
 
   // arc42 guidance pop-ups stay open until a click outside them.
   useEffect(() => installHelpPopups(), []);
@@ -159,6 +216,12 @@ function App() {
         case 'reveal':
           if (document.getElementById(`sec-${msg.sectionId}`)) revealRef.current(msg);
           else pendingReveal.current = msg;
+          break;
+        case 'outline':
+          runOutlineEdit(editors.current, msg.edit);
+          break;
+        case 'exportDialog':
+          setExporting(true);
           break;
         case 'follow': {
           // Live view: an agent is about to change this chapter / diagram / table.
@@ -196,7 +259,7 @@ function App() {
     }
   }, [data]);
 
-  // Scroll spy for the contents panel: the last section whose top has passed the toolbar.
+  // Scroll spy for the sidebar's contents: the last section whose top has passed the toolbar.
   useEffect(() => {
     if (!data) return;
     let frame = 0;
@@ -251,35 +314,30 @@ function App() {
     };
   }, [data?.sections.map((s) => s.id).join()]);
 
+  // A maximized diagram takes the whole VS Code window: the extension closes the side bars and the
+  // panel while it is open (and reopens them after). It tells which ones were open by the view's size.
+  const maximized = !!lightbox;
+  useEffect(() => {
+    const report = () => vscodeApi.postMessage({ type: 'viewSize', width: window.innerWidth, height: window.innerHeight });
+    report();
+    window.addEventListener('resize', report);
+    return () => window.removeEventListener('resize', report);
+  }, []);
+  const wasMaximized = useRef(false);
+  useEffect(() => {
+    if (maximized === wasMaximized.current) return;
+    wasMaximized.current = maximized;
+    vscodeApi.postMessage({ type: 'maximized', on: maximized });
+  }, [maximized]);
+
   // Tell the sidebar's contents where the reader is.
   useEffect(() => {
     if (activeSection) vscodeApi.postMessage({ type: 'activeSection', sectionId: activeSection, index: activeHeading });
   }, [activeSection, activeHeading]);
 
   const onEditor = useCallback((id: string, editor: Editor | null) => {
-    if (editor) {
-      editors.current.set(id, editor);
-      let last = '';
-      const check = () => {
-        const sig = editor.state.doc.content.content
-          .filter((n) => n.type.name === 'heading')
-          .map((n) => `${n.attrs.level}:${n.textContent}`)
-          .join('|');
-        if (sig !== last) {
-          last = sig;
-          setOutlineTick((t) => t + 1);
-        }
-      };
-      editor.on('update', check);
-      check();
-    } else editors.current.delete(id);
-  }, []);
-
-  const navigate = useCallback((sectionId: string, index?: number) => {
-    pinned.current = { section: sectionId, heading: index ?? null };
-    setActiveSection(sectionId);
-    setActiveHeading(index ?? null);
-    scrollToSection(sectionId, undefined, index);
+    if (editor) editors.current.set(id, editor);
+    else editors.current.delete(id);
   }, []);
 
   const ctx = useMemo<DocContextValue | null>(
@@ -302,35 +360,15 @@ function App() {
     [data, activeEditor],
   );
 
-  const [exporting, setExporting] = useState(false);
   if (!data || !ctx) return <div className="loading">Loading the documentation…</div>;
 
   return (
     <DocContext.Provider value={ctx}>
       <div className="layout">
-        <Toc
-          data={data}
-          active={activeSection}
-          activeHeading={activeHeading}
-          editors={editors.current}
-          historyNumber={historyNumber(data)}
-          width={tocWidth}
-          onWidth={(w) => {
-            setTocWidth(w);
-            try {
-              localStorage.setItem('archery.tocWidth', String(w));
-            } catch {
-              /* per-viewer convenience only */
-            }
-          }}
-          onNavigate={navigate}
-          onExport={() => setExporting(true)}
-          onDecision={showDecision}
-        />
         <main className="content">
           <Toolbar />
           <header className="doc-header">
-            <h1 className="doc-title">{data.title}</h1>
+            <DocTitle data={data} />
           </header>
           {data.sections.map((s) => (
             <section key={s.id} id={`sec-${s.id}`} className="doc-section" style={{ '--num': `"${s.number ?? ''}"` } as CSSProperties} data-numbered={s.number !== undefined} data-link-base={s.file.split('/').slice(0, -1).join('/')}>

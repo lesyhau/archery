@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ExportContent } from '../src/export/documentHtml';
 import { cssContent, pageCss, renderDocumentHtml } from '../src/export/documentHtml';
 import { marginSlots, resolveExportSettings } from '../src/export/exportSettings';
-import type { CanvasDiagram, Model, SequenceDiagram } from '../src/model/schema';
+import type { CanvasDiagram, ExportSettings, Model, SequenceDiagram } from '../src/model/schema';
 import { edgePoints, layoutCanvas, moveSegment } from '../src/render/canvasLayout';
 import { headPath, polylineD, roundCorners, strokeWidthOf } from '../src/render/scene';
 import { layoutSequence } from '../src/render/sequenceLayout';
@@ -148,13 +148,13 @@ const content: ExportContent = {
 const render = (settings = {}) => renderDocumentHtml(content, { generator: 'Archery test', date: '2026-11-19', settings });
 
 describe('export settings', () => {
-  it('defaults: Segoe UI 11 pt, A4, title in the footer, page numbers bottom right, two-level contents', () => {
+  it('defaults: Segoe UI 11 pt, A4, chapter in the header, title and version in the footer, page numbers bottom right, two-level contents', () => {
     const r = resolveExportSettings();
-    expect(r).toMatchObject({ font: 'Segoe UI', headingFont: 'Segoe UI', fontSize: 11, pageSize: 'A4', footer: '{title}', pageNumbers: 'bottom-right', tocDepth: 2 });
+    expect(r).toMatchObject({ font: 'Segoe UI', headingFont: 'Segoe UI', fontSize: 11, pageSize: 'A4', header: '{chapter}', footer: '{title} · v{version}', pageNumbers: 'bottom-right', tocDepth: 2 });
     const html = render();
     expect(html).toContain("--font: 'Segoe UI'");
     expect(html).toContain('size: A4 portrait');
-    expect(html).toContain('@bottom-left { content: "Shop architecture"');
+    expect(html).toContain('@bottom-left { content: "Shop architecture · v1.2"');
     expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages)');
     expect(html).toContain('@page :first'); // no header / footer on the cover
     expect(html).toContain('class="l2"');
@@ -174,15 +174,28 @@ describe('export settings', () => {
     expect(html).toContain('@bottom-right { content: "Internal · " counter(page) "/" counter(pages)');
   });
 
-  it('contents depth, numbering, cover, change history and chapter breaks', () => {
+  it('contents depth and cover; headings always numbered, the change history always the last numbered chapter', () => {
     expect(render({ tocDepth: 0 })).not.toContain('<nav class="toc"');
     expect(render({ tocDepth: 4 })).toContain('class="l4"');
-    const plain = render({ numberHeadings: false, cover: false, changeHistory: false, chapterBreaks: false });
-    expect(plain).not.toMatch(/<h[1-4][^>]*><span class="num">/);
+    // Older archery.yaml files may still carry the removed options: they change nothing.
+    const plain = render({ cover: false, numberHeadings: false, changeHistory: false, chapterBreaks: false } as ExportSettings);
     expect(plain).toContain('class="cover compact"');
-    expect(plain).not.toContain('Change history</h1>');
-    expect(plain).toContain('.chapter { break-before: auto; }');
-    expect(render()).toContain('<span class="num">1.1.1.1</span>');
+    expect(plain).toContain('<span class="num">1.1.1.1</span>');
+    expect(plain).toMatch(/<h1 id="sec-change-history"><span class="num">\d+<\/span> Change history<\/h1>/);
+    expect(plain).not.toContain('break-before: auto');
+  });
+
+  it('shows the chapter of each page in the header ({chapter}) through named pages', () => {
+    const html = render();
+    const named = [...html.matchAll(/<(?:section|nav)[^>]*style="page: (part-\d+)"/g)].map((m) => m[1]);
+    expect(named.length).toBeGreaterThan(2);
+    expect(new Set(named).size).toBe(named.length);
+    expect(html).toContain('@page part-1 { @top-left { content: "Contents"');
+    expect(html).toMatch(/@page part-2 \{ @top-left \{ content: "1 [^"]+"/);
+    expect(html).toMatch(/@page part-\d+ \{ @top-left \{ content: "\d+ Change history"/);
+    expect(html).toMatch(/@page part-\d+ \{ @top-left \{ content: "About this document"/);
+    // A header without {chapter} needs no named pages.
+    expect(render({ header: '{system}' })).not.toMatch(/@page part-/);
   });
 
   it('escapes header text for CSS and HTML', () => {

@@ -1,7 +1,7 @@
 // What agents can ask of VS Code (see ToolHost in src/ops/session.ts): versions and export. Used by
 // Copilot's tools directly and by the MCP server through the bridge.
 import * as vscode from 'vscode';
-import { exportDocumentSettings, writeDocumentFile } from '../commands/exportDocument';
+import { exportDocumentSettings, pdfBrowsers, writeDocumentFile } from '../commands/exportDocument';
 import { writeDiagramImage } from '../commands/export';
 import { loadDocumentContent } from '../document/content';
 import type { ExportSettings } from '../model/schema';
@@ -50,6 +50,9 @@ export function extensionHost(context: vscode.ExtensionContext, root: vscode.Uri
         throw new OpError(e instanceof Error ? e.message : String(e));
       }
       return vscode.workspace.asRelativePath(target);
+    },
+    async browsers() {
+      return pdfBrowsers();
     },
     async exportDiagram(diagram, format, theme, file) {
       const uri = vscode.Uri.joinPath(root, ...diagram.split('/'));

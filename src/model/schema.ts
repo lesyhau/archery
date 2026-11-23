@@ -19,8 +19,10 @@ export type SectionRef = z.infer<typeof SectionRefSchema>;
 
 /**
  * How the document is exported (HTML / PDF). Every field is optional; see resolveExportSettings
- * in src/export/documentHtml.ts for the defaults. Header and footer: up to three parts
- * "left | center | right" with the placeholders {title} {system} {version} {date} {page} {pages}.
+ * in src/export/exportSettings.ts for the defaults. Header and footer: up to three parts
+ * "left | center | right" with the placeholders {chapter} {title} {system} {version} {date} {page} {pages}.
+ * Headings are always numbered, every chapter starts on a new page and the change history is
+ * always the last numbered chapter.
  */
 export const ExportSettingsSchema = z.object({
   /** Text font family, e.g. "Segoe UI", "Calibri", "Georgia" (must be installed). */
@@ -40,10 +42,6 @@ export const ExportSettingsSchema = z.object({
   /** Contents: 0 = none, 1 = chapters, 2 = + sections, 3 = + subsections, 4 = all headings. */
   tocDepth: z.number().int().min(0).max(4).optional(),
   cover: z.boolean().optional(),
-  numberHeadings: z.boolean().optional(),
-  /** Start every chapter on a new page (PDF). */
-  chapterBreaks: z.boolean().optional(),
-  changeHistory: z.boolean().optional(),
 });
 export type ExportSettings = z.infer<typeof ExportSettingsSchema>;
 

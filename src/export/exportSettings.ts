@@ -10,15 +10,13 @@ export const EXPORT_DEFAULTS: Omit<ResolvedExportSettings, 'headingFont'> = {
   pageSize: 'A4',
   orientation: 'portrait',
   margins: 'normal',
-  header: '',
-  footer: '{title}',
+  // The chapter on every page's top, the document and its version at the bottom.
+  header: '{chapter}',
+  footer: '{title} · v{version}',
   pageNumbers: 'bottom-right',
   pageNumberFormat: 'Page {page} of {pages}',
   tocDepth: 2,
   cover: true,
-  numberHeadings: true,
-  chapterBreaks: true,
-  changeHistory: true,
 };
 
 /** The export settings with every default filled in. */
@@ -48,7 +46,10 @@ export function marginSlots(set: Pick<ResolvedExportSettings, 'header' | 'footer
   return Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v!.join(' · ')]));
 }
 
-/** Fills {title} {system} {version} {date}; {page} and {pages} stay for the renderer. */
+/**
+ * Fills {chapter} {title} {system} {version} {date}; {page} and {pages} stay for the renderer.
+ * {chapter} is the chapter a page belongs to, e.g. "7 Deployment view" (empty where there is none).
+ */
 export function fillPlaceholders(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(title|system|version|date)\}/g, (_, k: string) => values[k] ?? '');
+  return template.replace(/\{(chapter|title|system|version|date)\}/g, (_, k: string) => values[k] ?? '');
 }

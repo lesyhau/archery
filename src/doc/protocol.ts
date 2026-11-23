@@ -24,9 +24,12 @@ export interface DocTable {
   /** List name (see src/doc/dataLists.ts), used by the write_data_table operation. */
   list: string;
   title: string;
-  /** Data file the table is stored in (relative to the root). */
+  /** Data file the table is stored in (relative to the root), and the list's key in it. */
   file: string;
+  key: string;
   keyField: string;
+  /** `views.<key>.fit: auto`: the export fits the column widths to the content (src/export/tableFit.ts). */
+  fit?: 'auto';
   /** Visible columns, in order. `builtin` = a field of the arc42 list (not a custom column). */
   columns: { field: string; label: string; builtin: boolean; width?: number }[];
   /** All known fields of the list (also the hidden ones that can be shown). */
@@ -91,12 +94,33 @@ export interface DocumentData {
 
 export type DiagramKind = CanvasDiagram['type'] | 'sequence' | 'communication' | 'timing';
 
+/** A heading of a chapter: its index among the chapter's ## / ### headings, and its text (to check the index still points at it). */
+export interface HeadingRef {
+  sectionId: string;
+  index: number;
+  title: string;
+}
+
+/**
+ * Outline edits (webview/document/outline.ts). `add`: a new heading after `at` (and its subsections),
+ * `child` one level down; without `at`, a new ## at the end of `sectionId`. `move`: `heading` (with its
+ * subsections) in front of `before`, at its level, or to the end of chapter `into`.
+ */
+export type OutlineEdit =
+  | { kind: 'add'; sectionId: string; at?: HeadingRef; child?: boolean }
+  | { kind: 'level'; heading: HeadingRef; delta: 1 | -1 }
+  | { kind: 'move'; heading: HeadingRef; before?: HeadingRef; into?: string };
+
 export type ToDocument =
   | { type: 'load'; data: DocumentData }
   /** Scroll to a chapter, or to one of its headings (by text, or by index among its ## / ### headings). */
   | { type: 'reveal'; sectionId: string; heading?: string; index?: number; decision?: string }
   /** Live view: an agent is about to change (or just changed) this chapter / diagram / table. */
   | { type: 'follow'; sectionId: string; index?: number; src?: string; edit?: boolean }
+  /** An outline edit from the sidebar's contents (run in the page, so Ctrl+Z undoes it). */
+  | { type: 'outline'; edit: OutlineEdit }
+  /** Shows the export dialog (the sidebar's Export button). */
+  | { type: 'exportDialog' }
   | { type: 'diagramCreated'; requestId: number; src: string | null }
   | { type: 'opResult'; requestId: number; ok: boolean; result?: unknown; error?: string }
   /** Answer to saveImage: the image path relative to the documentation root (null if it failed). */
@@ -108,6 +132,10 @@ export type FromDocument =
   | { type: 'activity' }
   /** The chapter (and heading index) being read, for the sidebar's contents. */
   | { type: 'activeSection'; sectionId: string; index: number | null }
+  /** A diagram was maximized (`on`) or closed again: the view takes the whole window meanwhile. */
+  | { type: 'maximized'; on: boolean }
+  /** The view's size, sent when it changes (tells which side bars a maximized diagram closed). */
+  | { type: 'viewSize'; width: number; height: number }
   | { type: 'save'; file: string; markdown: string }
   | { type: 'openDiagram'; src: string }
   /** A link to something outside the document (a source file, a web page); `href` as written, `base` the folder it is relative to. */

@@ -24,7 +24,7 @@ The sidebar has three views:
 
 - **The whole document on one page,** laid out like a published architecture document. Click any text to edit it in place; every chapter is a Markdown file. The toolbar has paragraph styles, lists, quotes, code, links, tables, images and diagrams, with undo and redo.
 - **arc42 guidance where you write.** Every heading has an info icon with what belongs in that chapter. It stays open until you click elsewhere.
-- **A contents panel** with numbered chapters and subsections (`1.2`, `5.2.1`). Drag a subsection to move it, also into another chapter, and the numbers follow. Right-click to add, promote or demote headings.
+- **Contents in the Archery sidebar** with numbered chapters and subsections (`1.2`, `5.2.1`), following the chapter you read. Drag a heading onto another to move it there, also into another chapter, and the numbers follow. Right-click to add, promote or demote headings.
 - **Diagrams anywhere in the text,** with a numbered caption below. Hover one for zoom, edit, maximize and remove. **Edit** (or a double-click) opens it in its own tab, named after the diagram.
 - **Tables:**
   - Markdown tables in the text and editable data tables for the structured chapters (quality goals, stakeholders, constraints, quality scenarios, risks, glossary), stored as YAML.
@@ -34,7 +34,7 @@ The sidebar has three views:
 - **Versions.** Every saved change raises the minor version (v1.1, v1.2, …). **Release** creates the next major version with a change log entry and keeps a snapshot. **Restore a Release** rolls back to any release. The change history is the document's last chapter.
 - **Export** to PDF or to one self-contained HTML file:
   - The PDF has bookmarks and page numbers in its contents. It is printed by an installed Edge, Chrome, Chromium or Brave.
-  - Choose fonts, page size and margins, header and footer, page numbers and the contents depth. The choices are saved with the documentation, so the whole team exports the same way.
+  - Choose fonts, page size and margins, header and footer (by default the chapter at the top of each page, the document title and version at the bottom), page numbers and the contents depth. The choices are saved with the documentation, so the whole team exports the same way.
 
 ### UML on a shared model
 

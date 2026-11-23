@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { findSection } from '../src/template/template';
-import { LISTS } from '../src/doc/dataLists';
+import { LISTS, shownValue } from '../src/doc/dataLists';
 import type { DocDiagram } from '../src/doc/protocol';
 import { buildTables } from '../src/doc/tables';
 import { imageReferences, renderDocumentHtml, type ExportContent } from '../src/export/documentHtml';
@@ -75,7 +75,7 @@ describe('document export (HTML)', () => {
     expect(html).toMatch(/<span class="num">13<\/span> Change history/);
     expect(html).toContain('First draft');
     // The last page: about the document (arc42, Archery), also in the contents.
-    expect(html).toMatch(/<section class="chapter about" id="chapter-about"><h1 id="sec-about">About this document<\/h1>/);
+    expect(html).toMatch(/<section class="chapter about" id="chapter-about" style="page: part-\d+"><h1 id="sec-about">About this document<\/h1>/);
     expect(html).toContain('arc42 9.1-EN by Dr. Peter Hruschka, Dr. Gernot Starke and contributors');
     expect(html).toContain('>Archery 0.1.0</a>');
     expect(html).toMatch(/<li class="l1"><a href="#sec-about">.*About this document/);
@@ -101,6 +101,14 @@ describe('document export (HTML)', () => {
     expect(html).toContain('ADR-0001');
     const tables = [...html.matchAll(/<b>Table (\d+)[:<]/g)].map((m) => Number(m[1]));
     expect(tables).toEqual(tables.map((_, i) => i + 1));
+  });
+
+  it('shows allowed values (stored in lower case) with a capital, anything else as written', () => {
+    const values = LISTS.find((l) => l.name === 'constraints')!.fields.find((f) => f.field === 'category')!.values;
+    expect(shownValue('technical', values)).toBe('Technical');
+    expect(shownValue('Technical', values)).toBe('Technical');
+    expect(shownValue('technical debt', values)).toBe('technical debt');
+    expect(shownValue('free text', undefined)).toBe('free text');
   });
 
   it('uses captions from the Markdown and embeds images as figures', () => {

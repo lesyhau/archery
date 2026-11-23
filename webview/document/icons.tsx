@@ -11,7 +11,6 @@ const svg = (d: string, filled = false) =>
 export const IconEdit = svg('M10.5 2.5l3 3L6 13H3v-3z M9 4l3 3');
 export const IconMaximize = svg('M9.5 2.5h4v4 M13.5 2.5L9 7 M6.5 13.5h-4v-4 M2.5 13.5L7 9');
 export const IconCollapse = svg('M4 6l4 4 4-4');
-export const IconExpand = svg('M6 4l4 4-4 4');
 export const IconReset = svg('M3 8a5 5 0 1 0 1.5-3.5 M3 2.5v3h3');
 export const IconRemove = svg('M4 4l8 8 M12 4l-8 8');
 export const IconInfo = svg('M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13z M8 7.5v4 M8 5v.01');
@@ -58,8 +57,6 @@ export const IconRule = tb(<path d="M2 8h12 M2 4.5h3 M11 4.5h3 M2 11.5h3 M11 11.
 export const IconTable = tb(<><rect x="1.8" y="2.5" width="12.4" height="11" rx="1.2" /><path d="M1.8 6.3h12.4 M1.8 9.9h12.4 M6 6.3v7.2 M10 6.3v7.2" /></>);
 export const IconImage = tb(<><rect x="1.8" y="2.5" width="12.4" height="11" rx="1.4" /><circle cx="5.5" cy="6.2" r="1.2" /><path d="M2 12l4-4 3 3 2-2 3 3" /></>);
 export const IconDiagram = tb(<><rect x="5.5" y="1.8" width="5" height="3.6" rx=".6" /><rect x="1.8" y="10.6" width="5" height="3.6" rx=".6" /><rect x="9.2" y="10.6" width="5" height="3.6" rx=".6" /><path d="M8 5.4v2.6 M4.3 8h7.4 M4.3 8v2.6 M11.7 8v2.6" /></>);
-/** Export: an arrow leaving a tray. */
-export const IconExport = tb(<path d="M8 10V2.5 M5 5.5l3-3 3 3 M3 9.5v4h10v-4" />);
 export const IconUndo = tb(<path d="M5.5 3.5L2.5 6.5l3 3 M2.5 6.5H10a3.5 3.5 0 0 1 0 7H6" />);
 export const IconRedo = tb(<path d="M10.5 3.5l3 3-3 3 M13.5 6.5H6a3.5 3.5 0 0 0 0 7h4" />);
 export const IconChevron = tb(<path d="M4.5 6.5L8 10l3.5-3.5" />);

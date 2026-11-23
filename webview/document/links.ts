@@ -82,11 +82,19 @@ export function installLinkHandler(t: LinkTargets): () => void {
     const base = a.closest<HTMLElement>('[data-link-base]')?.dataset.linkBase ?? 'sections';
     if (href) followLink(href, base, t, a);
   };
+  // The page's own links (contents entries) cancel their clicks, but VS Code's handler on the window
+  // ignores that and jumps to the link's #fragment: the chapter, not the heading the entry scrolls to.
+  // A handled link click stops at the document, before it reaches the window.
+  const onHandled = (e: MouseEvent) => {
+    if (e.defaultPrevented && (e.target as Element | null)?.closest?.('a[href]')) e.stopPropagation();
+  };
   // Capture on the window: runs before (and stops) the click handling VS Code adds to the page.
   window.addEventListener('click', onClick, true);
   window.addEventListener('auxclick', onClick, true);
+  document.addEventListener('click', onHandled);
   return () => {
     window.removeEventListener('click', onClick, true);
     window.removeEventListener('auxclick', onClick, true);
+    document.removeEventListener('click', onHandled);
   };
 }

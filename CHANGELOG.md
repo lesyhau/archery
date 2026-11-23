@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Balanced table column widths.** New agent tool `fit_table_columns` balances a data table's column widths: as few wrapped lines as possible and no word wider than its column, measured in Edge / Chrome / Chromium with the export's own fonts and layout, on the exported page and on the printed page (page size, orientation and margins from the export settings). It proposes the widths, or saves them with `apply: true` (only the widths change); limits per column (`min`, `max`, `fixed`). New `get_table_layout` shows how a table is laid out: column widths, lines per cell, overflowing cells, table height.
+- **`fit: auto` for tables.** With `fit: auto` in a table's view (`write_data_table` sets it), every export fits the column widths to the content; columns with a width keep it.
+- **`write_data_table` without rows** changes only the layout (columns, labels, order, widths, merged cells); the rows stay byte for byte.
+- **More table checks in `validate`:** a table directive naming a file with several lists but no `#list` (it shows the first list), an empty table whose file's other list has the rows, and, with a browser installed, words wider than their column and columns that wrap much more than the rest.
+- **The contents are in the sidebar only.** The document no longer has its own contents panel; the reading column is centered in the page. The Archery sidebar's Contents now does what the panel did: drag a heading onto another to move it there (with its subheadings, also into another chapter), or onto a chapter to move it to the chapter's end; right-click to add a heading, add a subheading, promote or demote. Ctrl+Z in the document undoes these.
+- **Version and system name in the sidebar.** The Contents view shows the documentation's version next to its title; "Rename System..." is in its "..." menu.
+- **Export opens the export dialog.** The Export button in the Contents view opens the document's export dialog (fonts, numbering, page margins) instead of asking only for PDF or HTML.
+- **The document title is edited in place.** Click the title at the top of the document to rename it: the document's own title, or the system name when the document has none.
+- **PDF bookmarks read correctly.** Chapter bookmarks showed their number and title twice ("11 Introduction and goals Introduction and goals").
+- **The chapter in every page header.** New placeholder `{chapter}` for the header and footer, e.g. "7 Deployment view"; the header shows it by default, the footer the document title and version (`{title} · v{version}`). Header and footer text saved in archery.yaml stays as it is.
+- **Fewer export options.** Headings are always numbered, every chapter starts on a new page, and the change history is always the last numbered chapter; the three switches for them are gone from the export dialog (and are ignored in archery.yaml).
+- **Links in the page no longer jump to the chapter.** VS Code followed a page link's target after Archery had already handled the click (the contents panel's headings went to their chapter).
+- **A click maximizes a diagram.** Clicking a diagram in the document maximizes it (dragging still pans it); the Edit button opens it in the UML diagram editor.
+- **Maximized diagrams fill the VS Code window.** While a diagram is maximized, the side bars and the panel are closed (and the document's editor group is maximized); they open again when it closes.
+- **Allowed values with a capital.** Table values from a fixed set (constraint category, risk priority and kind) are stored in lower case and shown as "Technical", "High", "Risk" in the document and in exports.
+
 ## 0.2.8
 
 - **Contents entries scroll again.** Clicking a chapter or heading in the document's contents panel goes there again (0.2.6 and 0.2.7 caught those clicks as links).

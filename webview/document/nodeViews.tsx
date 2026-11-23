@@ -121,6 +121,8 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
   const width = live ? `${live.w}px` : attrs.width ?? undefined;
   const height = live ? live.h : attrs.height ?? autoHeight;
   const open = () => editDiagram(attrs.src);
+  // A click on the diagram maximizes it; a drag pans it (and is no click).
+  const pressedAt = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <NodeViewWrapper className={`node-diagram${selected ? ' is-selected' : ''}`} contentEditable={false}>
@@ -169,8 +171,19 @@ export function DiagramFrame({ node, updateAttributes, editor, selected, deleteN
             ref={bindBody}
             className={`frame-body${scene ? ' stage' : ''}`}
             style={{ height: scene ? height : undefined }}
-            onDoubleClick={open}
-            onPointerDown={scene ? pz.startPan : undefined}
+            onPointerDown={
+              scene
+                ? (e) => {
+                    pressedAt.current = { x: e.clientX, y: e.clientY };
+                    pz.startPan(e);
+                  }
+                : undefined
+            }
+            onClick={(e) => {
+              const at = pressedAt.current;
+              pressedAt.current = null;
+              if (scene && at && e.button === 0 && Math.hypot(e.clientX - at.x, e.clientY - at.y) < 3) maximize(scene, caption, attrs.src);
+            }}
           >
             {scene ? (
               <div className="stage-canvas" style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})` }}>

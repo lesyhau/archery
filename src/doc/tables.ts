@@ -15,6 +15,12 @@ export function savedColumns(parsed: Row | undefined, key: string): ColumnView[]
   return out.length > 0 ? out : undefined;
 }
 
+/** Whether the export fits the list's column widths (`views.<key>.fit: auto`). */
+export function savedFit(parsed: Row | undefined, key: string): boolean {
+  const views = parsed?.views as Record<string, { fit?: unknown }> | undefined;
+  return views?.[key]?.fit === 'auto';
+}
+
 /** Saved merged cells of a list (`views.<key>.merges`). */
 export function savedMerges(parsed: Row | undefined, key: string): TableMerge[] {
   const views = parsed?.views as Record<string, { merges?: unknown }> | undefined;
@@ -38,7 +44,9 @@ export function buildTables(data: Map<string, unknown>): Record<string, DocTable
       list: list.name,
       title: list.title,
       file: list.file,
+      key: list.key,
       keyField: list.keyField,
+      ...(savedFit(parsed, list.key) ? { fit: 'auto' as const } : {}),
       columns,
       fields: list.fields.map((f) => ({ field: f.field, label: f.label, required: !!f.required, values: f.values })),
       rows: items.map((item) => Object.fromEntries(Object.entries(item ?? {}).map(([k, v]) => [k, cellText(v)]))),

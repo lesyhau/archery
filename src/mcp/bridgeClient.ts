@@ -66,6 +66,7 @@ export function connectBridge(root: string): BridgeClient | undefined {
       restore: (version) => call('restore', version),
       exportDocument: (format, file, settings) => call('exportDocument', format, file, settings),
       exportDiagram: (diagram, format, theme, file) => call('exportDiagram', diagram, format, theme, file),
+      browsers: () => call('browsers'),
     },
   };
 }

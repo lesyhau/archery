@@ -33,6 +33,8 @@ export interface ToolHost {
   restore(version: string): Promise<string>;
   exportDocument(format: 'html' | 'pdf', file?: string, settings?: Record<string, unknown>): Promise<string>;
   exportDiagram(diagram: string, format: 'svg' | 'png', theme: 'light' | 'dark', file?: string): Promise<string>;
+  /** Browsers for measuring tables, with VS Code's archery.export.browserPath first. */
+  browsers?(): Promise<string[]>;
 }
 
 export class ArcherySession {

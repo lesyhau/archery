@@ -1,6 +1,7 @@
-// Export dialog: text, page, header, footer, page numbers, table of contents and document
-// options, each in its own section; a small page preview shows where the header,
-// footer and page numbers go. The choices are saved in archery.yaml (`export`) when you export.
+// Export dialog: text, page, header, footer, page numbers, table of contents and the cover page,
+// each in its own section; a small page preview shows where the header, footer and page numbers
+// go. The choices are saved in archery.yaml (`export`) when you export. Headings are always
+// numbered, chapters always start on a new page and the change history is always included.
 import { forwardRef, useEffect, useRef, useState, type SelectHTMLAttributes } from 'react';
 import type { DocumentData } from '../../src/doc/protocol';
 import { fillPlaceholders, marginSlots, resolveExportSettings, type MarginSlot } from '../../src/export/exportSettings';
@@ -78,14 +79,15 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const values = { title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10) };
+  // The preview shows a page of chapter 5.
+  const values = { chapter: '5 Building Block View', title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10) };
   const slots = marginSlots(r);
   const slotText = (slot: MarginSlot) => (slots[slot] ? fillPlaceholders(slots[slot]!, values).replace(/\{page\}/g, '3').replace(/\{pages\}/g, '42') : '');
   const landscape = r.orientation === 'landscape';
   const editorStyle = data.canvasSettings.diagramStyle === 'modern' ? 'Modern' : 'Classic';
   const placeholders = (
     <>
-      <code>{'{title}'}</code> <code>{'{system}'}</code> <code>{'{version}'}</code> <code>{'{date}'}</code> <code>{'{page}'}</code> <code>{'{pages}'}</code>
+      <code>{'{chapter}'}</code> <code>{'{title}'}</code> <code>{'{system}'}</code> <code>{'{version}'}</code> <code>{'{date}'}</code> <code>{'{page}'}</code> <code>{'{pages}'}</code>
     </>
   );
 
@@ -200,15 +202,6 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
                 <label className="check">
                   <input type="checkbox" checked={r.cover} onChange={(e) => set({ cover: e.target.checked })} /> Cover page
                 </label>
-                <label className="check">
-                  <input type="checkbox" checked={r.numberHeadings} onChange={(e) => set({ numberHeadings: e.target.checked })} /> Numbered headings
-                </label>
-                <label className="check">
-                  <input type="checkbox" checked={r.chapterBreaks} onChange={(e) => set({ chapterBreaks: e.target.checked })} /> Each chapter on a new page
-                </label>
-                <label className="check">
-                  <input type="checkbox" checked={r.changeHistory} onChange={(e) => set({ changeHistory: e.target.checked })} /> Change history chapter
-                </label>
               </div>
               <p className="xd-hint">Diagrams are drawn in the {editorStyle} style, as set in the Archery extension settings (Diagram Style).</p>
             </fieldset>
@@ -223,13 +216,13 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
               </div>
               <div className="xd-sheet" style={{ fontSize: `${r.fontSize * 0.62}px` }}>
                 <div className="xd-h" style={{ fontFamily: `'${r.headingFont}', var(--vscode-font-family)` }}>
-                  {r.numberHeadings ? '5 ' : ''}Building Block View
+                  5 Building Block View
                 </div>
                 <div className="xd-line" />
                 <div className="xd-line" />
                 <div className="xd-line short" />
                 <div className="xd-h2" style={{ fontFamily: `'${r.headingFont}', var(--vscode-font-family)` }}>
-                  {r.numberHeadings ? '5.1 ' : ''}Whitebox Overall System
+                  5.1 Whitebox Overall System
                 </div>
                 <div className="xd-line" />
                 <div className="xd-line" />

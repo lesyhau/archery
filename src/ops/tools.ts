@@ -42,7 +42,14 @@ import {
 import { validateWorkspace } from '../model/validate';
 import { findSection, SECTIONS } from '../template/template';
 import { camelSlug, fileSlug, kebabSlug, uniqueId } from './ids';
-import { defaultColumns, listByName, parseCell } from '../doc/dataLists';
+import { defaultColumns, listByName, listForSrc, LISTS, parseCell } from '../doc/dataLists';
+import { buildTables } from '../doc/tables';
+import { documentTitle } from '../doc/title';
+import type { DocTable } from '../doc/protocol';
+import { findBrowsers, NO_BROWSER } from '../export/browsers';
+import { stillWrapping, tallestCell, totalLines, wrappingColumns, type TargetLayout } from '../export/tableFit';
+import { measure, tableOfList, type TableSource } from '../export/tableMeasure';
+import { parse as parseYamlText } from 'yaml';
 import { autoLayout } from './autoLayout';
 import { layoutProblems } from '../render/layoutLint';
 import { appendItem, OpError, type ArcherySession, type ToolHost } from './session';
@@ -261,6 +268,94 @@ function insertInChapter(session: ArcherySession, s: { id: string; number?: numb
   }
   lines.splice(at, 0, '', ...block, ...(at < lines.length ? [''] : []));
   session.write(s.file, `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`);
+}
+
+/** The data tables and export settings, for measuring tables (src/export/tableMeasure.ts). */
+function tableSource(session: ArcherySession): TableSource {
+  const data = new Map<string, unknown>();
+  for (const l of LISTS) {
+    const text = data.has(l.file) ? undefined : session.read(l.file);
+    if (text === undefined) continue;
+    try {
+      data.set(l.file, parseYamlText(text));
+    } catch (e) {
+      throw new OpError(`${l.file} has syntax errors: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  const project = parseProject(session.read('archery.yaml') ?? '').value;
+  const system = project?.system ?? 'System';
+  return { system, title: documentTitle(system, project?.title), version: '', tables: buildTables(data), exportSettings: project?.export };
+}
+
+/** Browsers to measure with: VS Code's (with its browserPath setting) when it is open, else the installed ones. */
+async function browsersFor(session: ArcherySession): Promise<string[]> {
+  const list = (await session.host?.browsers?.().catch(() => undefined)) ?? findBrowsers();
+  if (!list.length) throw new OpError(`Measuring tables ${NO_BROWSER}.`);
+  return list;
+}
+
+/** The table of a list, with columns and rows to measure. */
+function measurableTable(src: TableSource, list: string): DocTable {
+  const table = tableOfList(src.tables, list);
+  if (!table) throw new OpError(`There is no ${list} table yet (its data file is missing).`);
+  if (!table.columns.length) throw new OpError(`The ${list} table shows no columns.`);
+  if (!table.rows.length) throw new OpError(`The ${list} table has no rows to measure.`);
+  return table;
+}
+
+/**
+ * Saves column widths in the table's view (`views.<key>.columns`). When the view lists exactly the
+ * shown columns, only their `width` values change; otherwise the shown columns are written with them.
+ */
+function saveColumnWidths(session: ArcherySession, list: DataListName, table: DocTable, widths: number[]): void {
+  const def = listByName(list)!;
+  const doc = parseDocument(session.read(def.file) ?? `${def.key}: []\n`);
+  if (doc.errors.length > 0) throw new OpError(`${def.file} has syntax errors: ${doc.errors[0]!.message}`);
+  const saved = doc.getIn(['views', def.key, 'columns'], true);
+  if (isSeq(saved) && saved.items.length === table.columns.length && saved.items.every((it, i) => isMap(it) && it.get('field') === table.columns[i]!.field)) {
+    saved.items.forEach((it, i) => isMap(it) && it.set('width', widths[i]));
+  } else {
+    doc.setIn(['views', def.key, 'columns'], doc.createNode(table.columns.map((c, i) => ({ field: c.field, label: c.label, width: widths[i] }))));
+  }
+  session.writeDocument(def.file, doc);
+}
+
+const TargetsSchema = z.array(z.enum(['screen', 'print'])).min(1).describe('screen: the exported page; print: the printed page (page size, orientation and margins from the export settings). Default both').optional();
+
+/** Problems of the tables the chapters show, measured in a browser (none without one). */
+async function tableLayoutProblems(session: ArcherySession): Promise<{ file: string; message: string }[]> {
+  const src = tableSource(session);
+  const project = parseProject(session.read('archery.yaml') ?? '').value;
+  const shown = new Map<string, DocTable>();
+  for (const s of project?.sections ?? []) {
+    if (!s.enabled) continue;
+    for (const m of (session.read(s.file) ?? '').matchAll(/<!--\s*archery:table\s+((?:(?!-->)\S)+)/g)) {
+      const def = listForSrc(m[1]!);
+      const table = def && tableOfList(src.tables, def.name);
+      if (table && table.rows.length && table.columns.length) shown.set(table.list, table);
+    }
+  }
+  if (!shown.size) return [];
+  const browsers = (await session.host?.browsers?.().catch(() => undefined)) ?? findBrowsers();
+  if (!browsers.length) return [];
+  const results = await measure(browsers, src, [...shown.values()].map((table) => ({ table, mode: 'layout' as const })));
+  const problems = new Map<string, { file: string; message: string; targets: string[] }>();
+  const add = (key: string, file: string, message: string, target: string) => {
+    const p = problems.get(key) ?? { file, message, targets: [] };
+    p.targets.push(target);
+    problems.set(key, p);
+  };
+  for (const r of results) {
+    const table = shown.get(r.list)!;
+    const label = (field: string) => table.columns.find((c) => c.field === field)?.label || field;
+    const name = `Table "${table.title}" (${table.list})`;
+    for (const l of r.layouts) {
+      for (const o of l.overflow) add(`o:${r.list}:${o.row}:${o.field}`, table.file, `${name}: a word in the "${label(o.field)}" cell of ${o.row === 'header' ? 'the header' : `row ${o.row}`} is wider than its column`, l.target);
+      for (const f of l.forced) add(`f:${r.list}:${f.field}`, table.file, `${name}: column "${label(f.field)}" is set to ${f.requested}% but a word needs about ${Math.ceil(f.rendered)}%; fit_table_columns finds widths that fit`, l.target);
+      for (const w of wrappingColumns(l)) add(`w:${r.list}:${w.field}`, table.file, `${name}: column "${label(w.field)}" wraps much more than the rest (median ${w.median} lines, the table's ${w.table}); fit_table_columns balances the widths`, l.target);
+    }
+  }
+  return [...problems.values()].map((p) => ({ file: p.file, message: `${p.message} (${p.targets.join(', ')})` }));
 }
 
 /** Versions and export run in VS Code. */
@@ -1056,19 +1151,25 @@ export const TOOLS: ToolDef<any>[] = [
   tool({
     name: 'validate',
     title: 'Validate architecture documentation',
-    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), and the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates). Call after making changes.',
+    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.',
     input: z.object({}),
     readOnly: true,
     async run(session) {
       const { issues } = await validateWorkspace(sessionReader(session));
+      // The tables the chapters show, measured in a browser when there is one: words wider than their
+      // column, columns that wrap much more than the rest.
+      const tables = await tableLayoutProblems(session).catch(() => []);
       return {
         ok: !issues.some((i) => i.severity === 'error'),
-        problems: issues.map((i) => ({
-          severity: i.severity,
-          file: session.display(i.file),
-          line: i.line,
-          message: i.message,
-        })),
+        problems: [
+          ...issues.map((i) => ({
+            severity: i.severity,
+            file: session.display(i.file),
+            line: i.line,
+            message: i.message,
+          })),
+          ...tables.map((t) => ({ severity: 'warning' as const, file: session.display(t.file), line: undefined, message: t.message })),
+        ],
       };
     },
   }),
@@ -1387,10 +1488,10 @@ export const TOOLS: ToolDef<any>[] = [
   tool({
     name: 'write_data_table',
     title: 'Write structured table',
-    description: `Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items). Rows are objects of field -> text; numbers, comma-separated lists and "key: value" maps are converted per field. Rows without an id get one. Lists:\n${DATA_LIST_HELP}`,
+    description: `Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items). Omit rows to change only the layout: the rows stay exactly as they are. Rows are objects of field -> text; numbers, comma-separated lists and "key: value" maps are converted per field. Rows without an id get one. fit: "auto" makes the export fit the column widths to the content (columns with a width keep it); fit_table_columns fits them once. Lists:\n${DATA_LIST_HELP}`,
     input: z.object({
       list: DataListSchema,
-      rows: z.array(z.record(z.string(), z.string())),
+      rows: z.array(z.record(z.string(), z.string())).describe('All rows; omit to keep the current rows').optional(),
       columns: z
         .array(
           z.object({
@@ -1405,14 +1506,17 @@ export const TOOLS: ToolDef<any>[] = [
         .array(z.object({ row: z.string().describe('Key of the top row'), field: z.string(), rows: z.number().int().positive(), cols: z.number().int().positive() }))
         .describe('Merged cells (spreadsheet style); omit to keep the current ones')
         .optional(),
+      fit: z.enum(['auto']).nullable().describe('"auto": the export fits the column widths to the content; null: widths as set; omit to keep').optional(),
     }),
     readOnly: false,
-    confirm: (i) => `Save the ${i.list} table (${i.rows.length} rows)?`,
-    run(session, { list, rows, columns, merges }) {
+    confirm: (i) => (i.rows ? `Save the ${i.list} table (${i.rows.length} rows)?` : `Change the layout of the ${i.list} table?`),
+    run(session, { list, rows: givenRows, columns, merges, fit }) {
       const def = listByName(list)!;
       const schema = DATA_LISTS[list].schema;
       const doc = parseDocument(session.read(def.file) ?? `${def.key}: []\n`);
       if (doc.errors.length > 0) throw new OpError(`${def.file} has syntax errors: ${doc.errors[0]!.message}`);
+      if (!givenRows && !columns && !merges && fit === undefined) throw new OpError('Nothing to change: pass rows, columns, merges or fit.');
+      const rows = givenRows ?? [];
       const fields = new Map(def.fields.map((f) => [f.field, f]));
       const label = (field: string) => fields.get(field)?.label ?? columns?.find((c) => c.field === field)?.label ?? field;
       const taken = new Set(rows.map((r) => r[def.keyField]?.trim()).filter((v): v is string => !!v));
@@ -1447,18 +1551,23 @@ export const TOOLS: ToolDef<any>[] = [
       const dup = keys.find((k, i) => keys.indexOf(k) !== i);
       if (dup) throw new OpError(`Two rows have the ${label(def.keyField)} "${dup}".`);
 
-      doc.set(def.key, doc.createNode(items));
-      const seq = doc.get(def.key, true);
-      if (isSeq(seq)) seq.flow = false;
-      if (columns || merges) {
-        // The table layout (custom columns, order, labels, merged cells) lives in `views.<list key>`.
-        const current = ((doc.toJS() as Record<string, any>)?.views?.[def.key] ?? {}) as { columns?: unknown; merges?: unknown };
+      // Without rows the items are left as they are (byte for byte).
+      if (givenRows) {
+        doc.set(def.key, doc.createNode(items));
+        const seq = doc.get(def.key, true);
+        if (isSeq(seq)) seq.flow = false;
+      }
+      if (columns || merges || fit !== undefined) {
+        // The table layout (custom columns, order, labels, widths, merged cells, fit) lives in `views.<list key>`.
+        const current = ((doc.toJS() as Record<string, any>)?.views?.[def.key] ?? {}) as { columns?: unknown; merges?: unknown; fit?: unknown };
         const defaults = defaultColumns(def);
         const cols = columns ?? (current.columns as typeof columns);
         const isDefault =
           !cols || (cols.length === defaults.length && cols.every((c, i) => c.field === defaults[i]!.field && c.label === defaults[i]!.label && c.width === undefined));
         const mergeList = merges ?? (current.merges as typeof merges) ?? [];
+        const fitMode = fit === undefined ? (current.fit === 'auto' ? 'auto' : undefined) : (fit ?? undefined);
         const view: Record<string, unknown> = {};
+        if (fitMode) view.fit = fitMode;
         if (!isDefault) view.columns = cols;
         if (mergeList.length > 0) view.merges = mergeList;
         if (Object.keys(view).length > 0) doc.setIn(['views', def.key], doc.createNode(view));
@@ -1476,7 +1585,87 @@ export const TOOLS: ToolDef<any>[] = [
         throw new OpError(`Not saved: ${problems.join('; ')}`);
       }
       session.writeDocument(def.file, doc);
-      return { file: session.display(def.file), rows: items.length };
+      const stored = (doc.toJS() as Record<string, unknown> | null)?.[def.key];
+      return { file: session.display(def.file), rows: givenRows ? items.length : Array.isArray(stored) ? stored.length : 0 };
+    },
+  }),
+
+  tool({
+    name: 'fit_table_columns',
+    title: 'Fit table column widths',
+    description:
+      'Balance the column widths of a data table (data/*.yaml): as few wrapped lines as possible and no word wider than its column. The table is measured in a browser (Edge, Chrome or Chromium) with the export\'s own fonts and layout, on the exported page (screen) and on the printed page (print: page size, orientation and margins from the export settings). Starting from the current widths, width moves between columns while the table gets shorter. Returns the widths in percent before and after (in the order of `fields`), `lines` (the lines all body cells are drawn with; a cell is as tall as its row) and `tallestCell` per target as [before, after], and the cells whose own text still takes 3 or more lines. apply: true saves the widths in the table\'s view (only the column widths change); fitting again gives the same widths. columns: limits per field in percent { min (default 3), max, fixed (keeps its current width) }.',
+    input: z.object({
+      list: DataListSchema,
+      targets: TargetsSchema,
+      columns: z
+        .record(z.string(), z.object({ min: z.number().min(1).max(100).optional(), max: z.number().min(1).max(100).optional(), fixed: z.boolean().optional() }))
+        .describe('Limits per field, in percent')
+        .optional(),
+      apply: z.boolean().describe('true: save the widths; false (default): only propose them').optional(),
+    }),
+    readOnly: false,
+    confirm: (i) => (i.apply ? `Fit and save the column widths of the ${i.list} table?` : `Measure the ${i.list} table?`),
+    async run(session, { list, targets, columns: limits, apply }) {
+      const src = tableSource(session);
+      const table = measurableTable(src, list);
+      for (const [field, l] of Object.entries(limits ?? {})) {
+        const col = table.columns.find((c) => c.field === field);
+        if (!col) throw new OpError(`The ${list} table has no column "${field}"; its columns: ${table.columns.map((c) => c.field).join(', ')}.`);
+        if (l.fixed && !col.width) throw new OpError(`Column "${field}" has no width to keep; drop "fixed" or give it a width.`);
+        if (l.min !== undefined && l.max !== undefined && l.min > l.max) throw new OpError(`Column "${field}": min is above max.`);
+      }
+      const [r] = await measure(await browsersFor(session), src, [{ table, mode: 'fit', limits }], targets);
+      if (!r || r.error) throw new OpError(r?.error ?? 'The table could not be measured.');
+      if (!r.fitted || !r.fittedLayouts) {
+        const cells = (r.tooWide ?? []).map((c) => `row ${c.row}, ${c.field}: a word needs ${c.wordPx}px, the column gets at most ${c.maxPx}px`);
+        throw new OpError(`No widths fit every word within the limits${cells.length ? `: ${cells.join('; ')}` : ''}. Shorten those words, allow the columns more width, or show fewer columns.`);
+      }
+      const before = table.columns.every((c) => c.width) ? table.columns.map((c) => c.width!) : r.current.map((p) => Math.round(p));
+      const per = (f: (l: TargetLayout) => number) => Object.fromEntries(r.layouts.map((l, i) => [l.target, [f(l), f(r.fittedLayouts![i]!)]]));
+      const changed = r.fitted.some((w, i) => w !== table.columns[i]!.width);
+      if (apply && changed) saveColumnWidths(session, list, table, r.fitted);
+      return {
+        list,
+        fields: r.fields,
+        before,
+        after: r.fitted,
+        lines: per(totalLines),
+        tallestCell: per(tallestCell),
+        stillWrapping: r.fittedLayouts.flatMap(stillWrapping),
+        applied: !!apply && changed,
+      };
+    },
+  }),
+
+  tool({
+    name: 'get_table_layout',
+    title: 'Get table layout',
+    description:
+      'How a data table (data/*.yaml) is laid out with its current column widths, measured in a browser with the export\'s fonts and layout: per target (screen: the exported page; print: the printed page) the table height in px, each column\'s width in px and percent, the lines of each body cell\'s own text (by row key and field), cells whose content overflows, and columns the browser made wider than their width to fit a word. The table counterpart of get_diagram; fit_table_columns balances the widths.',
+    input: z.object({ list: DataListSchema, targets: TargetsSchema }),
+    readOnly: true,
+    async run(session, { list, targets }) {
+      const src = tableSource(session);
+      const table = measurableTable(src, list);
+      const [r] = await measure(await browsersFor(session), src, [{ table, mode: 'layout' }], targets);
+      if (!r || r.error) throw new OpError(r?.error ?? 'The table could not be measured.');
+      return {
+        list,
+        widths: table.columns.map((c) => c.width ?? null),
+        targets: r.layouts.map((l) => {
+          const rows = new Map<string, Record<string, number>>();
+          for (const c of l.cells) rows.set(c.row, { ...rows.get(c.row), [c.field]: c.textLines });
+          return {
+            target: l.target,
+            height: Math.round(l.height),
+            columns: l.columns,
+            lines: [...rows].map(([row, lines]) => ({ row, lines })),
+            overflow: l.overflow,
+            widenedForAWord: l.forced,
+          };
+        }),
+      };
     },
   }),
 
@@ -1936,6 +2125,7 @@ export const SERVER_INSTRUCTIONS = `Tools for architecture documentation (docs-a
 - Many elements, relationships or local nodes / edges at once: batch (one call, all or nothing).
 - Container and parts on one diagram: create_diagram / add_to_diagram leave out a container's relationship when a part has it (relationships: "all" to keep them).
 - Check a layout without an image: get_diagram returns every node's drawn box; validate reports overlapping shapes and labels with coordinates.
+- Table column widths: fit_table_columns balances them (measured as exported, on screen and in print), get_table_layout shows how a table wraps; write_data_table without rows changes only the layout, fit: "auto" keeps them fitted at every export.
 - Call validate after a series of changes and fix reported problems.`;
 
 export type { DataListName };

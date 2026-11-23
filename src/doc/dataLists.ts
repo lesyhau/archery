@@ -164,6 +164,14 @@ export function cellText(value: unknown): string {
   return String(value);
 }
 
+/**
+ * A cell as shown: one of the field's allowed values is stored in lower case ("technical", as agents
+ * write it) and shown with a capital ("Technical"). Anything else is shown as written.
+ */
+export function shownValue(text: string, values: string[] | undefined): string {
+  return values?.includes(text) ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 /** Editable text back to the field's stored value (undefined = remove the field). */
 export function parseCell(text: string, type: FieldType | undefined): unknown {
   const t = text.trim();

@@ -13,11 +13,15 @@ import { initCommand } from './commands/init';
 import { newDiagramCommand } from './commands/newDiagram';
 import { DocumentPanel, type RevealTarget } from './document/documentPanel';
 import { WebviewDiagramEditorProvider } from './editors/webviewEditor';
-import type { Issue } from './model/load';
+import { parseProject, type Issue } from './model/load';
 import { validateWorkspace } from './model/validate';
 import { HISTORY_FILE } from './versions/history';
 import { releaseCommand, rollbackCommand, VersionTracker } from './versions/tracker';
-import { ContentsTreeProvider } from './views/contentsTree';
+import { ContentsTreeProvider, headingRef, isHeading, type ContentsNode } from './views/contentsTree';
+import type { OutlineEdit } from './doc/protocol';
+import { ArcherySession } from './ops/session';
+import { TOOLS } from './ops/tools';
+import { applyChanges } from './workspaceEdit';
 import { DiagramToolsView } from './views/toolsView';
 import { DiagramsTreeProvider } from './views/diagramsTree';
 import { createReader, findArcheryRoots } from './workspace';
@@ -25,8 +29,13 @@ import { createReader, findArcheryRoots } from './workspace';
 export function activate(context: vscode.ExtensionContext): void {
   const tree = new DiagramsTreeProvider();
   const treeView = vscode.window.createTreeView('archery.diagrams', { treeDataProvider: tree });
-  const contents = new ContentsTreeProvider();
-  const contentsView = vscode.window.createTreeView('archery.contents', { treeDataProvider: contents });
+  // Outline edits run in the document (opened if needed); moving and changing levels keeps the
+  // keyboard in the sidebar, a new heading takes it to the document to type its title.
+  const outlineEdit = (edit: OutlineEdit) => {
+    if (currentRoot) void DocumentPanel.send(context, currentRoot, tracker, { type: 'outline', edit }, edit.kind !== 'add');
+  };
+  const contents = new ContentsTreeProvider(outlineEdit);
+  const contentsView = vscode.window.createTreeView('archery.contents', { treeDataProvider: contents, dragAndDropController: contents });
   const diagnostics = vscode.languages.createDiagnosticCollection('archery');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'archery.versionMenu';
@@ -39,9 +48,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // The status bar shows the product name only; the documentation version is in the tooltip and the menu.
   let versionLabel = '';
+  // The Contents view's heading: the documentation's version and folder.
+  const describeContents = () => {
+    const folder = currentRoot ? vscode.workspace.asRelativePath(currentRoot) : undefined;
+    contentsView.description = [tracker ? versionLabel : '', folder].filter(Boolean).join(' · ') || undefined;
+  };
   const showVersion = async () => {
+    describeContents();
     if (!tracker) return status.hide();
     versionLabel = `v${(await tracker.history()).current}`;
+    describeContents();
     status.text = '$(archery-logo) Archery';
     status.tooltip = `Archery ${versionLabel}`;
     status.show();
@@ -50,7 +66,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const refresh = async () => {
     const root = (await findArcheryRoots())[0];
     await vscode.commands.executeCommand('setContext', 'archery.hasRoot', !!root);
-    contentsView.description = root ? vscode.workspace.asRelativePath(root) : undefined;
     if (!root) {
       await tree.update(undefined, undefined);
       await contents.update(undefined, undefined);
@@ -164,9 +179,45 @@ export function activate(context: vscode.ExtensionContext): void {
       if (node?.uri) await vscode.window.showTextDocument(node.uri, { preview: false });
     }),
     vscode.commands.registerCommand('archery.exportDiagram', exportDiagramCommand),
-    vscode.commands.registerCommand('archery.exportDocument', (format?: ExportFormat, settings?: ExportSettings) =>
-      exportDocument(context, currentRoot, tracker, format === 'html' || format === 'pdf' ? format : undefined, settings && typeof settings === 'object' ? settings : undefined),
-    ),
+    vscode.commands.registerCommand('archery.exportDocument', async (format?: ExportFormat, settings?: ExportSettings) => {
+      // Without a format (the sidebar's button, the command palette): the export dialog in the document.
+      if (format !== 'html' && format !== 'pdf') {
+        if (!currentRoot) await refresh();
+        if (currentRoot) return DocumentPanel.send(context, currentRoot, tracker, { type: 'exportDialog' }, false);
+      }
+      return exportDocument(context, currentRoot, tracker, format === 'html' || format === 'pdf' ? format : undefined, settings && typeof settings === 'object' ? settings : undefined);
+    }),
+    // The contents' context menu.
+    vscode.commands.registerCommand('archery.contents.addHeading', (node?: ContentsNode) => {
+      if (isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId, at: headingRef(node) });
+    }),
+    vscode.commands.registerCommand('archery.contents.addSubheading', (node?: ContentsNode) => {
+      if (isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId, at: headingRef(node), child: true });
+    }),
+    vscode.commands.registerCommand('archery.contents.addSubsection', (node?: ContentsNode) => {
+      if (node && !isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId });
+    }),
+    vscode.commands.registerCommand('archery.contents.promote', (node?: ContentsNode) => {
+      if (isHeading(node)) outlineEdit({ kind: 'level', heading: headingRef(node), delta: -1 });
+    }),
+    vscode.commands.registerCommand('archery.contents.demote', (node?: ContentsNode) => {
+      if (isHeading(node)) outlineEdit({ kind: 'level', heading: headingRef(node), delta: 1 });
+    }),
+    vscode.commands.registerCommand('archery.renameSystem', async () => {
+      if (!currentRoot) return;
+      const root = currentRoot;
+      const session = await ArcherySession.load(createReader(root), '');
+      const current = parseProject(session.read('archery.yaml') ?? '').value?.system ?? '';
+      const name = (await vscode.window.showInputBox({ title: 'Rename System', value: current, valueSelection: [0, current.length], validateInput: (v) => (v.trim() ? undefined : 'Enter a name.') }))?.trim();
+      if (!name || name === current) return;
+      try {
+        const def = TOOLS.find((t) => t.name === 'set_project')!;
+        await def.run(session, def.input.parse({ system: name }));
+        await applyChanges(root, session.changes);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Archery: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }),
     vscode.commands.registerCommand('archery.editDiagram', async (target?: vscode.Uri | { uri?: vscode.Uri }) => {
       const uri = target instanceof vscode.Uri ? target : target?.uri;
       noteUserActivity();

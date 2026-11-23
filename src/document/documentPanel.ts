@@ -29,6 +29,8 @@ export class DocumentPanel implements vscode.Disposable {
 
   private ready = false;
   private pendingReveal: RevealTarget | undefined;
+  /** Messages for the page that wait until it is ready. */
+  private readonly pending: ToDocument[] = [];
   private updateTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -38,21 +40,34 @@ export class DocumentPanel implements vscode.Disposable {
     root: vscode.Uri,
     tracker: VersionTracker | undefined,
     target?: RevealTarget,
+    preserveFocus = !!target?.preserveFocus,
   ): Promise<void> {
     const existing = DocumentPanel.current;
     if (existing && existing.root.toString() === root.toString()) {
-      existing.panel.reveal(undefined, !!target?.preserveFocus);
+      existing.panel.reveal(undefined, preserveFocus);
       if (target) existing.reveal(target);
       return;
     }
     existing?.dispose();
-    const panel = vscode.window.createWebviewPanel('archery.document', 'Archery', { viewColumn: vscode.ViewColumn.One, preserveFocus: !!target?.preserveFocus }, {
+    const panel = vscode.window.createWebviewPanel('archery.document', 'Archery', { viewColumn: vscode.ViewColumn.One, preserveFocus }, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist'), root],
     });
     DocumentPanel.current = new DocumentPanel(context, panel, root, tracker);
     if (target) DocumentPanel.current.reveal(target);
+  }
+
+  /**
+   * Sends the page a message (an outline edit or the export dialog from the sidebar), opening the
+   * document first when it is not open. `preserveFocus`: the keyboard stays where it is.
+   */
+  static async send(context: vscode.ExtensionContext, root: vscode.Uri, tracker: VersionTracker | undefined, msg: ToDocument, preserveFocus: boolean): Promise<void> {
+    await DocumentPanel.show(context, root, tracker, undefined, preserveFocus);
+    const current = DocumentPanel.current;
+    if (!current) return;
+    if (current.ready) current.post(msg);
+    else current.pending.push(msg);
   }
 
   /** Opens a diagram in its UML editor, as a tab of the active editor group. */
@@ -109,7 +124,71 @@ export class DocumentPanel implements vscode.Disposable {
     if (tracker) this.disposables.push(tracker.onDidChange(() => this.scheduleUpdate()));
   }
 
+  // --- a maximized diagram takes the whole window -------------------------------------------------
+  /** The parts a maximized diagram closed, to reopen when it closes (and whether it maximized the editor group). */
+  private hidden: { reopen: string[]; group: boolean } | undefined;
+  private layout: Promise<void> = Promise.resolve();
+  private viewSize = '';
+  private onViewSize: (() => void) | undefined;
+
+  /** Resolves true when the view's size changes within `ms`, false otherwise. */
+  private resized(ms = 200): Promise<boolean> {
+    const before = this.viewSize;
+    return new Promise((resolve) => {
+      const done = (changed: boolean) => {
+        clearTimeout(timer);
+        this.onViewSize = undefined;
+        resolve(changed);
+      };
+      const timer = setTimeout(() => done(false), ms);
+      this.onViewSize = () => this.viewSize !== before && done(true);
+    });
+  }
+
+  /**
+   * Closes the side bars and the panel (and maximizes the document's editor group). Extensions cannot
+   * ask which of them are open, so each is closed in turn: the view growing means it was open.
+   */
+  private async maximizeLayout(): Promise<void> {
+    if (this.hidden || !this.panel.active) return;
+    const hidden: { reopen: string[]; group: boolean } = { reopen: [], group: false };
+    this.hidden = hidden;
+    if (vscode.window.tabGroups.all.length > 1) {
+      // Its resize must not count as the side bar's.
+      const grew = this.resized();
+      await vscode.commands.executeCommand('workbench.action.toggleMaximizeEditorGroup');
+      await grew;
+      hidden.group = true;
+    }
+    const parts = [
+      ['workbench.action.closeSidebar', 'workbench.action.toggleSidebarVisibility'],
+      ['workbench.action.closeAuxiliaryBar', 'workbench.action.toggleAuxiliaryBar'],
+      ['workbench.action.closePanel', 'workbench.action.togglePanel'],
+    ] as const;
+    for (const [close, reopen] of parts) {
+      const grew = this.resized();
+      await vscode.commands.executeCommand(close);
+      if (await grew) hidden.reopen.push(reopen);
+    }
+  }
+
+  /** Reopens what maximizeLayout closed. */
+  private async restoreLayout(): Promise<void> {
+    const hidden = this.hidden;
+    this.hidden = undefined;
+    if (!hidden) return;
+    for (const reopen of [...hidden.reopen].reverse()) await vscode.commands.executeCommand(reopen);
+    if (hidden.group && vscode.window.tabGroups.all.length > 1) await vscode.commands.executeCommand('workbench.action.toggleMaximizeEditorGroup');
+    // Reopening the side bar and the panel moves the focus there; the reader was in the document.
+    if (!this.disposed) this.panel.reveal(undefined, false);
+  }
+
+  private disposed = false;
+
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.hidden) void this.restoreLayout().catch(() => undefined);
     if (DocumentPanel.current === this) DocumentPanel.current = undefined;
     if (this.updateTimer) clearTimeout(this.updateTimer);
     this.disposables.forEach((d) => d.dispose());
@@ -144,12 +223,20 @@ export class DocumentPanel implements vscode.Disposable {
         await this.update();
         if (this.pendingReveal) this.post({ type: 'reveal', ...this.pendingReveal });
         this.pendingReveal = undefined;
+        for (const m of this.pending.splice(0)) this.post(m);
         return;
       case 'activity':
         noteUserActivity();
         return;
       case 'activeSection':
         DocumentPanel.activeSection.fire({ sectionId: msg.sectionId, index: msg.index });
+        return;
+      case 'viewSize':
+        this.viewSize = `${msg.width}x${msg.height}`;
+        this.onViewSize?.();
+        return;
+      case 'maximized':
+        this.layout = this.layout.then(() => (msg.on ? this.maximizeLayout() : this.restoreLayout())).catch(() => undefined);
         return;
       case 'save':
         try {

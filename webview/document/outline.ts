@@ -1,10 +1,11 @@
 // The heading outline of each arc42 section (## and ### inside it) and the outline edits the
-// contents panel offers: move a heading with its subsections (also into another section),
+// sidebar's contents offer: move a heading with its subsections (also into another section),
 // add a peer / a child, promote / demote. Edits run as editor transactions (Ctrl+Z undoes them)
 // and are saved like any other edit.
 import type { Editor } from '@tiptap/core';
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
+import type { HeadingRef, OutlineEdit } from '../../src/doc/protocol';
 import { saveNow } from './context';
 
 export const MIN_LEVEL = 2;
@@ -43,21 +44,6 @@ function blocks(doc: PMNode): Block[] {
 
 export function outlineOf(editor: Editor): OutlineItem[] {
   return blocks(editor.state.doc).map((b, index) => ({ title: b.title, level: b.level, index }));
-}
-
-/** Numbers like "7.2" / "7.2.1" for a section's outline. */
-export function outlineNumbers(items: { level: number }[], sectionNumber: number | undefined): string[] {
-  let major = 0;
-  let minor = 0;
-  return items.map((it) => {
-    if (it.level <= MIN_LEVEL) {
-      major++;
-      minor = 0;
-      return sectionNumber === undefined ? '' : `${sectionNumber}.${major}`;
-    }
-    minor++;
-    return sectionNumber === undefined ? '' : `${sectionNumber}.${major}.${minor}`;
-  });
 }
 
 const clampLevel = (l: number) => Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, l));
@@ -158,4 +144,60 @@ export function addHeading(editor: Editor, index: number | null, kind: 'peer' | 
   editor.view.focus();
   saveNow(editor);
   return true;
+}
+
+// --- edits from the sidebar's contents --------------------------------------------------------
+
+/** Heading text without Markdown marks, for comparing the sidebar's titles with the editor's. */
+const plain = (s: string) => s.replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * The editor and current index of a heading the sidebar names. The sidebar reads the saved Markdown,
+ * which can be a moment behind the page: the title decides when the index no longer points at it.
+ */
+function locate(editors: Map<string, Editor>, ref: HeadingRef): { editor: Editor; index: number; level: number; items: OutlineItem[] } | null {
+  const editor = editors.get(ref.sectionId);
+  if (!editor) return null;
+  const items = outlineOf(editor);
+  const title = plain(ref.title);
+  let index = plain(items[ref.index]?.title ?? '') === title ? ref.index : -1;
+  if (index < 0) {
+    const same = items.filter((it) => plain(it.title) === title);
+    if (same.length === 1) index = same[0]!.index;
+  }
+  if (index < 0 && ref.index < items.length) index = ref.index;
+  return index < 0 ? null : { editor, index, level: items[index]!.level, items };
+}
+
+/** Runs an outline edit from the sidebar; false when the chapter is not (yet) in the page or nothing changed. */
+export function applyOutlineEdit(editors: Map<string, Editor>, edit: OutlineEdit): boolean {
+  switch (edit.kind) {
+    case 'add': {
+      if (!edit.at) {
+        const editor = editors.get(edit.sectionId);
+        return !!editor && addHeading(editor, null, 'peer');
+      }
+      const at = locate(editors, edit.at);
+      return !!at && addHeading(at.editor, at.index, edit.child ? 'child' : 'peer');
+    }
+    case 'level': {
+      const h = locate(editors, edit.heading);
+      if (!h) return false;
+      if (edit.delta < 0 ? !canPromote(h.items, h.index) : !canDemote(h.items, h.index)) return false;
+      return setLevel(h.editor, h.index, edit.delta);
+    }
+    case 'move': {
+      const h = locate(editors, edit.heading);
+      if (!h) return false;
+      if (edit.before) {
+        const t = locate(editors, edit.before);
+        if (!t) return false;
+        // Onto itself or one of its own subheadings: nothing to move.
+        if (t.editor === h.editor && t.index >= h.index && h.items.slice(h.index + 1, t.index + 1).every((it) => it.level > h.level)) return false;
+        return moveHeading(h.editor, h.index, { editor: t.editor, index: t.index, place: 'before', level: t.level });
+      }
+      const into = edit.into ? editors.get(edit.into) : undefined;
+      return !!into && moveHeading(h.editor, h.index, { editor: into, index: null, place: 'after', level: MIN_LEVEL });
+    }
+  }
 }

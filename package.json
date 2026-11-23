@@ -143,6 +143,37 @@
         "title": "Open Source",
         "category": "Archery",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "archery.contents.addHeading",
+        "title": "Add Heading After",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.contents.addSubheading",
+        "title": "Add Subheading",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.contents.addSubsection",
+        "title": "Add Heading",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.contents.promote",
+        "title": "Promote",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.contents.demote",
+        "title": "Demote",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.renameSystem",
+        "title": "Rename System...",
+        "category": "Archery",
+        "enablement": "archery.hasRoot"
       }
     ],
     "viewsContainers": {
@@ -201,6 +232,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "archery.renameSystem",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "project@1"
+        },
+        {
           "command": "archery.release",
           "when": "view == archery.contents && archery.hasRoot",
           "group": "versions@1"
@@ -231,6 +267,31 @@
           "command": "archery.openDiagramSource",
           "when": "view == archery.diagrams && viewItem == diagram",
           "group": "navigation"
+        },
+        {
+          "command": "archery.contents.addSubsection",
+          "when": "view == archery.contents && viewItem == chapter",
+          "group": "1_add@1"
+        },
+        {
+          "command": "archery.contents.addHeading",
+          "when": "view == archery.contents && viewItem =~ /^heading/",
+          "group": "1_add@1"
+        },
+        {
+          "command": "archery.contents.addSubheading",
+          "when": "view == archery.contents && viewItem =~ /\bh2\b/",
+          "group": "1_add@2"
+        },
+        {
+          "command": "archery.contents.promote",
+          "when": "view == archery.contents && viewItem =~ /\bh3\b/",
+          "group": "2_level@1"
+        },
+        {
+          "command": "archery.contents.demote",
+          "when": "view == archery.contents && viewItem =~ /\bdemotable\b/",
+          "group": "2_level@2"
         }
       ],
       "commandPalette": [
@@ -248,6 +309,26 @@
         },
         {
           "command": "archery.openDiagramSource",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.addHeading",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.addSubheading",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.addSubsection",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.promote",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.demote",
           "when": "false"
         }
       ],
@@ -2185,8 +2266,8 @@
         "displayName": "Validate architecture documentation",
         "toolReferenceName": "archery-validate",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), and the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates).",
-        "modelDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), and the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates). Call after making changes.",
+        "userDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest).",
+        "modelDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.",
         "icon": "$(book)",
         "tags": [
           "archery",
@@ -2947,8 +3028,8 @@
         "displayName": "Write structured table",
         "toolReferenceName": "archery-write-data-table",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items).",
-        "modelDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and optionally its column layout (visible columns, their order and labels; extra columns become custom fields on the items). Rows are objects of field -> text; numbers, comma-separated lists and \"key: value\" maps are converted per field. Rows without an id get one. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "userDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items).",
+        "modelDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items). Omit rows to change only the layout: the rows stay exactly as they are. Rows are objects of field -> text; numbers, comma-separated lists and \"key: value\" maps are converted per field. Rows without an id get one. fit: \"auto\" makes the export fit the column widths to the content (columns with a width keep it); fit_table_columns fits them once. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2980,7 +3061,8 @@
                 "additionalProperties": {
                   "type": "string"
                 }
-              }
+              },
+              "description": "All rows; omit to keep the current rows"
             },
             "columns": {
               "type": "array",
@@ -3039,11 +3121,145 @@
                 ]
               },
               "description": "Merged cells (spreadsheet style); omit to keep the current ones"
+            },
+            "fit": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "auto"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\"auto\": the export fits the column widths to the content; null: widths as set; omit to keep"
             }
           },
           "required": [
-            "list",
-            "rows"
+            "list"
+          ]
+        }
+      },
+      {
+        "name": "archery_fit_table_columns",
+        "displayName": "Fit table column widths",
+        "toolReferenceName": "archery-fit-table-columns",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Balance the column widths of a data table (data/*.yaml): as few wrapped lines as possible and no word wider than its column.",
+        "modelDescription": "Balance the column widths of a data table (data/*.yaml): as few wrapped lines as possible and no word wider than its column. The table is measured in a browser (Edge, Chrome or Chromium) with the export's own fonts and layout, on the exported page (screen) and on the printed page (print: page size, orientation and margins from the export settings). Starting from the current widths, width moves between columns while the table gets shorter. Returns the widths in percent before and after (in the order of `fields`), `lines` (the lines all body cells are drawn with; a cell is as tall as its row) and `tallestCell` per target as [before, after], and the cells whose own text still takes 3 or more lines. apply: true saves the widths in the table's view (only the column widths change); fitting again gives the same widths. columns: limits per field in percent { min (default 3), max, fixed (keeps its current width) }.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            },
+            "targets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "screen",
+                  "print"
+                ]
+              },
+              "description": "screen: the exported page; print: the printed page (page size, orientation and margins from the export settings). Default both"
+            },
+            "columns": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "max": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "fixed": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "description": "Limits per field, in percent"
+            },
+            "apply": {
+              "type": "boolean",
+              "description": "true: save the widths; false (default): only propose them"
+            }
+          },
+          "required": [
+            "list"
+          ]
+        }
+      },
+      {
+        "name": "archery_get_table_layout",
+        "displayName": "Get table layout",
+        "toolReferenceName": "archery-get-table-layout",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "How a data table (data/*.yaml) is laid out with its current column widths, measured in a browser with the export's fonts and layout: per target (screen: the exported page; print: the printed page) the table height in px, each column's width in px and percent, the lines of each body cell's own text (by row key and field), cells whose content overflows, and columns the browser made wider than their width to fit a word.",
+        "modelDescription": "How a data table (data/*.yaml) is laid out with its current column widths, measured in a browser with the export's fonts and layout: per target (screen: the exported page; print: the printed page) the table height in px, each column's width in px and percent, the lines of each body cell's own text (by row key and field), cells whose content overflows, and columns the browser made wider than their width to fit a word. The table counterpart of get_diagram; fit_table_columns balances the widths.",
+        "icon": "$(book)",
+        "tags": [
+          "archery",
+          "arc42",
+          "read"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "list": {
+              "type": "string",
+              "enum": [
+                "quality-goals",
+                "stakeholders",
+                "constraints",
+                "quality-overview",
+                "quality-scenarios",
+                "risks",
+                "glossary"
+              ]
+            },
+            "targets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "screen",
+                  "print"
+                ]
+              },
+              "description": "screen: the exported page; print: the printed page (page size, orientation and margins from the export settings). Default both"
+            }
+          },
+          "required": [
+            "list"
           ]
         }
       },
@@ -3515,15 +3731,6 @@
                   "maximum": 4
                 },
                 "cover": {
-                  "type": "boolean"
-                },
-                "numberHeadings": {
-                  "type": "boolean"
-                },
-                "chapterBreaks": {
-                  "type": "boolean"
-                },
-                "changeHistory": {
                   "type": "boolean"
                 }
               }
