@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.10
 
 - **Find in the document.** Ctrl+F in the document opens a find box; so does the new search button in the Contents view.
 - **Contents toolbar: Find, Export, Release, Restore.** The Contents view's title bar has these four buttons with their own icons (export, tag, history); Open Document moved to its "..." menu, since a click on the Archery icon or on any entry opens the document.
