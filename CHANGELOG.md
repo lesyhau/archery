@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Find in the document.** Ctrl+F in the document opens a find box; so does the new search button in the Contents view.
+- **Contents toolbar: Find, Export, Release, Restore.** The Contents view's title bar has these four buttons with their own icons (export, tag, history); Open Document moved to its "..." menu, since a click on the Archery icon or on any entry opens the document.
+- **Heading controls in the Contents.** Hover a heading for arrows that move it up or down among its siblings and promote or demote it, also with Alt+Shift+Up / Down / Left / Right on the selected heading; it stays selected after the move. Chapters have a + to add a heading.
+- **Promote, demote and add subheading are back in the context menu.** Since 0.2.9 they never showed.
+- **"Archery" and its version in exported footers.** PDF and HTML exports show e.g. "Archery 0.2.9" in the middle of the footer. Turn it off in the export dialog (saved with the document) or with the setting `archery.export.credit`.
+- **Header and footer in HTML exports.** The HTML file shows the export's header and footer as the PDF does (without page numbers): each chapter's header stays at the top of the window while you read it, and the footer ends the page.
+
 ## 0.2.9
 
 - **Balanced table column widths.** New agent tool `fit_table_columns` balances a data table's column widths: as few wrapped lines as possible and no word wider than its column, measured in Edge / Chrome / Chromium with the export's own fonts and layout, on the exported page and on the printed page (page size, orientation and margins from the export settings). It proposes the widths, or saves them with `apply: true` (only the widths change); limits per column (`min`, `max`, `fixed`). New `get_table_layout` shows how a table is laid out: column widths, lines per cell, overflowing cells, table height.

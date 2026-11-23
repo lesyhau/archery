@@ -44,6 +44,16 @@ async function embedImages(root: vscode.Uri, content: ExportContent): Promise<Ma
   return out;
 }
 
+/** "Archery" and the extension's version, e.g. "Archery 0.2.9". */
+export function generatorName(context: vscode.ExtensionContext): string {
+  return `Archery ${String((context.extension.packageJSON as { version?: string }).version ?? '')}`.trim();
+}
+
+/** Whether exports name Archery in the footer when archery.yaml does not say (setting archery.export.credit). */
+export function exportCreditDefault(): boolean {
+  return vscode.workspace.getConfiguration('archery').get<boolean>('export.credit', true);
+}
+
 /** Installed Chromium-based browsers that can print to PDF, in order of preference. */
 export function pdfBrowsers(): string[] {
   return findBrowsers(vscode.workspace.getConfiguration('archery').get<string>('export.browserPath'));
@@ -99,12 +109,12 @@ export async function writeDocumentFile(
   browsers: string[] = picked === 'pdf' ? pdfBrowsers() : [],
 ): Promise<void> {
   if (picked === 'pdf' && browsers.length === 0) throw new Error('PDF export needs Microsoft Edge, Google Chrome, Chromium or Brave (or set "archery.export.browserPath").');
-  const version = String((context.extension.packageJSON as { version?: string }).version ?? '');
+  const chosen = settings ?? content.exportSettings;
   const options = {
     images: await embedImages(root, content),
-    generator: `Archery ${version}`.trim(),
+    generator: generatorName(context),
     date: new Date().toISOString().slice(0, 10),
-    settings: settings ?? content.exportSettings,
+    settings: { ...chosen, credit: chosen.credit ?? exportCreditDefault() },
     diagramStyle: diagramStyle(),
   };
   // Tables whose view says `fit: auto` get column widths fitted to their content (src/export/tableFit.ts).

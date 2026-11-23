@@ -15,7 +15,7 @@ import type { VersionTracker } from '../versions/tracker';
 import { createReader, readText } from '../workspace';
 
 /** The document without the webview-only parts. */
-export type DocumentContent = Omit<DocumentData, 'canvasSettings' | 'sectionsBaseUri'>;
+export type DocumentContent = Omit<DocumentData, 'canvasSettings' | 'sectionsBaseUri' | 'generator' | 'exportCredit'>;
 
 export async function loadDocumentContent(root: vscode.Uri, tracker?: VersionTracker): Promise<DocumentContent> {
   const read = (path: string) => readText(vscode.Uri.joinPath(root, ...path.split('/')));

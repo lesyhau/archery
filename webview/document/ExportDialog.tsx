@@ -1,6 +1,7 @@
 // Export dialog: text, page, header, footer, page numbers, table of contents and the cover page,
 // each in its own section; a small page preview shows where the header, footer and page numbers
-// go. The choices are saved in archery.yaml (`export`) when you export. Headings are always
+// go (and "Archery x.y.z" in the footer, unless turned off). The choices are saved in archery.yaml
+// (`export`) when you export. Headings are always
 // numbered, chapters always start on a new page and the change history is always included.
 import { forwardRef, useEffect, useRef, useState, type SelectHTMLAttributes } from 'react';
 import type { DocumentData } from '../../src/doc/protocol';
@@ -80,8 +81,10 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
   }, [onClose]);
 
   // The preview shows a page of chapter 5.
-  const values = { chapter: '5 Building Block View', title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10) };
-  const slots = marginSlots(r);
+  const values = { chapter: '5 Building Block View', title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10), generator: data.generator };
+  // Archery in the footer: the document's choice, else the extension setting.
+  const credit = s.credit ?? data.exportCredit;
+  const slots = marginSlots({ ...r, credit });
   const slotText = (slot: MarginSlot) => (slots[slot] ? fillPlaceholders(slots[slot]!, values).replace(/\{page\}/g, '3').replace(/\{pages\}/g, '42') : '');
   const landscape = r.orientation === 'landscape';
   const editorStyle = data.canvasSettings.diagramStyle === 'modern' ? 'Modern' : 'Classic';
@@ -163,6 +166,11 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
                 <input value={r.footer} placeholder="No footer" onChange={(e) => set({ footer: e.target.value })} />
               </label>
               <p className="xd-hint">Same parts and placeholders as the header.</p>
+              <div className="xd-checks">
+                <label className="check">
+                  <input type="checkbox" checked={credit} onChange={(e) => set({ credit: e.target.checked })} /> {data.generator} in the middle of the footer
+                </label>
+              </div>
             </fieldset>
 
             <fieldset>

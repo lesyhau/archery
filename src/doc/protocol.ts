@@ -88,6 +88,10 @@ export interface DocumentData {
   exportSettings: ExportSettings;
   /** Diagram editor settings (snap to grid, show grid, grid size). */
   canvasSettings: CanvasSettings;
+  /** The extension's name and version, e.g. "Archery 0.2.9" (in the exported footer). */
+  generator: string;
+  /** Whether exports show `generator` in the footer when archery.yaml does not say (setting archery.export.credit). */
+  exportCredit: boolean;
   /** Webview URI of the sections folder, for relative image paths. */
   sectionsBaseUri: string;
 }

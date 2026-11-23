@@ -42,6 +42,8 @@ export const ExportSettingsSchema = z.object({
   /** Contents: 0 = none, 1 = chapters, 2 = + sections, 3 = + subsections, 4 = all headings. */
   tocDepth: z.number().int().min(0).max(4).optional(),
   cover: z.boolean().optional(),
+  /** "Archery" and its version in the footer (default: the setting archery.export.credit, on). */
+  credit: z.boolean().optional(),
 });
 export type ExportSettings = z.infer<typeof ExportSettingsSchema>;
 

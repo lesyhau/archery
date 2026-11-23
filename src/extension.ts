@@ -17,7 +17,7 @@ import { parseProject, type Issue } from './model/load';
 import { validateWorkspace } from './model/validate';
 import { HISTORY_FILE } from './versions/history';
 import { releaseCommand, rollbackCommand, VersionTracker } from './versions/tracker';
-import { ContentsTreeProvider, headingRef, isHeading, type ContentsNode } from './views/contentsTree';
+import { ContentsTreeProvider, headingRef, isHeading, siblingsOf, type ContentsNode } from './views/contentsTree';
 import type { OutlineEdit } from './doc/protocol';
 import { ArcherySession } from './ops/session';
 import { TOOLS } from './ops/tools';
@@ -36,6 +36,18 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const contents = new ContentsTreeProvider(outlineEdit);
   const contentsView = vscode.window.createTreeView('archery.contents', { treeDataProvider: contents, dragAndDropController: contents });
+  // A heading moved or promoted / demoted from the Contents stays selected there once the contents
+  // reload (its number and place change), so the arrow keys can move it again.
+  let selectAfterEdit: { sectionId: string; title: string; level?: number; until: number } | undefined;
+  const keepSelected = (node: ContentsNode, level?: number) => {
+    selectAfterEdit = { sectionId: node.sectionId, title: node.title, level, until: Date.now() + 2500 };
+  };
+  const reselect = () => {
+    const want = selectAfterEdit;
+    if (!want || Date.now() > want.until) return (selectAfterEdit = undefined);
+    const node = contents.findHeading(want.sectionId, want.title, want.level);
+    if (node && contentsView.visible) void contentsView.reveal(node, { select: true, focus: true }).then(undefined, () => undefined);
+  };
   const diagnostics = vscode.languages.createDiagnosticCollection('archery');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'archery.versionMenu';
@@ -108,6 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const { workspace, issues } = await validateWorkspace(createReader(root));
     const count = await tree.update(root, workspace);
     await contents.update(root, workspace);
+    reselect();
     await vscode.commands.executeCommand('setContext', 'archery.hasDiagrams', count > 0);
     publishDiagnostics(diagnostics, root, issues);
   };
@@ -187,21 +200,50 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       return exportDocument(context, currentRoot, tracker, format === 'html' || format === 'pdf' ? format : undefined, settings && typeof settings === 'object' ? settings : undefined);
     }),
-    // The contents' context menu.
+    // Ctrl+F in the document, or the Contents view's search button.
+    vscode.commands.registerCommand('archery.find', async () => {
+      if (!currentRoot) await refresh();
+      if (currentRoot) await DocumentPanel.find(context, currentRoot, tracker);
+    }),
+    // The contents' row buttons, context menu and keys (Alt+Shift+arrows act on the selected heading).
     vscode.commands.registerCommand('archery.contents.addHeading', (node?: ContentsNode) => {
+      node ??= contentsView.selection[0];
       if (isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId, at: headingRef(node) });
     }),
     vscode.commands.registerCommand('archery.contents.addSubheading', (node?: ContentsNode) => {
+      node ??= contentsView.selection[0];
       if (isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId, at: headingRef(node), child: true });
     }),
     vscode.commands.registerCommand('archery.contents.addSubsection', (node?: ContentsNode) => {
-      if (node && !isHeading(node)) outlineEdit({ kind: 'add', sectionId: node.sectionId });
+      node ??= contentsView.selection[0];
+      if (node && !isHeading(node) && !node.decision) outlineEdit({ kind: 'add', sectionId: node.sectionId });
     }),
     vscode.commands.registerCommand('archery.contents.promote', (node?: ContentsNode) => {
-      if (isHeading(node)) outlineEdit({ kind: 'level', heading: headingRef(node), delta: -1 });
+      node ??= contentsView.selection[0];
+      if (!isHeading(node) || node.level !== 3) return;
+      keepSelected(node, 2);
+      outlineEdit({ kind: 'level', heading: headingRef(node), delta: -1 });
     }),
     vscode.commands.registerCommand('archery.contents.demote', (node?: ContentsNode) => {
-      if (isHeading(node)) outlineEdit({ kind: 'level', heading: headingRef(node), delta: 1 });
+      node ??= contentsView.selection[0];
+      if (!isHeading(node) || node.level !== 2 || !siblingsOf(node).before) return;
+      keepSelected(node, 3);
+      outlineEdit({ kind: 'level', heading: headingRef(node), delta: 1 });
+    }),
+    vscode.commands.registerCommand('archery.contents.moveUp', (node?: ContentsNode) => {
+      node ??= contentsView.selection[0];
+      const before = isHeading(node) ? siblingsOf(node).before : undefined;
+      if (!isHeading(node) || !isHeading(before)) return;
+      keepSelected(node, node.level);
+      outlineEdit({ kind: 'move', heading: headingRef(node), before: headingRef(before) });
+    }),
+    vscode.commands.registerCommand('archery.contents.moveDown', (node?: ContentsNode) => {
+      node ??= contentsView.selection[0];
+      const after = isHeading(node) ? siblingsOf(node).after : undefined;
+      if (!isHeading(node) || !isHeading(after)) return;
+      keepSelected(node, node.level);
+      // The next heading goes in front of this one.
+      outlineEdit({ kind: 'move', heading: headingRef(after), before: headingRef(node) });
     }),
     vscode.commands.registerCommand('archery.renameSystem', async () => {
       if (!currentRoot) return;

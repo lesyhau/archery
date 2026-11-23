@@ -98,6 +98,10 @@ interface TocEntry {
 
 export function renderDocumentHtml(content: ExportContent, options: ExportOptions): string {
   const set = resolveExportSettings(options.settings);
+  const docTitle = content.title || content.system;
+  const values = { title: docTitle, system: content.system, version: content.version, date: options.date, generator: options.generator };
+  /** The on-screen header at the top of a part (the contents, a chapter). */
+  const runHead = (chapter: string) => runningBand('head', set, { ...values, chapter });
   const diagramStyle = options.diagramStyle;
   const images = options.images ?? new Map<string, string>();
   const counters = { table: 0, diagram: 0, figure: 0 };
@@ -293,7 +297,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
       out.push(t);
     }
     const page = part(chapter ? `${chapter} ${chapterTitle}` : chapterTitle);
-    return `<section class="chapter" id="chapter-${esc(section.id)}" style="page: ${page}">${md.renderer.render(out, md.options, {})}</section>`;
+    return `<section class="chapter" id="chapter-${esc(section.id)}" style="page: ${page}">${runHead(parts.at(-1)!.chapter)}${md.renderer.render(out, md.options, {})}</section>`;
   };
 
   const chapters = content.sections.map(renderSection).join('\n');
@@ -306,7 +310,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
   const historyRows = content.changeHistory.length
     ? content.changeHistory.map((r) => `<tr><td class="nowrap">${esc(r.version)}</td><td class="nowrap">${esc(r.date)}</td><td class="nowrap">${esc(r.author ?? '')}</td><td>${esc(r.changes)}</td></tr>`).join('')
     : '<tr><td class="empty" colspan="4">No releases yet.</td></tr>';
-  const history = `<section class="chapter" id="chapter-change-history" style="page: ${part(`${historyNumber} Change history`)}"><h1 id="${historyId}"><span class="num">${historyNumber}</span> Change history</h1>
+  const history = `<section class="chapter" id="chapter-change-history" style="page: ${part(`${historyNumber} Change history`)}">${runHead(`${historyNumber} Change history`)}<h1 id="${historyId}"><span class="num">${historyNumber}</span> Change history</h1>
 <p>Current version: v${esc(content.version)}${released && released !== content.version ? ` (unreleased changes since v${esc(released)})` : ''}</p>
 <figure class="table">${caption('Table', ++counters.table, 'Change history', 'figcaption')}<table><thead><tr><th>Version</th><th>Date</th><th>Author</th><th>Changes</th></tr></thead><tbody>${historyRows}</tbody></table></figure></section>`;
 
@@ -320,7 +324,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     ...count(content.model?.elements.length ?? 0, 'model element', 'model elements'),
     ...count(content.decisions.length, 'architecture decision', 'architecture decisions'),
   ];
-  const about = `<section class="chapter about" id="chapter-about" style="page: ${part('About this document')}"><h1 id="${aboutId}">About this document</h1>
+  const about = `<section class="chapter about" id="chapter-about" style="page: ${part('About this document')}">${runHead('About this document')}<h1 id="${aboutId}">About this document</h1>
 <p>This document describes the software architecture of <strong>${esc(content.system)}</strong>, version ${esc(content.version)}, as of ${esc(options.date)}.</p>
 <h2>Structure: arc42</h2>
 <p>The chapters follow <a href="https://arc42.org">arc42</a>, a template for communicating and documenting software architectures: from the goals and constraints (chapters 1 and 2) through the context, the solution strategy and the building blocks, runtime and deployment views (chapters 3 to 7) to the concepts, decisions, quality requirements, risks and glossary (chapters 8 to 12). Chapters that do not apply to the system may be short or left out.</p>
@@ -330,7 +334,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <p>This edition${stats.length ? ` (${stats.join(', ')})` : ''} was generated from those files with <a href="${ARCHERY_URL}">${esc(options.generator)}</a>.</p>
 </section>`;
 
-  const tocHtml = !toc.length ? '' : `<nav class="toc" aria-label="Contents" style="page: ${contentsPage}"><h2>Contents</h2><ol>${toc
+  const tocHtml = !toc.length ? '' : `<nav class="toc" aria-label="Contents" style="page: ${contentsPage}">${runHead('Contents')}<h2>Contents</h2><ol>${toc
     .map((e) => {
       const page = options.tocPages?.[e.id];
       // PDF: the page number on the right, after a dotted leader.
@@ -339,7 +343,6 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     })
     .join('')}</ol></nav>`;
 
-  const docTitle = content.title || content.system;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -349,7 +352,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
 <title>${esc(docTitle)}</title>
 <style>${EXPORT_CSS}
 :root { --font: ${fontStack(set.font)}; --heading-font: ${fontStack(set.headingFont)}; --size: ${set.fontSize}pt; }
-${pageCss(set, { title: docTitle, system: content.system, version: content.version, date: options.date }, parts)}</style>
+${pageCss(set, values, parts)}</style>
 </head>
 <body>
 <header class="cover${set.cover ? '' : ' compact'}"${set.cover ? '' : ` style="page: ${contentsPage}"`}>
@@ -363,9 +366,25 @@ ${chapters}
 ${history}
 ${about}
 </main>
+${runningBand('foot', set, { ...values, chapter: parts.at(-1)?.chapter ?? '' })}
 </body>
 </html>
 `;
+}
+
+/**
+ * On screen (the HTML file), the header and footer the PDF has in its page margins, without page
+ * numbers. Every part (the contents, each chapter) starts with its own header that sticks to the top
+ * of the window while that part is read, so {chapter} names the chapter on screen too (no script);
+ * the footer ends the page. Hidden in print, where the margin boxes (pageCss) show them.
+ */
+function runningBand(kind: 'head' | 'foot', set: ResolvedExportSettings, values: Record<string, string>): string {
+  const slots = marginSlots({ ...set, pageNumbers: 'none' });
+  const row = kind === 'head' ? 'top' : 'bottom';
+  const cells = (['left', 'center', 'right'] as const).map((place) => esc(fillPlaceholders(slots[`${row}-${place}`] ?? '', values).replace(/\{pages?\}/g, '').trim()));
+  if (!cells.some(Boolean)) return '';
+  const tag = kind === 'head' ? 'div' : 'footer';
+  return `<${tag} class="run run-${kind}">${cells.map((text, i) => `<span class="run-${['left', 'center', 'right'][i]}">${text}</span>`).join('')}</${tag}>`;
 }
 
 /** Image paths referenced by the document (Markdown text and data table cells), for embedding. */
@@ -442,7 +461,14 @@ td.nowrap { white-space: nowrap; }
 .figure img { max-width: 100%; }
 .figure .caption { margin: 0; text-align: center; }
 .missing { color: #d1242f; }
+/* Running header and footer (screen only). */
+.run { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; font-size: 0.85em; color: var(--muted); }
+.run .run-center { text-align: center; }
+.run .run-right { text-align: right; }
+.run-head { position: sticky; top: 0; z-index: 1; padding: 8px 0; background: #fff; border-bottom: 1px solid var(--line); }
+.run-foot { margin-top: 40px; padding-top: 10px; border-top: 1px solid var(--line); }
 @media print {
+  .run { display: none; }
   /* The PDF uses black and grays only. */
   :root { --ink: #000; --muted: #555; --line: #000; --well: #f0f0f0; --accent: #000; }
   .missing { color: #000; font-weight: 600; }

@@ -17,6 +17,8 @@ export const EXPORT_DEFAULTS: Omit<ResolvedExportSettings, 'headingFont'> = {
   pageNumberFormat: 'Page {page} of {pages}',
   tocDepth: 2,
   cover: true,
+  // "Archery" and its version in the footer's middle.
+  credit: true,
 };
 
 /** The export settings with every default filled in. */
@@ -27,13 +29,17 @@ export function resolveExportSettings(settings: ExportSettings = {}): ResolvedEx
   return { ...out, headingFont: settings.headingFont?.trim() || out.font };
 }
 
+/** The footer part that names the tool, e.g. "Archery 0.2.9" ({generator}). */
+export const CREDIT = '{generator}';
+
 export type MarginSlot = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
 /**
  * Text templates per page margin slot. Header and footer: "left", "left | right" or
- * "left | center | right"; the page number joins the text already in its slot.
+ * "left | center | right"; the page number joins the text already in its slot, the credit
+ * ("Archery 0.2.9") the footer's middle.
  */
-export function marginSlots(set: Pick<ResolvedExportSettings, 'header' | 'footer' | 'pageNumbers' | 'pageNumberFormat'>): Partial<Record<MarginSlot, string>> {
+export function marginSlots(set: Pick<ResolvedExportSettings, 'header' | 'footer' | 'pageNumbers' | 'pageNumberFormat'> & { credit?: boolean }): Partial<Record<MarginSlot, string>> {
   const slots: Partial<Record<MarginSlot, string[]>> = {};
   const place = (template: string, row: 'top' | 'bottom') => {
     const parts = template.split('|').map((x) => x.trim());
@@ -42,14 +48,16 @@ export function marginSlots(set: Pick<ResolvedExportSettings, 'header' | 'footer
   };
   place(set.header, 'top');
   place(set.footer, 'bottom');
+  if (set.credit) (slots['bottom-center'] ??= []).push(CREDIT);
   if (set.pageNumbers !== 'none') (slots[set.pageNumbers] ??= []).push(set.pageNumberFormat);
   return Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v!.join(' · ')]));
 }
 
 /**
- * Fills {chapter} {title} {system} {version} {date}; {page} and {pages} stay for the renderer.
- * {chapter} is the chapter a page belongs to, e.g. "7 Deployment view" (empty where there is none).
+ * Fills {chapter} {title} {system} {version} {date} {generator}; {page} and {pages} stay for the
+ * renderer. {chapter} is the chapter a page belongs to, e.g. "7 Deployment view" (empty where there
+ * is none); {generator} is "Archery" and its version.
  */
 export function fillPlaceholders(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(chapter|title|system|version|date)\}/g, (_, k: string) => values[k] ?? '');
+  return template.replace(/\{(chapter|title|system|version|date|generator)\}/g, (_, k: string) => values[k] ?? '');
 }

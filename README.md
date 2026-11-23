@@ -16,15 +16,15 @@ Documents follow the structure of the [arc42](https://arc42.org) template. Arche
 Open a folder and run **Archery: Initialize Architecture Documentation**. It creates `docs/architecture/` with the twelve arc42 chapters, a model and the data lists. Click the **Archery** icon in the activity bar to open the document.
 
 The sidebar has three views:
-- **Contents:** the chapters and their headings. Click one to go there; the chapter you are reading is selected while you scroll.
+- **Contents:** the chapters and their headings. Click one to go there; the chapter you are reading is selected while you scroll. Its title bar has **Find**, **Export**, **Release** and **Restore a Release**.
 - **Diagrams:** every diagram, also those no chapter shows yet. Right-click one for **Open Source**.
 - **Diagram Tools:** the palette and properties of the diagram you are editing, so the diagram tab can use its full width.
 
 ## Features
 
-- **The whole document on one page,** laid out like a published architecture document. Click any text to edit it in place; every chapter is a Markdown file. The toolbar has paragraph styles, lists, quotes, code, links, tables, images and diagrams, with undo and redo.
+- **The whole document on one page,** laid out like a published architecture document. **Ctrl+F** finds text in it. Click any text to edit it in place; every chapter is a Markdown file. The toolbar has paragraph styles, lists, quotes, code, links, tables, images and diagrams, with undo and redo.
 - **arc42 guidance where you write.** Every heading has an info icon with what belongs in that chapter. It stays open until you click elsewhere.
-- **Contents in the Archery sidebar** with numbered chapters and subsections (`1.2`, `5.2.1`), following the chapter you read. Drag a heading onto another to move it there, also into another chapter, and the numbers follow. Right-click to add, promote or demote headings.
+- **Contents in the Archery sidebar** with numbered chapters and subsections (`1.2`, `5.2.1`), following the chapter you read. Drag a heading onto another to move it there, also into another chapter, and the numbers follow. The arrows on a heading's row move it up or down and promote or demote it (also **Alt+Shift+Arrow** keys); right-click to add headings.
 - **Diagrams anywhere in the text,** with a numbered caption below. Hover one for zoom, edit, maximize and remove. **Edit** (or a double-click) opens it in its own tab, named after the diagram.
 - **Tables:**
   - Markdown tables in the text and editable data tables for the structured chapters (quality goals, stakeholders, constraints, quality scenarios, risks, glossary), stored as YAML.
@@ -34,7 +34,8 @@ The sidebar has three views:
 - **Versions.** Every saved change raises the minor version (v1.1, v1.2, …). **Release** creates the next major version with a change log entry and keeps a snapshot. **Restore a Release** rolls back to any release. The change history is the document's last chapter.
 - **Export** to PDF or to one self-contained HTML file:
   - The PDF has bookmarks and page numbers in its contents. It is printed by an installed Edge, Chrome, Chromium or Brave.
-  - Choose fonts, page size and margins, header and footer (by default the chapter at the top of each page, the document title and version at the bottom), page numbers and the contents depth. The choices are saved with the documentation, so the whole team exports the same way.
+  - The HTML file shows the header and footer too: each chapter's header stays at the top of the window while you read it.
+  - Choose fonts, page size and margins, header and footer (by default the chapter at the top of each page, the document title and version at the bottom, and "Archery" with its version in the middle of the footer, which the dialog or the setting **Archery > Export: Credit** turns off), page numbers and the contents depth. The choices are saved with the documentation, so the whole team exports the same way.
 
 ### UML on a shared model
 

@@ -2,8 +2,9 @@
 // Clicking one opens the document there; the chapter being read is selected while scrolling. The
 // chapter that lists the architecture decisions has one entry per decision, which opens it.
 // Outline edits: drag a heading (with its subheadings) onto another to put it in front of that one,
-// at its level, or onto a chapter to put it at the chapter's end; the context menu adds headings,
-// promotes and demotes. The page runs them (DocumentPanel.send), so Ctrl+Z there undoes them.
+// at its level, or onto a chapter to put it at the chapter's end; the buttons on a heading's row
+// (and Alt+Shift+arrows) move it up / down and promote / demote it; the context menu also adds
+// headings. The page runs them (DocumentPanel.send), so Ctrl+Z there undoes them.
 import * as vscode from 'vscode';
 import type { LoadedWorkspace } from '../model/load';
 import { findSection } from '../template/template';
@@ -89,6 +90,13 @@ export class ContentsTreeProvider implements vscode.TreeDataProvider<ContentsNod
     this.changed.fire(undefined);
   }
 
+  /** A heading of a chapter by its title and level (after an outline edit renumbered the headings). */
+  findHeading(sectionId: string, title: string, level?: number): ContentsNode | undefined {
+    const chapter = this.nodes.find((n) => n.sectionId === sectionId);
+    const all = chapter?.children.flatMap((c) => [c, ...c.children]) ?? [];
+    return all.find((n) => isHeading(n) && n.title === title && (level === undefined || n.level === level));
+  }
+
   /** The node for a place in the document (the heading, else its chapter). */
   find(sectionId: string, index?: number | null): ContentsNode | undefined {
     const chapter = this.nodes.find((n) => n.sectionId === sectionId);
@@ -129,14 +137,24 @@ export class ContentsTreeProvider implements vscode.TreeDataProvider<ContentsNod
   }
 }
 
+/** The headings next to a heading under the same parent: the one before it and the one after it. */
+export function siblingsOf(node: ContentsNode): { before?: ContentsNode; after?: ContentsNode } {
+  const peers = (node.parent?.children ?? []).filter(isHeading);
+  const at = peers.indexOf(node as ContentsNode & { index: number });
+  return at < 0 ? {} : { before: peers[at - 1], after: peers[at + 1] };
+}
+
 /**
- * For the context menu (package.json, view/item/context): "chapter", "decision", "generated", or
- * "heading h2" / "heading h3", with "demotable" when a ## has a ## above it to become its parent.
+ * For the inline buttons and the context menu (package.json, view/item/context): "chapter",
+ * "decision", "generated", or "heading h2" / "heading h3" with what can be done to it: "up" / "down"
+ * (a heading before / after it under the same parent), "promotable" (a ###) and "demotable" (a ##
+ * with a ## above it to become its parent).
  */
 function contextOf(node: ContentsNode): string {
   if (node.decision) return 'decision';
   if (!node.uri) return 'generated';
   if (!isHeading(node)) return 'chapter';
-  const demotable = node.level === 2 && (node.parent?.children ?? []).some((n) => n !== node && isHeading(n) && n.index < node.index);
-  return `heading h${node.level}${demotable ? ' demotable' : ''}`;
+  const { before, after } = siblingsOf(node);
+  const flags = [`h${node.level}`, before && 'up', after && 'down', node.level === 3 && 'promotable', node.level === 2 && before && 'demotable'];
+  return ['heading', ...flags.filter(Boolean)].join(' ');
 }

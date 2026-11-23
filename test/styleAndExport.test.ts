@@ -198,6 +198,27 @@ describe('export settings', () => {
     expect(render({ header: '{system}' })).not.toMatch(/@page part-/);
   });
 
+  it('names Archery and its version in the middle of the footer unless turned off', () => {
+    expect(resolveExportSettings().credit).toBe(true);
+    expect(render()).toContain('@bottom-center { content: "Archery test"');
+    expect(render({ credit: false })).not.toContain('@bottom-center');
+    // It joins a footer part already in the middle.
+    expect(render({ footer: 'a | b | c' })).toContain('@bottom-center { content: "b · Archery test"');
+  });
+
+  it('shows the header and footer on screen too: a header per chapter that sticks while it is read, no page numbers', () => {
+    const html = render();
+    expect(html).toContain('<nav class="toc" aria-label="Contents" style="page: part-1"><div class="run run-head"><span class="run-left">Contents</span>');
+    expect(html).toMatch(/<section class="chapter" id="chapter-intro" style="page: part-\d+"><div class="run run-head"><span class="run-left">1 Introduction<\/span><span class="run-center"><\/span><span class="run-right"><\/span><\/div><h1/);
+    expect(html).toContain('<footer class="run run-foot"><span class="run-left">Shop architecture · v1.2</span><span class="run-center">Archery test</span><span class="run-right"></span></footer>');
+    expect(html).toContain('.run-head { position: sticky; top: 0;');
+    expect(html).toContain('.run { display: none; }'); // print: the page margins show them
+    expect(html).not.toContain('<script'); // still no scripts
+    expect(render({ pageNumbers: 'top-right', header: '{system}' })).toContain('<span class="run-left">Shop</span><span class="run-center"></span><span class="run-right"></span>');
+    // Nothing to show: no bands.
+    expect(render({ header: '', footer: '', credit: false })).not.toContain('class="run ');
+  });
+
   it('escapes header text for CSS and HTML', () => {
     expect(cssContent('a "b" \\ <c> {page}', {})).toBe('"a \\"b\\" \\\\ \\3C c> " counter(page)');
     expect(marginSlots({ header: 'x', footer: '', pageNumbers: 'top-right', pageNumberFormat: '{page}' })).toEqual({ 'top-left': 'x', 'top-right': '{page}' });

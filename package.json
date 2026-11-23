@@ -91,6 +91,13 @@
         "icon": "$(book)"
       },
       {
+        "command": "archery.find",
+        "title": "Find in Document",
+        "category": "Archery",
+        "icon": "$(search)",
+        "enablement": "archery.hasRoot"
+      },
+      {
         "command": "archery.openSectionSource",
         "title": "Open Markdown Source",
         "category": "Archery",
@@ -98,13 +105,13 @@
       },
       {
         "command": "archery.release",
-        "title": "Release (new major version)",
+        "title": "Release a New Version...",
         "category": "Archery",
         "icon": "$(tag)"
       },
       {
         "command": "archery.rollback",
-        "title": "Restore a Release",
+        "title": "Restore a Release...",
         "category": "Archery",
         "icon": "$(history)"
       },
@@ -133,9 +140,9 @@
       },
       {
         "command": "archery.exportDocument",
-        "title": "Export Document (PDF or HTML)",
+        "title": "Export Document (PDF or HTML)...",
         "category": "Archery",
-        "icon": "$(file-pdf)",
+        "icon": "$(export)",
         "enablement": "archery.hasRoot"
       },
       {
@@ -157,17 +164,32 @@
       {
         "command": "archery.contents.addSubsection",
         "title": "Add Heading",
-        "category": "Archery"
+        "category": "Archery",
+        "icon": "$(add)"
       },
       {
         "command": "archery.contents.promote",
         "title": "Promote",
-        "category": "Archery"
+        "category": "Archery",
+        "icon": "$(arrow-left)"
       },
       {
         "command": "archery.contents.demote",
         "title": "Demote",
-        "category": "Archery"
+        "category": "Archery",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "archery.contents.moveUp",
+        "title": "Move Up",
+        "category": "Archery",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "archery.contents.moveDown",
+        "title": "Move Down",
+        "category": "Archery",
+        "icon": "$(arrow-down)"
       },
       {
         "command": "archery.renameSystem",
@@ -217,9 +239,24 @@
     "menus": {
       "view/title": [
         {
-          "command": "archery.openDocument",
+          "command": "archery.find",
           "when": "view == archery.contents && archery.hasRoot",
           "group": "navigation@1"
+        },
+        {
+          "command": "archery.exportDocument",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archery.release",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archery.rollback",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "navigation@4"
         },
         {
           "command": "archery.newDiagram",
@@ -227,24 +264,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "archery.exportDocument",
-          "when": "view == archery.contents && archery.hasRoot",
-          "group": "navigation@3"
-        },
-        {
           "command": "archery.renameSystem",
           "when": "view == archery.contents && archery.hasRoot",
           "group": "project@1"
         },
         {
-          "command": "archery.release",
+          "command": "archery.openDocument",
           "when": "view == archery.contents && archery.hasRoot",
-          "group": "versions@1"
-        },
-        {
-          "command": "archery.rollback",
-          "when": "view == archery.contents && archery.hasRoot",
-          "group": "versions@2"
+          "group": "project@2"
         },
         {
           "command": "archery.refresh",
@@ -271,6 +298,31 @@
         {
           "command": "archery.contents.addSubsection",
           "when": "view == archery.contents && viewItem == chapter",
+          "group": "inline@1"
+        },
+        {
+          "command": "archery.contents.moveUp",
+          "when": "view == archery.contents && viewItem =~ /\\bup\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "archery.contents.moveDown",
+          "when": "view == archery.contents && viewItem =~ /\\bdown\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "archery.contents.promote",
+          "when": "view == archery.contents && viewItem =~ /\\bpromotable\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "archery.contents.demote",
+          "when": "view == archery.contents && viewItem =~ /\\bdemotable\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "archery.contents.addSubsection",
+          "when": "view == archery.contents && viewItem == chapter",
           "group": "1_add@1"
         },
         {
@@ -280,18 +332,28 @@
         },
         {
           "command": "archery.contents.addSubheading",
-          "when": "view == archery.contents && viewItem =~ /\bh2\b/",
+          "when": "view == archery.contents && viewItem =~ /\\bh2\\b/",
           "group": "1_add@2"
         },
         {
+          "command": "archery.contents.moveUp",
+          "when": "view == archery.contents && viewItem =~ /\\bup\\b/",
+          "group": "2_move@1"
+        },
+        {
+          "command": "archery.contents.moveDown",
+          "when": "view == archery.contents && viewItem =~ /\\bdown\\b/",
+          "group": "2_move@2"
+        },
+        {
           "command": "archery.contents.promote",
-          "when": "view == archery.contents && viewItem =~ /\bh3\b/",
-          "group": "2_level@1"
+          "when": "view == archery.contents && viewItem =~ /\\bpromotable\\b/",
+          "group": "3_level@1"
         },
         {
           "command": "archery.contents.demote",
-          "when": "view == archery.contents && viewItem =~ /\bdemotable\b/",
-          "group": "2_level@2"
+          "when": "view == archery.contents && viewItem =~ /\\bdemotable\\b/",
+          "group": "3_level@2"
         }
       ],
       "commandPalette": [
@@ -329,6 +391,14 @@
         },
         {
           "command": "archery.contents.demote",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "archery.contents.moveDown",
           "when": "false"
         }
       ],
@@ -396,6 +466,11 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Path to a Chromium-based browser (Edge, Chrome, Chromium, Brave) used to print the document to PDF. Empty: detect an installed one."
+        },
+        "archery.export.credit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show \"Archery\" and its version in the footer of exported documents. The export dialog can change this for a document."
         },
         "archery.followAgent": {
           "type": "boolean",
@@ -3732,6 +3807,9 @@
                 },
                 "cover": {
                   "type": "boolean"
+                },
+                "credit": {
+                  "type": "boolean"
                 }
               }
             }
@@ -4059,6 +4137,28 @@
             "decision"
           ]
         }
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "archery.contents.moveUp",
+        "key": "alt+shift+up",
+        "when": "focusedView == 'archery.contents'"
+      },
+      {
+        "command": "archery.contents.moveDown",
+        "key": "alt+shift+down",
+        "when": "focusedView == 'archery.contents'"
+      },
+      {
+        "command": "archery.contents.promote",
+        "key": "alt+shift+left",
+        "when": "focusedView == 'archery.contents'"
+      },
+      {
+        "command": "archery.contents.demote",
+        "key": "alt+shift+right",
+        "when": "focusedView == 'archery.contents'"
       }
     ]
   },

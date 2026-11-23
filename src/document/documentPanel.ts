@@ -14,7 +14,7 @@ import { createReader, readText } from '../workspace';
 import { loadDocumentContent } from './content';
 import { applyChanges } from '../workspaceEdit';
 import { newDiagramInput } from '../commands/newDiagram';
-import { exportDocumentSettings } from '../commands/exportDocument';
+import { exportCreditDefault, exportDocumentSettings, generatorName } from '../commands/exportDocument';
 import { WebviewDiagramEditorProvider } from '../editors/webviewEditor';
 import { noteUserActivity } from '../live/userActivity';
 
@@ -52,6 +52,8 @@ export class DocumentPanel implements vscode.Disposable {
     const panel = vscode.window.createWebviewPanel('archery.document', 'Archery', { viewColumn: vscode.ViewColumn.One, preserveFocus }, {
       enableScripts: true,
       retainContextWhenHidden: true,
+      // Ctrl+F finds text in the document.
+      enableFindWidget: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist'), root],
     });
     DocumentPanel.current = new DocumentPanel(context, panel, root, tracker);
@@ -68,6 +70,26 @@ export class DocumentPanel implements vscode.Disposable {
     if (!current) return;
     if (current.ready) current.post(msg);
     else current.pending.push(msg);
+  }
+
+  /** Opens the document (with the keyboard in it) and its find box, as Ctrl+F there does. */
+  static async find(context: vscode.ExtensionContext, root: vscode.Uri, tracker: VersionTracker | undefined): Promise<void> {
+    await DocumentPanel.show(context, root, tracker, undefined, false);
+    const panel = DocumentPanel.current?.panel;
+    if (!panel) return;
+    // The find box belongs to the active editor: wait until the document is it.
+    if (!panel.active) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(done, 1000);
+        const sub = panel.onDidChangeViewState((e) => e.webviewPanel.active && done());
+        function done() {
+          clearTimeout(timer);
+          sub.dispose();
+          resolve();
+        }
+      });
+    }
+    await vscode.commands.executeCommand('editor.action.webvieweditor.showFind');
   }
 
   /** Opens a diagram in its UML editor, as a tab of the active editor group. */
@@ -118,7 +140,7 @@ export class DocumentPanel implements vscode.Disposable {
       panel.webview.onDidReceiveMessage((msg: FromDocument) => void this.onMessage(msg)),
       panel.onDidDispose(() => this.dispose()),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('archery.canvas') || e.affectsConfiguration('archery.diagramStyle')) this.scheduleUpdate();
+        if (e.affectsConfiguration('archery.canvas') || e.affectsConfiguration('archery.diagramStyle') || e.affectsConfiguration('archery.export.credit')) this.scheduleUpdate();
       }),
     );
     if (tracker) this.disposables.push(tracker.onDidChange(() => this.scheduleUpdate()));
@@ -428,6 +450,8 @@ export class DocumentPanel implements vscode.Disposable {
     return {
       ...(await loadDocumentContent(this.root, this.tracker)),
       canvasSettings: canvasSettings(),
+      generator: generatorName(this.context),
+      exportCredit: exportCreditDefault(),
       sectionsBaseUri: this.panel.webview.asWebviewUri(this.uri('sections')).toString(),
     };
   }

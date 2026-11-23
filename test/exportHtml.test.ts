@@ -75,7 +75,7 @@ describe('document export (HTML)', () => {
     expect(html).toMatch(/<span class="num">13<\/span> Change history/);
     expect(html).toContain('First draft');
     // The last page: about the document (arc42, Archery), also in the contents.
-    expect(html).toMatch(/<section class="chapter about" id="chapter-about" style="page: part-\d+"><h1 id="sec-about">About this document<\/h1>/);
+    expect(html).toMatch(/<section class="chapter about" id="chapter-about" style="page: part-\d+">(?:<div class="run run-head">.*?<\/div>)?<h1 id="sec-about">About this document<\/h1>/);
     expect(html).toContain('arc42 9.1-EN by Dr. Peter Hruschka, Dr. Gernot Starke and contributors');
     expect(html).toContain('>Archery 0.1.0</a>');
     expect(html).toMatch(/<li class="l1"><a href="#sec-about">.*About this document/);
