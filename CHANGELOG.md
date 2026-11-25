@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.12
 
 - **Requirements in chapter 1.1.** A new requirements table (`data/requirements.yaml`): id, heading, title, text, type, status, priority, the requirement it is under, the building blocks that satisfy it and the quality goals it refines. New documentations show it under Requirements Overview. Decisions can address requirements too (in the decision dialog and in `create_decision` / `update_decision`), and `validate` reports requirements that point to unknown requirements, elements or quality goals.
 - **ReqIF import and export.** **Import Requirements (ReqIF)...** and **Export Requirements (ReqIF)...** in the Contents view's "..." menu exchange requirements with requirements tools (DOORS, Polarion, Jama, codebeamer, Capella, ReqIF Studio and others) as `.reqif` or `.reqifz` files ([OMG ReqIF 1.2](https://www.omg.org/reqif/), with the ProSTEP attribute names `ReqIF.ForeignID`, `ReqIF.ChapterName`, `ReqIF.Name`, `ReqIF.Text`). Importing the next version of a file updates the requirements and keeps your trace links. After an import, an export writes the imported file back with only your changes, and adds the architecture (quality goals, scenarios, constraints, decisions, the building blocks that satisfy requirements) with its trace links as Satisfies, Refines and Addresses relations. Agents get `import_reqif` and `export_reqif`.
