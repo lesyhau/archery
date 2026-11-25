@@ -65,6 +65,7 @@ export interface DocDecision {
   supersedes?: string;
   qualityGoals: string[];
   constraints: string[];
+  requirements: string[];
   /** The Markdown of each known part (src/doc/adr.ts). */
   parts: Partial<Record<AdrPart, string>>;
 }

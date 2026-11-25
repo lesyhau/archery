@@ -8,7 +8,7 @@ import { jsonToMarkdown, markdownToJson } from '../../src/doc/markdown';
 import type { DocSection } from '../../src/doc/protocol';
 import { useDoc } from './context';
 import { takeEdit } from './follow';
-import { flashBlock, HelpIcons, ImageDrop, LiveFlash, TableCaptions, TableControls, TableWithFoot } from './editorTools';
+import { flashBlock, HelpIcons, ImageDrop, LiveFlash, TableCaptions, TableControls, TableWithFoot, VariableHints } from './editorTools';
 import { DataTable, DecisionList, DiagramFrame, HelpNote, ImageFigure, RawHtmlView } from './nodeViews';
 
 /** Holds the save function so node views can save after changing attributes. */
@@ -49,6 +49,7 @@ function documentExtensions(): Extensions {
     TableCaptions,
     TableControls,
     LiveFlash,
+    VariableHints,
   ];
   return cached;
 }

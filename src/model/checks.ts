@@ -1,7 +1,7 @@
 // Cross-file consistency checks (references between model, diagrams and data).
 // Schema validation of single files lives in load.ts.
 import type { Issue } from './load';
-import type { CanvasDiagram, Message, Model, QualityGoals, QualityRequirements, SequenceDiagram, SequenceStep, TimingDiagram } from './schema';
+import type { CanvasDiagram, Message, Model, QualityGoals, QualityRequirements, Requirements, SequenceDiagram, SequenceStep, TimingDiagram } from './schema';
 
 export interface CheckInput {
   model: Model;
@@ -10,6 +10,7 @@ export interface CheckInput {
   timingDiagrams?: { file: string; diagram: TimingDiagram }[];
   qualityGoals?: QualityGoals;
   qualityRequirements?: QualityRequirements;
+  requirements?: Requirements;
 }
 
 const LIFELINE_KINDS = new Set(['actor', 'component', 'externalSystem']);
@@ -121,6 +122,29 @@ export function checkReferences(input: CheckInput): Issue[] {
       for (const g of s.goals) {
         if (!goals.has(g)) error('data/quality-requirements.yaml', `Scenario "${s.id}" refers to unknown quality goal "${g}"`);
       }
+    }
+  }
+
+  if (input.requirements) {
+    const file = 'data/requirements.yaml';
+    const list = input.requirements.requirements;
+    const byId = new Map(list.map((r) => [r.id, r]));
+    const goals = new Set(input.qualityGoals?.goals.map((g) => g.id) ?? []);
+    for (const id of duplicates(list.map((r) => r.id))) error(file, `Duplicate requirement id "${id}"`);
+    for (const r of list) {
+      if (r.parent && !byId.has(r.parent)) error(file, `Requirement "${r.id}" is under unknown requirement "${r.parent}"`);
+      else if (r.parent) {
+        const seen = new Set([r.id]);
+        for (let p: string | undefined = r.parent; p; p = byId.get(p)?.parent) {
+          if (seen.has(p)) {
+            error(file, `Requirement "${r.id}" is (indirectly) under itself`);
+            break;
+          }
+          seen.add(p);
+        }
+      }
+      for (const e of r.satisfiedBy) if (!elements.has(e)) error(file, `Requirement "${r.id}" is satisfied by unknown element "${e}"`);
+      for (const g of r.goals) if (!goals.has(g)) error(file, `Requirement "${r.id}" refers to unknown quality goal "${g}"`);
     }
   }
 

@@ -1943,6 +1943,40 @@ html.modal-open body {
   line-height: 1.5;
 }
 
+/* A variable in the text ({version}): filled in by the export; its value shows on hover. */
+.doc-var {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--doc-well);
+}
+
+/* Variables: name, value and a remove button per row. */
+.xd-vars {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: 6px 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.xd-vars-row {
+  display: contents;
+}
+
+.xd-vars-head {
+  color: var(--doc-muted);
+}
+
+.xd-vars-add {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.xd input[aria-invalid='true'] {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
 .xd-hint code {
   padding: 0 3px;
   border-radius: 3px;

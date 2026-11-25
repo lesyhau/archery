@@ -154,6 +154,16 @@
         "enablement": "archery.hasRoot"
       },
       {
+        "command": "archery.importReqif",
+        "title": "Import Requirements (ReqIF)...",
+        "category": "Archery"
+      },
+      {
+        "command": "archery.exportReqif",
+        "title": "Export Requirements (ReqIF)...",
+        "category": "Archery"
+      },
+      {
         "command": "archery.openDiagramSource",
         "title": "Open Source",
         "category": "Archery",
@@ -285,6 +295,16 @@
           "command": "archery.openDocument",
           "when": "view == archery.contents && archery.hasRoot",
           "group": "project@2"
+        },
+        {
+          "command": "archery.importReqif",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "project@3"
+        },
+        {
+          "command": "archery.exportReqif",
+          "when": "view == archery.contents && archery.hasRoot",
+          "group": "project@4"
         },
         {
           "command": "archery.refresh",
@@ -432,6 +452,14 @@
         {
           "command": "archery.selectDoc",
           "when": "archery.multipleDocs"
+        },
+        {
+          "command": "archery.importReqif",
+          "when": "archery.hasRoot"
+        },
+        {
+          "command": "archery.exportReqif",
+          "when": "archery.hasRoot"
         }
       ],
       "editor/title": [
@@ -2319,7 +2347,7 @@
         "toolReferenceName": "archery-get-data",
         "canBeReferencedInPrompt": true,
         "userDescription": "Items of a structured arc42 list stored in data/*.yaml.",
-        "modelDescription": "Items of a structured arc42 list stored in data/*.yaml. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "modelDescription": "Items of a structured arc42 list stored in data/*.yaml. Lists:\n- requirements (section 1.1, key field \"id\"): id, heading (chapter heading), title, text (Markdown), type (e.g. \"Functional requirement\"), status, priority, parent (id of the requirement or heading it is under; the list is in document order), specification, satisfiedBy (list of model element ids: the building blocks that satisfy it), goals (list of quality goal ids it refines), attributes (map name -> text: other attributes of a requirements tool), reqif (ReqIF identifier, set by import_reqif; keep it)\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
         "icon": "$(book)",
         "tags": [
           "archery",
@@ -2332,6 +2360,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -2357,7 +2386,7 @@
         "toolReferenceName": "archery-upsert-data-item",
         "canBeReferencedInPrompt": true,
         "userDescription": "Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field).",
-        "modelDescription": "Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field). The result is validated before it is written. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "modelDescription": "Add an item to a structured arc42 list, or update the item with the same key field (only the given fields change; null removes a field). The result is validated before it is written. Lists:\n- requirements (section 1.1, key field \"id\"): id, heading (chapter heading), title, text (Markdown), type (e.g. \"Functional requirement\"), status, priority, parent (id of the requirement or heading it is under; the list is in document order), specification, satisfiedBy (list of model element ids: the building blocks that satisfy it), goals (list of quality goal ids it refines), attributes (map name -> text: other attributes of a requirements tool), reqif (ReqIF identifier, set by import_reqif; keep it)\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -2370,6 +2399,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -2417,6 +2447,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -2446,8 +2477,8 @@
         "displayName": "Validate architecture documentation",
         "toolReferenceName": "archery-validate",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest).",
-        "modelDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.",
+        "userDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals, requirements pointing to unknown parents, elements or quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest).",
+        "modelDescription": "Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals, requirements pointing to unknown parents, elements or quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.",
         "icon": "$(book)",
         "tags": [
           "archery",
@@ -3258,7 +3289,7 @@
         "toolReferenceName": "archery-write-data-table",
         "canBeReferencedInPrompt": true,
         "userDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items).",
-        "modelDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items). Omit rows to change only the layout: the rows stay exactly as they are. Rows are objects of field -> text; numbers, comma-separated lists and \"key: value\" maps are converted per field. Rows without an id get one. fit: \"auto\" makes the export fit the column widths to the content (columns with a width keep it); fit_table_columns fits them once. Lists:\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
+        "modelDescription": "Replace all rows of a structured arc42 list (data/*.yaml) at once, and/or its column layout (visible columns, their order, labels and widths; extra columns become custom fields on the items). Omit rows to change only the layout: the rows stay exactly as they are. Rows are objects of field -> text; numbers, comma-separated lists and \"key: value\" maps are converted per field. Rows without an id get one. fit: \"auto\" makes the export fit the column widths to the content (columns with a width keep it); fit_table_columns fits them once. Lists:\n- requirements (section 1.1, key field \"id\"): id, heading (chapter heading), title, text (Markdown), type (e.g. \"Functional requirement\"), status, priority, parent (id of the requirement or heading it is under; the list is in document order), specification, satisfiedBy (list of model element ids: the building blocks that satisfy it), goals (list of quality goal ids it refines), attributes (map name -> text: other attributes of a requirements tool), reqif (ReqIF identifier, set by import_reqif; keep it)\n- quality-goals (section 1.2, key field \"id\"): id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation\n- stakeholders (section 1.3, key field \"role\"): role, contact, expectations (towards the architecture documentation)\n- constraints (section 2, key field \"id\"): id, category (technical | organizational | convention), constraint, explanation\n- quality-overview (section 10.1, key field \"category\"): category, description\n- quality-scenarios (section 10.2, key field \"id\"): id, name, kind (usage | change), quality, goals (list of quality goal ids), priority; short form: context, stimulus, metric; long form: source, stimulus, environment, artifact, response, responseMeasure\n- risks (section 11, key field \"id\"): id, kind (risk | debt), title, description, priority (high | medium | low), probability, impact, mitigation\n- glossary (section 12, key field \"term\"): term, definition, translations (map language -> term), synonyms (list)",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -3271,6 +3302,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -3394,6 +3426,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -3473,6 +3506,7 @@
             "list": {
               "type": "string",
               "enum": [
+                "requirements",
                 "quality-goals",
                 "stakeholders",
                 "constraints",
@@ -3637,7 +3671,7 @@
               ]
             },
             "src": {
-              "description": "diagram: its name or file, e.g. \"order-flow\"; table: a data list name (quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)",
+              "description": "diagram: its name or file, e.g. \"order-flow\"; table: a data list name (requirements, quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)",
               "type": "string"
             },
             "caption": {
@@ -3768,6 +3802,14 @@
             },
             "constraints": {
               "description": "Ids of the constraints it addresses",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "requirements": {
+              "description": "Ids of the requirements it addresses",
               "type": "array",
               "items": {
                 "type": "string",
@@ -3930,7 +3972,7 @@
         "toolReferenceName": "archery-export-document",
         "canBeReferencedInPrompt": true,
         "userDescription": "Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file.",
-        "modelDescription": "Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, ...); they are saved for the next export.",
+        "modelDescription": "Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, variables: name -> value of the variables the text, header and footer use besides the built-in ones, ...); they are saved for the next export, and options not given stay as saved.",
         "icon": "$(edit)",
         "tags": [
           "archery",
@@ -4017,6 +4059,16 @@
                 },
                 "credit": {
                   "type": "boolean"
+                },
+                "variables": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 }
               }
             },
@@ -4028,6 +4080,62 @@
           "required": [
             "format"
           ]
+        }
+      },
+      {
+        "name": "archery_import_reqif",
+        "displayName": "Import requirements (ReqIF)",
+        "toolReferenceName": "archery-import-reqif",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Import requirements from a ReqIF file (.reqif, or a .reqifz archive; the OMG Requirements Interchange Format of DOORS, Polarion, Jama, codebeamer, Capella, ReqIF Studio and others) into the requirements list (data/requirements.yaml, shown in chapter 1.1).",
+        "modelDescription": "Import requirements from a ReqIF file (.reqif, or a .reqifz archive; the OMG Requirements Interchange Format of DOORS, Polarion, Jama, codebeamer, Capella, ReqIF Studio and others) into the requirements list (data/requirements.yaml, shown in chapter 1.1). Every requirement of the file's specifications becomes a row in document order: id (from ReqIF.ForeignID), heading (ReqIF.ChapterName), title (ReqIF.Name), text (ReqIF.Text, as Markdown), type, status, priority, parent (its place in the hierarchy), specification, and its other attributes. Importing again updates the requirements from the file and drops the ones the file no longer has; Archery's trace links (satisfiedBy, goals) and requirements added in Archery stay. The file is kept as data/requirements.reqif, so export_reqif writes it back with only Archery's changes. `file`: relative to the workspace, or absolute.",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        }
+      },
+      {
+        "name": "archery_export_reqif",
+        "displayName": "Export requirements (ReqIF)",
+        "toolReferenceName": "archery-export-reqif",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Export the requirements (data/requirements.yaml) as a ReqIF file for a requirements tool, with the architecture they trace to: quality goals, quality scenarios, constraints, decisions and the building blocks that satisfy requirements, each as a specification of its own, and the trace links as relations (Satisfies: building block -> requirement; Refines: requirement or scenario -> quality goal; Addresses: decision -> requirement, quality goal or constraint).",
+        "modelDescription": "Export the requirements (data/requirements.yaml) as a ReqIF file for a requirements tool, with the architecture they trace to: quality goals, quality scenarios, constraints, decisions and the building blocks that satisfy requirements, each as a specification of its own, and the trace links as relations (Satisfies: building block -> requirement; Refines: requirement or scenario -> quality goal; Addresses: decision -> requirement, quality goal or constraint). After import_reqif, the imported file is written back with only Archery's changes: identifiers, unchanged values (with their formatting), types and the tool's own data stay. `file`: relative to the workspace, or absolute; .reqifz writes a ZIP archive (default: <system>.reqif next to the documentation folder).",
+        "icon": "$(edit)",
+        "tags": [
+          "archery",
+          "arc42",
+          "write"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "doc": {
+              "description": "Which documentation, when the project has several: its folder (e.g. \"services/billing/docs/architecture\") or its system name. Default: the one open in VS Code. overview lists them.",
+              "type": "string"
+            }
+          }
         }
       },
       {
@@ -4357,6 +4465,13 @@
               }
             },
             "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              }
+            },
+            "requirements": {
               "type": "array",
               "items": {
                 "type": "string",

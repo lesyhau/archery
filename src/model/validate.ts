@@ -1,7 +1,7 @@
 // Full validation of a workspace: per-file schemas (load.ts) + cross-file references (checks.ts).
 import { checkReferences, type CheckInput } from './checks';
 import { loadWorkspace, parseCanvasDiagram, parseSequenceDiagram, parseTimingDiagram, parseYaml, type Issue, type LoadedWorkspace, type WorkspaceReader } from './load';
-import { QualityGoalsSchema, QualityRequirementsSchema } from './schema';
+import { QualityGoalsSchema, QualityRequirementsSchema, RequirementsSchema } from './schema';
 import { layoutProblems } from '../render/layoutLint';
 import { LISTS, listForSrc } from '../doc/dataLists';
 import { parse as parseYamlText } from 'yaml';
@@ -30,6 +30,9 @@ export async function validateWorkspace(reader: WorkspaceReader): Promise<{ work
   if (reqText !== undefined) {
     input.qualityRequirements = parseYaml('data/quality-requirements.yaml', reqText, QualityRequirementsSchema).value;
   }
+
+  const requirementsText = await reader.readText('data/requirements.yaml');
+  if (requirementsText !== undefined) input.requirements = parseYaml('data/requirements.yaml', requirementsText, RequirementsSchema).value;
 
   // Reference checks are only meaningful when model.yaml itself parsed.
   const modelBroken = workspace.issues.some((i) => i.file === 'model.yaml' && i.severity === 'error');

@@ -252,6 +252,32 @@ function cellText(state: MarkdownSerializerState, cell: PMNode): string {
   return inner.trim().replace(/\n+/g, ' ').replace(/\|/g, '\\|') || ' ';
 }
 
+/**
+ * Text in square brackets that is no Markdown syntax, such as a traceability tag "[BOOTLOADER-AD 001]",
+ * "[SRS_BL_012]" or "[REQ-1.2]": letters, digits, spaces and . / # : - (and "_" inside a word).
+ */
+export const BRACKETED = /\[[A-Za-z0-9](?:[A-Za-z0-9 ./#:-]|(?<=[A-Za-z0-9])_(?=[A-Za-z0-9]))*\]/g;
+
+/**
+ * Writes text escaped, except for bracketed text that stays plain text unescaped: what follows it is
+ * not "(", "[" or ":" (an inline link, a reference or a link definition), it is not in a link, and it is
+ * not a task list box "[x]". Tools that look for tags in the Markdown files then find them as typed.
+ */
+function writeText(state: MarkdownSerializerState, node: PMNode, parent: PMNode, index: number): void {
+  const text = node.text ?? '';
+  if (node.marks.some((m) => m.type.name === 'link')) return state.text(text);
+  const after = (end: number) => (end < text.length ? text[end] : index + 1 < parent.childCount ? parent.child(index + 1).text?.[0] : undefined);
+  let last = 0;
+  for (const m of text.matchAll(BRACKETED)) {
+    const end = m.index + m[0].length;
+    if (/^\[[xX]\]$/.test(m[0]) || ['(', '[', ':'].includes(after(end) ?? '')) continue;
+    if (m.index > last) state.text(text.slice(last, m.index));
+    state.text(m[0], false);
+    last = end;
+  }
+  if (last < text.length || !text) state.text(text.slice(last));
+}
+
 let cachedSerializer: MarkdownSerializer | undefined;
 function serializer(): MarkdownSerializer {
   if (cachedSerializer) return cachedSerializer;
@@ -262,7 +288,7 @@ function serializer(): MarkdownSerializer {
   cachedSerializer = new MarkdownSerializer(
     {
       doc: (state, node) => state.renderContent(node),
-      text: (state, node) => state.text(node.text ?? ''),
+      text: writeText,
       paragraph: (state, node) => {
         state.renderInline(node);
         state.closeBlock(node);

@@ -97,6 +97,7 @@ export async function loadDocumentContent(root: vscode.Uri, tracker?: VersionTra
       supersedes: meta.supersedes != null && String(meta.supersedes).trim() ? String(meta.supersedes).trim().padStart(4, '0') : undefined,
       qualityGoals: strings(meta.qualityGoals),
       constraints: strings(meta.constraints),
+      requirements: strings(meta.requirements),
       parts: readAdrParts(body),
     });
   }

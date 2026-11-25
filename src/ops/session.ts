@@ -37,11 +37,23 @@ export interface ToolHost {
   browsers?(): Promise<string[]>;
 }
 
+/**
+ * Files outside the documentation (ReqIF import and export). Paths are relative to the workspace
+ * folder (VS Code) / the project directory (MCP), or absolute.
+ */
+export interface DiskAccess {
+  read(path: string): Promise<Uint8Array>;
+  /** Writes a file; without a path, as `name` next to the documentation folder. Returns the path written, as shown to the user. */
+  write(path: string | undefined, name: string, data: Uint8Array): Promise<string>;
+}
+
 export class ArcherySession {
   /** Path -> new content of every file created or modified by operations. */
   readonly changes = new Map<string, string>();
   /** Set by front-ends that run inside (or next to) VS Code. */
   host?: ToolHost;
+  /** Set by front-ends that can read and write files outside the documentation. */
+  disk?: DiskAccess;
 
   private constructor(
     private readonly texts: Map<string, string>,

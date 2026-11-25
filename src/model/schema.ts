@@ -44,6 +44,8 @@ export const ExportSettingsSchema = z.object({
   cover: z.boolean().optional(),
   /** "Archery" and its version in the footer (default: the setting archery.export.credit, on). */
   credit: z.boolean().optional(),
+  /** The documentation's own variables, e.g. { docNumber: "BL-AD-0001" }: `{docNumber}` in the text, header and footer. */
+  variables: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/, 'variable names start with a letter and contain only letters, digits, "_" or "-"'), z.string()).optional(),
 });
 export type ExportSettings = z.infer<typeof ExportSettingsSchema>;
 
@@ -609,6 +611,42 @@ export const QualityRequirementsSchema = z.object({
 });
 export type QualityRequirements = z.infer<typeof QualityRequirementsSchema>;
 
+/**
+ * Section 1.1 — requirements, in document order. Requirements exchanged with requirements tools
+ * (DOORS, Polarion, Jama, Capella, ...) through ReqIF keep the identifier of their ReqIF object in
+ * `reqif`; `satisfiedBy` and `goals` trace them to the architecture.
+ */
+export const RequirementSchema = z.object({
+  id: IdSchema,
+  /** A chapter heading (ReqIF.ChapterName); a row with only a heading structures the list. */
+  heading: z.string().optional(),
+  title: z.string().optional(),
+  /** Markdown (ReqIF.Text). */
+  text: z.string().optional(),
+  /** The kind of requirement, e.g. "Functional requirement" (the ReqIF object's type). */
+  type: z.string().optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  /** The requirement (or heading) this one is under. */
+  parent: IdSchema.optional(),
+  /** The ReqIF specification (document) a top-level requirement is in, when there are several. */
+  specification: z.string().optional(),
+  /** Ids of the model elements (building blocks) that satisfy it. */
+  satisfiedBy: z.array(IdSchema).default([]),
+  /** Ids of the quality goals (section 1.2) it refines. */
+  goals: z.array(IdSchema).default([]),
+  /** Other attributes from the requirements tool, by name. */
+  attributes: z.record(z.string(), z.string()).optional(),
+  /** IDENTIFIER of its ReqIF spec object. */
+  reqif: z.string().optional(),
+});
+export type Requirement = z.infer<typeof RequirementSchema>;
+
+export const RequirementsSchema = z.object({
+  requirements: z.array(RequirementSchema).default([]),
+});
+export type Requirements = z.infer<typeof RequirementsSchema>;
+
 /** Section 11 — risks and technical debt, ordered by priority. */
 export const RisksSchema = z.object({
   risks: z
@@ -649,14 +687,16 @@ export const AdrFrontMatterSchema = z.object({
   date: z.string().optional(),
   deciders: z.array(z.string()).optional(),
   supersedes: z.string().optional(),
-  /** Ids of quality goals / constraints this decision addresses. */
+  /** Ids of quality goals / constraints / requirements this decision addresses. */
   qualityGoals: z.array(IdSchema).default([]),
   constraints: z.array(IdSchema).default([]),
+  requirements: z.array(IdSchema).default([]),
 });
 export type AdrFrontMatter = z.infer<typeof AdrFrontMatterSchema>;
 
 /** Maps well-known data file names to their schema. */
 export const DataFileSchemas = {
+  'requirements.yaml': RequirementsSchema,
   'quality-goals.yaml': QualityGoalsSchema,
   'stakeholders.yaml': StakeholdersSchema,
   'constraints.yaml': ConstraintsSchema,

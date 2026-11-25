@@ -1,7 +1,7 @@
 // Tool definitions shared by the MCP server (Claude Code & other MCP clients) and the
 // VS Code language model tools (GitHub Copilot). One definition = one zod input schema,
 // an agent-facing description, and a pure `run` against an ArcherySession.
-import { isMap, isSeq, parseDocument } from 'yaml';
+import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
 import { forEachMessage } from '../model/checks';
 import type { WorkspaceReader } from '../model/load';
@@ -24,6 +24,7 @@ import {
   ScenarioSchema,
   QualityRequirementsSchema,
   RelationshipKindSchema,
+  RequirementsSchema,
   RisksSchema,
   SequenceStepSchema,
   StakeholdersSchema,
@@ -57,7 +58,13 @@ import { alignBoxes, ALIGN_MODES, type AlignMode } from './align';
 import { layoutNodes } from '../render/canvasLayout';
 import { parseProject } from '../model/load';
 import { parseDocument as parseYamlDocument } from 'yaml';
-import { setAdrPart, setAdrTitle, splitAdrText, type AdrPart } from '../doc/adr';
+import { adrTitle, readAdrParts, setAdrPart, setAdrTitle, splitAdrText, type AdrPart } from '../doc/adr';
+import { exportReqif, type ArchitectureData } from '../reqif/export';
+import { mergeRequirements, readRequirements, reqifEntry } from '../reqif/import';
+import { Reqif } from '../reqif/reqif';
+import { isZip, readZip, writeZip } from '../reqif/zip';
+import { REQUIREMENTS_HEADER, yamlFile } from '../template/scaffold';
+import { parseYaml } from '../model/load';
 
 export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
   /** snake_case; MCP clients namespace it (mcp__archery__add_element), Copilot gets an `archery_` prefix. */
@@ -369,6 +376,7 @@ function needHost(session: ArcherySession): ToolHost {
 // ---------------------------------------------------------------------------
 
 const DATA_LISTS = {
+  requirements: { file: 'data/requirements.yaml', key: 'requirements', idField: 'id', schema: RequirementsSchema, section: '1.1', fields: 'id, heading (chapter heading), title, text (Markdown), type (e.g. "Functional requirement"), status, priority, parent (id of the requirement or heading it is under; the list is in document order), specification, satisfiedBy (list of model element ids: the building blocks that satisfy it), goals (list of quality goal ids it refines), attributes (map name -> text: other attributes of a requirements tool), reqif (ReqIF identifier, set by import_reqif; keep it)' },
   'quality-goals': { file: 'data/quality-goals.yaml', key: 'goals', idField: 'id', schema: QualityGoalsSchema, section: '1.2', fields: 'id, priority (integer, 1 = highest), quality (e.g. ISO 25010 / Q42 characteristic), goal, motivation' },
   stakeholders: { file: 'data/stakeholders.yaml', key: 'stakeholders', idField: 'role', schema: StakeholdersSchema, section: '1.3', fields: 'role, contact, expectations (towards the architecture documentation)' },
   constraints: { file: 'data/constraints.yaml', key: 'constraints', idField: 'id', schema: ConstraintsSchema, section: '2', fields: 'id, category (technical | organizational | convention), constraint, explanation' },
@@ -385,10 +393,153 @@ const DATA_LIST_HELP = Object.entries(DATA_LISTS)
 
 function dataDocument(session: ArcherySession, list: DataListName) {
   const def = DATA_LISTS[list];
-  const doc = parseDocument(session.read(def.file) ?? `${def.key}: []\n`);
+  const empty = list === 'requirements' ? yamlFile(REQUIREMENTS_HEADER, { requirements: [] }) : `${def.key}: []\n`;
+  const doc = parseDocument(session.read(def.file) ?? empty);
   if (doc.errors.length > 0) throw new OpError(`${def.file} has syntax errors: ${doc.errors[0]!.message}`);
   if (!isSeq(doc.get(def.key, true))) doc.set(def.key, doc.createNode([]));
   return { def, doc };
+}
+
+/** The requirements a model element satisfies. */
+function requirementsSatisfiedBy(session: ArcherySession, id: string): string[] {
+  const text = session.read('data/requirements.yaml');
+  if (text === undefined) return [];
+  let items: unknown;
+  try {
+    items = (parseYamlText(text) as { requirements?: unknown } | null)?.requirements;
+  } catch {
+    return [];
+  }
+  return Array.isArray(items) ? items.filter((r) => Array.isArray(r?.satisfiedBy) && r.satisfiedBy.map(String).includes(id)).map((r) => String(r.id)) : [];
+}
+
+// ---------------------------------------------------------------------------
+// ReqIF (requirements exchange with requirements tools)
+// ---------------------------------------------------------------------------
+
+/** The ReqIF file kept from the last import; export_reqif writes it back with Archery's changes. */
+const REQIF_BASE = 'data/requirements.reqif';
+
+function needDisk(session: ArcherySession) {
+  if (!session.disk) throw new OpError('Reading and writing files outside the documentation is not available here.');
+  return session.disk;
+}
+
+/** The ReqIF XML of a .reqif file or a .reqifz archive. */
+function reqifXml(bytes: Uint8Array, file: string): string {
+  if (!isZip(bytes)) return new TextDecoder().decode(bytes);
+  let entries;
+  try {
+    entries = readZip(bytes);
+  } catch (e) {
+    throw new OpError(`${file} is not a readable .reqifz archive: ${e instanceof Error ? e.message : e}`);
+  }
+  const entry = reqifEntry(entries);
+  if (!entry) throw new OpError(`${file} contains no .reqif file.`);
+  return new TextDecoder().decode(entry.data);
+}
+
+/** A data file's parsed content, or an error naming the file. */
+function dataFile<S extends z.ZodType>(session: ArcherySession, file: string, schema: S): z.infer<S> | undefined {
+  const text = session.read(file);
+  if (text === undefined) return undefined;
+  const parsed = parseYaml(file, text, schema);
+  if (!parsed.value) throw new OpError(`${file} is invalid (${parsed.issues[0]?.message}). Run validate for details.`);
+  return parsed.value;
+}
+
+/** Everything export_reqif writes: the requirements, the architecture they trace to, the decisions. */
+function architectureData(session: ArcherySession): ArchitectureData {
+  const project = parseProject(session.read('archery.yaml') ?? '').value;
+  const quality = dataFile(session, 'data/quality-requirements.yaml', QualityRequirementsSchema);
+  const decisions = session
+    .files('decisions')
+    .filter((f) => /\/\d{4}-.+\.md$/.test(f))
+    .map((file) => {
+      const { front, body } = splitAdrText(session.read(file) ?? '');
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = (front ? (parseYamlText(front) as Record<string, unknown> | null) : null) ?? {};
+      } catch {
+        meta = {};
+      }
+      const ids = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+      const number = /\/(\d{4})-/.exec(file)![1]!;
+      const date = meta.date instanceof Date ? meta.date.toISOString().slice(0, 10) : meta.date != null ? String(meta.date) : undefined;
+      return {
+        number,
+        title: adrTitle(body) ?? file.slice('decisions/'.length + 5, -3).replace(/-/g, ' '),
+        status: typeof meta.status === 'string' ? meta.status : undefined,
+        date,
+        decision: readAdrParts(body).decision,
+        requirements: ids(meta.requirements),
+        qualityGoals: ids(meta.qualityGoals),
+        constraints: ids(meta.constraints),
+      };
+    });
+  const line = (label: string, value: string | undefined) => (value?.trim() ? `${label}: ${value.trim()}` : '');
+  return {
+    system: project?.system ?? 'System',
+    requirements: dataFile(session, 'data/requirements.yaml', RequirementsSchema)?.requirements ?? [],
+    goals: dataFile(session, 'data/quality-goals.yaml', QualityGoalsSchema)?.goals ?? [],
+    scenarios: (quality?.scenarios ?? []).map((q) => ({
+      id: q.id,
+      name: q.name,
+      kind: q.kind,
+      quality: q.quality,
+      goals: q.goals,
+      priority: q.priority,
+      text: [
+        line('Source', q.source),
+        line('Context', q.context),
+        line('Stimulus', q.stimulus),
+        line('Environment', q.environment),
+        line('Artifact', q.artifact),
+        line('Response', q.response),
+        line('Response measure', q.responseMeasure),
+        line('Metric', q.metric),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    })),
+    constraints: dataFile(session, 'data/constraints.yaml', ConstraintsSchema)?.constraints ?? [],
+    decisions,
+    elements: session.model().elements.map((e) => ({ id: e.id, name: e.name, kind: e.kind, description: e.description, stereotype: e.stereotype, technology: e.technology })),
+  };
+}
+
+/** Requirement ids changed in the requirements tool: the decisions that address them follow. */
+function renameRequirementsInDecisions(session: ArcherySession, renamed: Map<string, string>): void {
+  if (!renamed.size) return;
+  for (const file of session.files('decisions').filter((f) => f.endsWith('.md'))) {
+    const adr = splitAdr(session.read(file)!);
+    const list = adr.front.get('requirements', true);
+    if (!isSeq(list)) continue;
+    let changed = false;
+    for (const item of list.items) {
+      if (isScalar(item) && renamed.has(String(item.value))) {
+        item.value = renamed.get(String(item.value));
+        changed = true;
+      }
+    }
+    if (changed) session.write(file, joinAdr(adr.front, adr.body));
+  }
+}
+
+/** Shows the requirements table in chapter 1.1 when no chapter shows it yet. Returns the chapter file. */
+function showRequirementsTable(session: ArcherySession): string | undefined {
+  const project = parseProject(session.read('archery.yaml') ?? '').value;
+  const shown = (project?.sections ?? []).some((s) => /<!--\s*archery:table\s+data\/requirements\.yaml[\s#]/.test(session.read(s.file) ?? ''));
+  if (shown) return undefined;
+  const entry = project?.sections.find((s) => s.id === 'introduction-and-goals') ?? project?.sections[0];
+  if (!entry || !session.has(entry.file)) return undefined;
+  const s = { id: entry.id, number: findSection(entry.id)?.number, file: entry.file };
+  try {
+    insertInChapter(session, s, ['<!-- archery:table data/requirements.yaml -->'], 'Requirements Overview');
+  } catch {
+    insertInChapter(session, s, ['<!-- archery:table data/requirements.yaml -->']);
+  }
+  return session.display(entry.file);
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +577,7 @@ const nullable = <T extends Record<string, z.ZodOptional<z.ZodTypeAny>>>(fields:
   Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.unwrap().nullable().optional()])) as { [K in keyof T]: z.ZodOptional<z.ZodNullable<ReturnType<T[K]['unwrap']>>> };
 
 /** Tools a batch cannot run: they act outside the session (versions, export) or are batches themselves. */
-const NOT_BATCHED = new Set(['batch', 'list_versions', 'release_version', 'restore_version', 'export_document', 'export_diagram']);
+const NOT_BATCHED = new Set(['batch', 'list_versions', 'release_version', 'restore_version', 'export_document', 'export_diagram', 'import_reqif', 'export_reqif']);
 
 /** A place that refers to a diagram file: where it is, and how to drop it or point it elsewhere. */
 interface DiagramReference {
@@ -705,12 +856,14 @@ export const TOOLS: ToolDef<any>[] = [
       const canvas = canvasDiagrams(session).filter(({ diagram }) => diagram.nodes.some((n) => n.ref === id));
       const sequences = sequenceDiagrams(session).filter(({ diagram }) => diagram.lifelines.some((l) => l.ref === id));
       const timings = timingDiagrams(session).filter(({ diagram }) => diagram.lifelines.some((l) => l.ref === id));
+      const satisfied = requirementsSatisfiedBy(session, id);
       const usages = [
         ...relationships.map((r) => `relationship ${r}`),
         ...children.map((c) => `child element ${c}`),
         ...canvas.map((d) => session.display(d.path)),
         ...sequences.map((d) => session.display(d.path)),
         ...timings.map((d) => session.display(d.path)),
+        ...satisfied.map((r) => `requirement ${r} (satisfied by)`),
       ];
       if (usages.length > 0 && !cascade) {
         throw new OpError(`"${id}" is still used by: ${usages.join(', ')}. Pass cascade: true to remove it everywhere.`);
@@ -742,6 +895,17 @@ export const TOOLS: ToolDef<any>[] = [
         });
       }
       for (const { path, diagram } of timings) session.writeJson(path, withoutTimingLifeline(diagram, id));
+      if (satisfied.length) {
+        const { def, doc } = dataDocument(session, 'requirements');
+        const items = doc.get(def.key, true);
+        if (isSeq(items)) {
+          for (const item of items.items) {
+            const list = isMap(item) ? item.get('satisfiedBy', true) : undefined;
+            if (isSeq(list)) list.items = list.items.filter((v) => !(isScalar(v) && String(v.value) === id));
+          }
+        }
+        session.writeDocument(def.file, doc);
+      }
       return { message: `Deleted "${id}".`, alsoRemoved: usages };
     },
   }),
@@ -1151,7 +1315,7 @@ export const TOOLS: ToolDef<any>[] = [
   tool({
     name: 'validate',
     title: 'Validate architecture documentation',
-    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.',
+    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals, requirements pointing to unknown parents, elements or quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.',
     input: z.object({}),
     readOnly: true,
     async run(session) {
@@ -1733,7 +1897,7 @@ export const TOOLS: ToolDef<any>[] = [
     input: z.object({
       section: z.string(),
       kind: z.enum(['diagram', 'table', 'decisions']),
-      src: z.string().optional().describe('diagram: its name or file, e.g. "order-flow"; table: a data list name (quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)'),
+      src: z.string().optional().describe('diagram: its name or file, e.g. "order-flow"; table: a data list name (requirements, quality-goals, stakeholders, constraints, quality-overview, quality-scenarios, risks, glossary)'),
       caption: z.string().optional(),
       after_heading: z.string().optional(),
     }),
@@ -1795,6 +1959,7 @@ export const TOOLS: ToolDef<any>[] = [
       ...adrPartInputs,
       qualityGoals: z.array(IdSchema).optional().describe('Ids of the quality goals it addresses'),
       constraints: z.array(IdSchema).optional().describe('Ids of the constraints it addresses'),
+      requirements: z.array(IdSchema).optional().describe('Ids of the requirements it addresses'),
       supersedes: z.string().describe('Number of the decision this one replaces (that one then gets status superseded)').optional(),
     }),
     readOnly: false,
@@ -1812,6 +1977,7 @@ export const TOOLS: ToolDef<any>[] = [
       if (superseded) front.set('supersedes', /(\d{4})-/.exec(superseded)![1]!);
       setFrontList(front, 'qualityGoals', input.qualityGoals ?? [], true);
       setFrontList(front, 'constraints', input.constraints ?? [], true);
+      setFrontList(front, 'requirements', input.requirements ?? [], false);
       let body = `# ${input.title.trim()}\n\n## Context\n\n## Decision\n\n## Consequences\n`;
       const parts: [AdrPart, string | undefined][] = [
         ['context', input.context],
@@ -1893,11 +2059,87 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'export_document',
     title: 'Export the document (PDF or HTML)',
     description:
-      'Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, ...); they are saved for the next export.',
+      'Export the whole architecture document as PDF (needs Edge, Chrome or Chromium) or as one self-contained HTML file. `file`: where to write it, relative to the workspace (default: next to the documentation folder). `settings`: export options (font, fontSize, pageSize, orientation, margins, header, footer, pageNumbers, tocDepth, variables: name -> value of the variables the text, header and footer use besides the built-in ones, ...); they are saved for the next export, and options not given stay as saved.',
     input: z.object({ format: z.enum(['pdf', 'html']), file: z.string().optional(), settings: ExportSettingsSchema.optional() }),
     readOnly: false,
     confirm: (i) => `Export the document as ${i.format.toUpperCase()}${i.file ? ` to ${i.file}` : ''}?`,
     run: async (session, { format, file, settings }) => ({ file: await needHost(session).exportDocument(format, file, settings as Record<string, unknown> | undefined) }),
+  }),
+
+  tool({
+    name: 'import_reqif',
+    title: 'Import requirements (ReqIF)',
+    description:
+      "Import requirements from a ReqIF file (.reqif, or a .reqifz archive; the OMG Requirements Interchange Format of DOORS, Polarion, Jama, codebeamer, Capella, ReqIF Studio and others) into the requirements list (data/requirements.yaml, shown in chapter 1.1). Every requirement of the file's specifications becomes a row in document order: id (from ReqIF.ForeignID), heading (ReqIF.ChapterName), title (ReqIF.Name), text (ReqIF.Text, as Markdown), type, status, priority, parent (its place in the hierarchy), specification, and its other attributes. Importing again updates the requirements from the file and drops the ones the file no longer has; Archery's trace links (satisfiedBy, goals) and requirements added in Archery stay. The file is kept as data/requirements.reqif, so export_reqif writes it back with only Archery's changes. `file`: relative to the workspace, or absolute.",
+    input: z.object({ file: z.string().min(1) }),
+    readOnly: false,
+    confirm: (i) => `Import requirements from ${i.file}?`,
+    async run(session, { file }) {
+      const xml = reqifXml(await needDisk(session).read(file), file);
+      let reqif: Reqif;
+      try {
+        reqif = Reqif.parse(xml);
+      } catch (e) {
+        throw new OpError(`${file} is not a readable ReqIF file: ${e instanceof Error ? e.message : e}`);
+      }
+      const { items, specifications } = readRequirements(reqif);
+      const { def, doc } = dataDocument(session, 'requirements');
+      const current = (doc.toJS() as { requirements?: unknown } | null)?.requirements;
+      const merged = mergeRequirements(Array.isArray(current) ? current.filter((c): c is Record<string, unknown> => !!c && typeof c === 'object') : [], items);
+      doc.set(def.key, doc.createNode(merged.items));
+      // First import: show the columns the file fills.
+      if (!doc.hasIn(['views', def.key])) {
+        const filled = (field: string) => merged.items.some((i) => i[field] !== undefined && i[field] !== '');
+        const fields = listByName('requirements')!.fields;
+        const columns = ['id', 'heading', 'title', 'text', 'status', 'satisfiedBy']
+          .filter((f) => !['heading', 'title', 'status'].includes(f) || filled(f))
+          .map((f) => ({ field: f, label: fields.find((d) => d.field === f)!.label }));
+        doc.setIn(['views', def.key, 'columns'], doc.createNode(columns));
+      }
+      const check = RequirementsSchema.safeParse(doc.toJS());
+      if (!check.success) throw new OpError(`Not imported, the requirements would be invalid: ${check.error.issues[0]?.path.join('.')}: ${check.error.issues[0]?.message}`);
+      session.writeDocument(def.file, doc);
+      session.write(REQIF_BASE, xml);
+      renameRequirementsInDecisions(session, merged.renamed);
+      const shownIn = showRequirementsTable(session);
+      return {
+        file: session.display(def.file),
+        specifications,
+        requirements: merged.items.length,
+        added: merged.added.length,
+        updated: merged.updated.length,
+        unchanged: merged.unchanged,
+        removed: merged.removed,
+        keptFromArchery: merged.kept,
+        ...(merged.renamed.size ? { renamed: Object.fromEntries(merged.renamed) } : {}),
+        ...(shownIn ? { tableAddedTo: shownIn } : {}),
+      };
+    },
+  }),
+
+  tool({
+    name: 'export_reqif',
+    title: 'Export requirements (ReqIF)',
+    description:
+      "Export the requirements (data/requirements.yaml) as a ReqIF file for a requirements tool, with the architecture they trace to: quality goals, quality scenarios, constraints, decisions and the building blocks that satisfy requirements, each as a specification of its own, and the trace links as relations (Satisfies: building block -> requirement; Refines: requirement or scenario -> quality goal; Addresses: decision -> requirement, quality goal or constraint). After import_reqif, the imported file is written back with only Archery's changes: identifiers, unchanged values (with their formatting), types and the tool's own data stay. `file`: relative to the workspace, or absolute; .reqifz writes a ZIP archive (default: <system>.reqif next to the documentation folder).",
+    input: z.object({ file: z.string().optional() }),
+    readOnly: false,
+    confirm: (i) => `Export the requirements as ReqIF${i.file ? ` to ${i.file}` : ''}?`,
+    async run(session, { file }) {
+      const data = architectureData(session);
+      let result;
+      try {
+        result = exportReqif(data, { base: session.read(REQIF_BASE) });
+      } catch (e) {
+        throw new OpError(`Not exported: ${e instanceof Error ? e.message : e}`);
+      }
+      const name = `${kebabSlug(data.system) || 'requirements'}.reqif`;
+      const zip = /\.reqifz$/i.test(file ?? '');
+      const bytes = new TextEncoder().encode(result.xml);
+      const inner = (file ?? name).replace(/\\/g, '/').split('/').pop()!.replace(/\.reqifz$/i, '.reqif');
+      const written = await needDisk(session).write(file, name, zip ? writeZip([{ name: inner, data: bytes }]) : bytes);
+      return { file: written, requirements: result.requirements, added: result.added, changed: result.changed, removed: result.removed, architecture: result.architecture, links: result.links };
+    },
   }),
 
   tool({
@@ -2061,6 +2303,7 @@ export const TOOLS: ToolDef<any>[] = [
       ...adrPartInputs,
       qualityGoals: z.array(IdSchema).optional(),
       constraints: z.array(IdSchema).optional(),
+      requirements: z.array(IdSchema).optional(),
       supersedes: z.string().describe('Number of the decision this one replaces; "" for none').optional(),
     }),
     readOnly: false,
@@ -2076,6 +2319,7 @@ export const TOOLS: ToolDef<any>[] = [
       setFrontList(adr.front, 'deciders', input.deciders?.map((d) => d.trim()).filter(Boolean), false);
       setFrontList(adr.front, 'qualityGoals', input.qualityGoals, true);
       setFrontList(adr.front, 'constraints', input.constraints, true);
+      setFrontList(adr.front, 'requirements', input.requirements, false);
       let superseded: string | undefined;
       if (input.supersedes !== undefined && !input.supersedes.trim()) adr.front.delete('supersedes');
       else if (input.supersedes) {
@@ -2127,6 +2371,8 @@ export const SERVER_INSTRUCTIONS = `Tools for architecture documentation (docs-a
 - Container and parts on one diagram: create_diagram / add_to_diagram leave out a container's relationship when a part has it (relationships: "all" to keep them).
 - Check a layout without an image: get_diagram returns every node's drawn box; validate reports overlapping shapes and labels with coordinates.
 - Table column widths: fit_table_columns balances them (measured as exported, on screen and in print), get_table_layout shows how a table wraps; write_data_table without rows changes only the layout, fit: "auto" keeps them fitted at every export.
+- Requirements (chapter 1.1) are the requirements data list: link them to the building blocks that satisfy them (satisfiedBy) and the quality goals they refine (goals); import_reqif / export_reqif exchange them with requirements tools as ReqIF.
+- Variables: {title} {system} {version} {date} {chapter} and the documentation's own (export settings "variables", e.g. {docNumber}) are filled in by the PDF / HTML export in the text, headings, tables, captions, header and footer; inside code they stay as written.
 - Call validate after a series of changes and fix reported problems.
 - A project can hold several documentations (one folder with archery.yaml each): overview lists them, and every tool takes doc (the folder or the system name) to work on one other than the one open in VS Code.`;
 

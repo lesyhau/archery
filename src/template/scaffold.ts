@@ -30,7 +30,14 @@ export function renderSection(section: SectionDef, includeHelp: boolean): string
   return parts.join('\n\n') + '\n';
 }
 
-function yamlFile(header: string[], data: unknown): string {
+/** The comment at the top of data/requirements.yaml. */
+export const REQUIREMENTS_HEADER = [
+  'Section 1.1 - requirements, in document order (import and export them as ReqIF).',
+  'Fields: id, heading, title, text, type, status, priority, parent (requirement id), specification,',
+  '  satisfiedBy (model element ids), goals (quality goal ids), attributes (map), reqif (ReqIF identifier)',
+];
+
+export function yamlFile(header: string[], data: unknown): string {
   return header.map((l) => `# ${l}`.trimEnd()).join('\n') + '\n' + stringify(data);
 }
 
@@ -78,6 +85,7 @@ export function scaffold(options: ScaffoldOptions): ScaffoldFiles {
     files.set(`sections/${section.file}`, renderSection(section, options.includeHelp));
   }
 
+  files.set('data/requirements.yaml', yamlFile(REQUIREMENTS_HEADER, { requirements: [] }));
   files.set(
     'data/quality-goals.yaml',
     yamlFile(
@@ -153,6 +161,7 @@ status: proposed        # proposed | accepted | rejected | deprecated | supersed
 date: YYYY-MM-DD
 qualityGoals: []        # ids from data/quality-goals.yaml
 constraints: []         # ids from data/constraints.yaml
+requirements: []        # ids from data/requirements.yaml
 ---
 \`\`\`
 

@@ -4,7 +4,8 @@
 // arc42 guidance (help directives) is left out. No VS Code APIs here, so it can be tested.
 import MarkdownIt from 'markdown-it';
 import type { Token } from 'markdown-it';
-import { parseDirective, type Directive } from '../doc/markdown';
+import { BRACKETED, parseDirective, type Directive } from '../doc/markdown';
+import { fillVariables, variableValues } from '../doc/variables';
 import type { DocTable, DocumentData } from '../doc/protocol';
 import { resolveMerges, tableFor } from '../doc/tables';
 import { shownValue } from '../doc/dataLists';
@@ -99,7 +100,11 @@ interface TocEntry {
 export function renderDocumentHtml(content: ExportContent, options: ExportOptions): string {
   const set = resolveExportSettings(options.settings);
   const docTitle = content.title || content.system;
-  const values = { title: docTitle, system: content.system, version: content.version, date: options.date, generator: options.generator };
+  const values = variableValues({ title: docTitle, system: content.system, version: content.version, date: options.date, generator: options.generator }, set.variables);
+  /** {chapter} in the text: the chapter being rendered, e.g. "5 Building Block View". */
+  let chapterValue = '';
+  /** Text with its variables filled in. */
+  const fill = (text: string) => fillVariables(text, { ...values, chapter: chapterValue });
   /** The on-screen header at the top of a part (the contents, a chapter). */
   const runHead = (chapter: string) => runningBand('head', set, { ...values, chapter });
   const diagramStyle = options.diagramStyle;
@@ -119,11 +124,16 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
   // Images in the text are figures: "Figure N: alt".
   md.renderer.rules.image = (tokens, idx) => {
     const t = tokens[idx]!;
-    const alt = t.content || '';
+    const alt = fill(t.content || '');
     const n = ++counters.figure;
     const title = t.attrGet('title');
     return `<span class="figure"><img src="${esc(imageSrc(t.attrGet('src')))}" alt="${esc(alt)}"${title ? ` title="${esc(String(title))}"` : ''}><span class="caption"><b>Figure ${n}${alt ? ':' : ''}</b>${alt ? ` ${esc(alt)}` : ''}</span></span>`;
   };
+  // Bracketed text such as a traceability tag "[BOOTLOADER-AD 001]" is not broken across lines, so tools
+  // that read the PDF or HTML find it in one piece.
+  for (const m of [md, cellMd]) {
+    m.renderer.rules.text = (tokens, idx) => esc(fill(tokens[idx]!.content)).replace(BRACKETED, (tag) => `<span class="nobr">${tag}</span>`);
+  }
   // Images inside table cells are plain images.
   cellMd.renderer.rules.image = (tokens, idx) => {
     const t = tokens[idx]!;
@@ -131,7 +141,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
   };
 
   const caption = (kind: 'Table' | 'Diagram', n: number, text: string | null | undefined, tag = 'p') =>
-    `<${tag} class="caption"><b>${kind} ${n}${text ? ':' : ''}</b>${text ? ` ${esc(text)}` : ''}</${tag}>`;
+    `<${tag} class="caption"><b>${kind} ${n}${text ? ':' : ''}</b>${text ? ` ${esc(fill(text))}` : ''}</${tag}>`;
 
   // Figures are anchored by their diagram (the first place it is shown), so drill-down markers can link to them.
   const anchorOf = (src: string) => `diagram-${src.replace(/^diagrams\//, '').replace(/\.(uml|seq|timing)\.json$/, '').replace(/[^A-Za-z0-9_-]+/g, '-')}`;
@@ -190,7 +200,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
   const decisionsHtml = () => {
     const n = ++counters.table;
     const rows = content.decisions.length
-      ? content.decisions.map((d) => `<tr><td class="nowrap">ADR-${esc(d.number)}</td><td>${esc(d.title)}</td><td>${esc(d.status ?? '')}</td><td class="nowrap">${esc(d.date ?? '')}</td></tr>`).join('')
+      ? content.decisions.map((d) => `<tr><td class="nowrap">ADR-${esc(d.number)}</td><td>${esc(fill(d.title))}</td><td>${esc(d.status ?? '')}</td><td class="nowrap">${esc(d.date ?? '')}</td></tr>`).join('')
       : '<tr><td class="empty" colspan="4">No decisions recorded yet.</td></tr>';
     return `<figure class="table">${caption('Table', n, 'Architecture decisions', 'figcaption')}<table><thead><tr><th>#</th><th>Decision</th><th>Status</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table></figure>`;
   };
@@ -220,6 +230,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
     let h4 = 0;
     const chapter = section.number !== undefined ? String(section.number) : '';
     let chapterTitle = section.title;
+    chapterValue = chapter ? `${chapter} ${chapterTitle}` : chapterTitle;
     for (let i = 0; i < tokens.length; i++) {
       const t = tokens[i]!;
       if (t.type === 'html_block' && TokenCtor) {
@@ -267,7 +278,7 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
       if (t.type === 'heading_open') {
         const level = Number(t.tag.slice(1));
         const inline = tokens[i + 1];
-        const text = inline?.content ?? '';
+        const text = fill(inline?.content ?? '');
         let number = '';
         if (level === 1) number = chapter;
         else if (level === 2) {
@@ -283,7 +294,10 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
           h4++;
           number = chapter && `${chapter}.${h2}.${h3}.${h4}`;
         }
-        if (level === 1) chapterTitle = text;
+        if (level === 1) {
+          chapterTitle = text;
+          chapterValue = chapter ? `${chapter} ${chapterTitle}` : chapterTitle;
+        }
         const id = level === 1 ? uniqueId(`sec-${section.id}`) : uniqueId(`${section.id}-${slug(text)}`);
         t.attrSet('id', id);
         if (level <= set.tocDepth) toc.push({ id, number, title: text, level });
@@ -297,7 +311,9 @@ export function renderDocumentHtml(content: ExportContent, options: ExportOption
       out.push(t);
     }
     const page = part(chapter ? `${chapter} ${chapterTitle}` : chapterTitle);
-    return `<section class="chapter" id="chapter-${esc(section.id)}" style="page: ${page}">${runHead(parts.at(-1)!.chapter)}${md.renderer.render(out, md.options, {})}</section>`;
+    // The text is rendered now, after its chapter heading.
+    const body = md.renderer.render(out, md.options, {});
+    return `<section class="chapter" id="chapter-${esc(section.id)}" style="page: ${page}">${runHead(parts.at(-1)!.chapter)}${body}</section>`;
   };
 
   const chapters = content.sections.map(renderSection).join('\n');
@@ -454,6 +470,7 @@ th { background: #ebebeb; font-weight: 600; }
 thead tr:last-child th { border-bottom-width: 1pt; }
 td.empty { color: var(--muted); font-style: italic; }
 td.nowrap { white-space: nowrap; }
+.nobr { white-space: nowrap; }
 .cell-image { max-width: 220px; max-height: 160px; vertical-align: middle; }
 .diagram-body { text-align: center; }
 .diagram-svg { max-width: 100%; height: auto; }

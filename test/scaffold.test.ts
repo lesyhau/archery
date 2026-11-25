@@ -49,7 +49,7 @@ describe('scaffold', () => {
     expect(ws.project?.system).toBe('Webshop');
     expect(ws.project?.sections).toHaveLength(12);
     expect(ws.diagrams.map((d) => d.type)).toEqual(['component', 'deployment']);
-    expect(ws.dataFiles).toHaveLength(6);
+    expect(ws.dataFiles).toHaveLength(7);
   });
 
   it('every directive points to a generated file', () => {

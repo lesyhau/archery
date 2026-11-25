@@ -36,7 +36,7 @@ interface Doc {
   disposables: vscode.Disposable[];
   bridge: Bridge;
 }
-import { createReader, findArcheryRoots, setActiveDocRoot, systemOf } from './workspace';
+import { createReader, findArcheryRoots, setActiveDocRoot, systemOf, workspaceDisk } from './workspace';
 import type { LoadedWorkspace } from './model/load';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -338,6 +338,41 @@ export function activate(context: vscode.ExtensionContext): void {
         const def = TOOLS.find((t) => t.name === 'set_project')!;
         await def.run(session, def.input.parse({ system: name }));
         await applyChanges(root, session.changes);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Archery: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }),
+    vscode.commands.registerCommand('archery.importReqif', async () => {
+      if (!currentRoot) return;
+      const root = currentRoot;
+      const picked = await vscode.window.showOpenDialog({ title: 'Import Requirements', canSelectMany: false, filters: { ReqIF: ['reqif', 'reqifz'] }, defaultUri: vscode.Uri.joinPath(root, '..') });
+      if (!picked?.[0]) return;
+      try {
+        const session = await ArcherySession.load(createReader(root), '');
+        session.disk = workspaceDisk(root);
+        const def = TOOLS.find((t) => t.name === 'import_reqif')!;
+        const r = (await def.run(session, def.input.parse({ file: picked[0].fsPath }))) as { requirements: number; added: number; updated: number; removed: string[] };
+        await applyChanges(root, session.changes);
+        const parts = [`${r.added} new`, `${r.updated} changed`, ...(r.removed.length ? [`${r.removed.length} removed`] : [])];
+        void vscode.window.showInformationMessage(`Imported ${r.requirements} requirements (${parts.join(', ')}).`);
+        await openDocument({ sectionId: 'introduction-and-goals', heading: 'Requirements Overview' });
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Archery: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }),
+    vscode.commands.registerCommand('archery.exportReqif', async () => {
+      if (!currentRoot) return;
+      const root = currentRoot;
+      const system = (await systemOf(root)) ?? 'requirements';
+      const name = system.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'requirements';
+      const target = await vscode.window.showSaveDialog({ title: 'Export Requirements', filters: { ReqIF: ['reqif'], 'ReqIF archive': ['reqifz'] }, defaultUri: vscode.Uri.joinPath(root, '..', `${name}.reqif`) });
+      if (!target) return;
+      try {
+        const session = await ArcherySession.load(createReader(root), '');
+        session.disk = workspaceDisk(root);
+        const def = TOOLS.find((t) => t.name === 'export_reqif')!;
+        const r = (await def.run(session, def.input.parse({ file: target.fsPath }))) as { requirements: number };
+        void vscode.window.showInformationMessage(`Exported ${r.requirements} requirements to ${vscode.workspace.asRelativePath(target)}.`);
       } catch (e) {
         void vscode.window.showErrorMessage(`Archery: ${e instanceof Error ? e.message : String(e)}`);
       }

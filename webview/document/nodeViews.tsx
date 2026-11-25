@@ -260,7 +260,7 @@ export function DecisionList({ editor }: NodeViewProps) {
                 <span className="help-pop-title">Architecture decision records (ADRs)</span>
                 <span className="help-p">One record per important, expensive, large-scale or risky decision, so stakeholders can retrace why it was made.</span>
                 <span className="help-p">
-                  <strong>A record contains:</strong> status (proposed, accepted, rejected, deprecated, superseded), date, the quality goals and constraints it addresses, then
+                  <strong>A record contains:</strong> status (proposed, accepted, rejected, deprecated, superseded), date, the quality goals, constraints and requirements it addresses, then
                   Context (the forces at play), Decision (what was chosen) and Consequences (what becomes easier or harder).
                 </span>
               </span>

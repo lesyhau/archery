@@ -9,10 +9,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { scaffold } from '../template/scaffold';
 import type { WorkspaceReader } from '../model/load';
-import { ArcherySession, DELETED, OpError } from '../ops/session';
+import { ArcherySession, DELETED, OpError, type DiskAccess } from '../ops/session';
 import { INITIALIZE_TOOL, SERVER_INSTRUCTIONS, TOOLS } from '../ops/tools';
 import { DOC_PARAM, docsListing, pickDoc, type DocRef } from '../ops/docs';
 import { parseProject } from '../model/load';
@@ -23,6 +23,27 @@ declare const __VERSION__: string;
 const VERSION = typeof __VERSION__ === 'string' ? __VERSION__ : '0.0.0-dev';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.vscode-test']);
+
+/** Files outside the documentation: paths relative to the project directory, or absolute. */
+export function fsDisk(cwd: string, root: string): DiskAccess {
+  const at = (path: string) => (isAbsolute(path) ? path : resolve(cwd, path));
+  return {
+    async read(path) {
+      try {
+        return new Uint8Array(readFileSync(at(path)));
+      } catch {
+        throw new OpError(`Cannot read ${path}.`);
+      }
+    },
+    async write(path, name, data) {
+      const target = path ? at(path) : join(dirname(root), name);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, data);
+      const shown = relative(cwd, target);
+      return toPosix(shown.startsWith('..') ? target : shown);
+    },
+  };
+}
 
 /** Finds the folder containing archery.yaml: `docs/architecture` first, then a shallow search. */
 export function findRoot(cwd: string): string | undefined {
@@ -199,6 +220,7 @@ export function createArcheryMcpServer(options: ServerOptions): McpServer {
           // With the documentation open in VS Code, the window shows the change live and applies it.
           const bridge = connectBridge(root);
           session.host = bridge?.host;
+          session.disk = fsDisk(options.cwd, root);
           const input = def.input.parse(args ?? {});
           const result = await def.run(session, input);
           if (session.changes.size && !(bridge && (await bridge.apply(session.changes)))) writeFiles(root, session.changes);

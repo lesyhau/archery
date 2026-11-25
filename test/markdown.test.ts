@@ -140,3 +140,39 @@ describe('tables with merged cells', () => {
   });
 });
 
+
+describe('variables', () => {
+  it('writes variables as typed', () => {
+    const md = '# Intro\n\n{system} v{version}, document {docNumber}, as of {date}.\n';
+    expect(editorRoundTrip(md)).toBe(md);
+  });
+});
+
+describe('traceability tags', () => {
+  it('writes bracketed text as typed, without escapes', () => {
+    const md = '## Boot sequence [BOOTLOADER-AD 001]\n\nCovers [BOOTLOADER-SRS 012], [SRS_BL_013] and [REQ-1.2]. [SWRS:042] too.\n\n- [BOOTLOADER-AD 002] checks the signature\n';
+    expect(roundTrip(md)).toBe(md);
+    expect(editorRoundTrip(md)).toBe(md);
+  });
+
+  it('removes the escapes of earlier saves', () => {
+    expect(editorRoundTrip('Covers \\[BOOTLOADER-SRS 012\\].\n')).toBe('Covers [BOOTLOADER-SRS 012].\n');
+  });
+
+  it('keeps escapes where the brackets would become Markdown', () => {
+    // An inline link, a reference, a link definition, a task box, other characters, a real link.
+    for (const text of ['[TAG 1](x)', '[TAG 1][y]', '[TAG 1]: x', '[x] done', '[a*b]', '[_x_]']) {
+      const json = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] };
+      const md = jsonToMarkdown(json);
+      expect(md, text).toContain('\\[');
+      // Read back, it is the same text.
+      expect((markdownToJson(md) as any).content[0].content[0].text, text).toBe(text);
+    }
+    expect(roundTrip('See [the spec](https://x.org) [TAG 1].\n')).toBe('See [the spec](https://x.org) [TAG 1].\n');
+  });
+
+  it('keeps an escape when the next text node starts a link', () => {
+    const json = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'see [TAG 1]' }, { type: 'text', text: '(x)', marks: [{ type: 'bold' }] }] }] };
+    expect(jsonToMarkdown(json)).toContain('\\[TAG 1\\]');
+  });
+});

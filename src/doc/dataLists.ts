@@ -29,6 +29,29 @@ export interface ListDef {
 
 export const LISTS: ListDef[] = [
   {
+    name: 'requirements',
+    title: 'Requirements',
+    file: 'data/requirements.yaml',
+    key: 'requirements',
+    keyField: 'id',
+    idPrefix: 'REQ-',
+    fields: [
+      { field: 'id', label: 'ID', type: 'id' },
+      { field: 'heading', label: 'Heading', hidden: true },
+      { field: 'title', label: 'Title' },
+      { field: 'text', label: 'Requirement' },
+      { field: 'type', label: 'Type', hidden: true },
+      { field: 'status', label: 'Status' },
+      { field: 'priority', label: 'Priority', hidden: true },
+      { field: 'parent', label: 'Parent', hidden: true },
+      { field: 'specification', label: 'Specification', hidden: true },
+      { field: 'satisfiedBy', label: 'Satisfied by', type: 'list' },
+      { field: 'goals', label: 'Quality goals', type: 'list', hidden: true },
+      { field: 'attributes', label: 'Attributes', type: 'map', hidden: true },
+      { field: 'reqif', label: 'ReqIF identifier', hidden: true },
+    ],
+  },
+  {
     name: 'quality-goals',
     title: 'Quality goals',
     file: 'data/quality-goals.yaml',

@@ -1,6 +1,7 @@
 // Export options (archery.yaml `export`) with their defaults, and where the header, footer and
 // page numbers go on a page. Shared by the HTML / PDF renderer and the export dialog's preview.
 import type { ExportSettings } from '../model/schema';
+import { fillVariables } from '../doc/variables';
 
 export type ResolvedExportSettings = Required<Omit<ExportSettings, 'headingFont'>> & { headingFont: string };
 
@@ -19,6 +20,7 @@ export const EXPORT_DEFAULTS: Omit<ResolvedExportSettings, 'headingFont'> = {
   cover: true,
   // "Archery" and its version in the footer's middle.
   credit: true,
+  variables: {},
 };
 
 /** The export settings with every default filled in. */
@@ -54,10 +56,10 @@ export function marginSlots(set: Pick<ResolvedExportSettings, 'header' | 'footer
 }
 
 /**
- * Fills {chapter} {title} {system} {version} {date} {generator}; {page} and {pages} stay for the
- * renderer. {chapter} is the chapter a page belongs to, e.g. "7 Deployment view" (empty where there
- * is none); {generator} is "Archery" and its version.
+ * Fills {chapter} {title} {system} {version} {date} {generator} and the custom variables in `values`;
+ * {page} and {pages} stay for the renderer. {chapter} is the chapter a page belongs to, e.g.
+ * "7 Deployment view" (empty where there is none); {generator} is "Archery" and its version.
  */
 export function fillPlaceholders(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(chapter|title|system|version|date|generator)\}/g, (_, k: string) => values[k] ?? '');
+  return fillVariables(template, values);
 }

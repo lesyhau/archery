@@ -51,7 +51,7 @@ function sampleContent(): ExportContent {
     diagrams,
     model,
     tables: buildTables(data),
-    decisions: [{ file: 'decisions/0001-x.md', number: '0001', title: 'Use PostgreSQL', status: 'accepted', date: '2026-11-01', deciders: [], qualityGoals: [], constraints: [], parts: {} }],
+    decisions: [{ file: 'decisions/0001-x.md', number: '0001', title: 'Use PostgreSQL', status: 'accepted', date: '2026-11-01', deciders: [], qualityGoals: [], constraints: [], requirements: [], parts: {} }],
   };
 }
 
@@ -129,5 +129,18 @@ describe('document export (HTML)', () => {
     expect(out).toContain('<b>Table 2:</b> Top goals');
     expect(out).toContain('src="data:image/png;base64,AAAA"');
     expect(out).toContain('<b>Figure 1:</b> Context sketch');
+  });
+
+  it('keeps traceability tags on one line, in the text and in tables', () => {
+    const content = sampleContent();
+    content.sections = [
+      { id: 'introduction-and-goals', number: 1, title: 'Intro', file: 'sections/01.md', enabled: true, markdown: '# Intro [BOOTLOADER-AD 001]\n\nCovers \\[BOOTLOADER-SRS 012\\] and [SRS_BL_013].\n\n| Tag |\n| --- |\n| [BOOTLOADER-AD 002] |\n\n<!-- archery:table data/quality-goals.yaml -->\n' },
+    ];
+    content.tables['data/quality-goals.yaml']!.rows[0]!.goal = 'Fast boot [BOOTLOADER-SRS 020]';
+    const out = renderDocumentHtml(content, { generator: 'Archery', date: '2026-11-18' });
+    for (const tag of ['[BOOTLOADER-AD 001]', '[BOOTLOADER-SRS 012]', '[SRS_BL_013]', '[BOOTLOADER-AD 002]', '[BOOTLOADER-SRS 020]']) {
+      expect(out).toContain(`<span class="nobr">${tag}</span>`);
+    }
+    expect(out).toContain('.nobr { white-space: nowrap; }');
   });
 });

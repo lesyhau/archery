@@ -7,7 +7,26 @@ import { forwardRef, useEffect, useRef, useState, type SelectHTMLAttributes } fr
 import type { DocumentData } from '../../src/doc/protocol';
 import { fillPlaceholders, marginSlots, resolveExportSettings, type MarginSlot } from '../../src/export/exportSettings';
 import type { ExportSettings } from '../../src/model/schema';
-import { IconClose } from './icons';
+import { isBuiltinVariable, VARIABLE_NAME, variableValues } from '../../src/doc/variables';
+import { IconClose, IconPlus } from './icons';
+
+interface VariableRow {
+  name: string;
+  value: string;
+}
+
+/** Why a variable row's name cannot be saved, if it cannot. */
+function nameProblem(rows: VariableRow[], i: number): string | undefined {
+  const name = rows[i]!.name.trim();
+  if (!name) return undefined;
+  if (!VARIABLE_NAME.test(name)) return 'Letters, digits, _ and -, starting with a letter';
+  if (isBuiltinVariable(name)) return 'Built-in variable';
+  if (rows.some((r, j) => j < i && r.name.trim() === name)) return 'Defined twice';
+  return undefined;
+}
+
+/** The rows that can be saved, as archery.yaml `export.variables`. */
+const savedVariables = (rows: VariableRow[]) => Object.fromEntries(rows.flatMap((r, i) => (r.name.trim() && !nameProblem(rows, i) ? [[r.name.trim(), r.value]] : [])));
 import { useModalScrollLock } from './modal';
 
 const FONTS = ['Segoe UI', 'Calibri', 'Arial', 'Helvetica', 'Inter', 'Verdana', 'Tahoma', 'Georgia', 'Cambria', 'Times New Roman', 'Garamond', 'Consolas'];
@@ -71,6 +90,12 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
   const [s, setS] = useState<ExportSettings>(() => ({ ...data.exportSettings }));
   const set = (patch: ExportSettings) => setS((cur) => ({ ...cur, ...patch }));
   const r = resolveExportSettings(s);
+  const [vars, setVars] = useState<VariableRow[]>(() => Object.entries(data.exportSettings.variables ?? {}).map(([name, value]) => ({ name, value })));
+  const changeVars = (rows: VariableRow[]) => {
+    setVars(rows);
+    const variables = savedVariables(rows);
+    set({ variables: Object.keys(variables).length ? variables : undefined });
+  };
   const first = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
@@ -81,7 +106,7 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
   }, [onClose]);
 
   // The preview shows a page of chapter 5.
-  const values = { chapter: '5 Building Block View', title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10), generator: data.generator };
+  const values = variableValues({ chapter: '5 Building Block View', title: data.title, system: data.system, version: data.version, date: new Date().toISOString().slice(0, 10), generator: data.generator }, r.variables);
   // Archery in the footer: the document's choice, else the extension setting.
   const credit = s.credit ?? data.exportCredit;
   const slots = marginSlots({ ...r, credit });
@@ -91,6 +116,12 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
   const placeholders = (
     <>
       <code>{'{chapter}'}</code> <code>{'{title}'}</code> <code>{'{system}'}</code> <code>{'{version}'}</code> <code>{'{date}'}</code> <code>{'{page}'}</code> <code>{'{pages}'}</code>
+      {Object.keys(r.variables).map((name) => (
+        <span key={name}>
+          {' '}
+          <code>{`{${name}}`}</code>
+        </span>
+      ))}
     </>
   );
 
@@ -146,6 +177,36 @@ export function ExportDialog({ data, onClose, onExport }: Props) {
                   <option value="wide">Wide</option>
                 </Select>
               </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Variables</legend>
+              {vars.length > 0 && (
+                <div className="xd-vars">
+                  <span className="xd-vars-head">Name</span>
+                  <span className="xd-vars-head">Value</span>
+                  <span />
+                  {vars.map((row, i) => {
+                    const problem = nameProblem(vars, i);
+                    const edit = (patch: Partial<VariableRow>) => changeVars(vars.map((v, j) => (j === i ? { ...v, ...patch } : v)));
+                    return (
+                      <div key={i} className="xd-vars-row">
+                        <input value={row.name} placeholder="docNumber" aria-label="Name" aria-invalid={problem ? true : undefined} title={problem} onChange={(e) => edit({ name: e.target.value })} />
+                        <input value={row.value} placeholder="Value" aria-label={`Value of ${row.name || 'the variable'}`} onChange={(e) => edit({ value: e.target.value })} />
+                        <button type="button" className="icon-btn" title="Remove variable" onClick={() => changeVars(vars.filter((_, j) => j !== i))}>
+                          <IconClose />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <button type="button" className="link-btn xd-vars-add" onClick={() => changeVars([...vars, { name: '', value: '' }])}>
+                <IconPlus /> Add variable
+              </button>
+              <p className="xd-hint">
+                Use them as <code>{'{name}'}</code> in the text, header and footer, like <code>{'{title}'}</code> <code>{'{system}'}</code> <code>{'{version}'}</code> <code>{'{date}'}</code> <code>{'{chapter}'}</code>.
+              </p>
             </fieldset>
 
             <fieldset>

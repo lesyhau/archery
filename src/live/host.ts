@@ -42,7 +42,8 @@ export function extensionHost(context: vscode.ExtensionContext, root: vscode.Uri
       const content = await loadDocumentContent(root, tracker());
       const name = `${content.system} - Architecture Design Document.${format}`.replace(/[\\/:*?"<>|]/g, '-');
       const target = resolveTarget(root, file, vscode.Uri.joinPath(root, '..', name));
-      const chosen = settings ? (settings as ExportSettings) : undefined;
+      // An agent names the options it changes; the others (header, variables, ...) stay as saved.
+      const chosen = settings ? { ...content.exportSettings, ...(settings as ExportSettings) } : undefined;
       if (chosen) await exportDocumentSettings(root, chosen);
       try {
         await writeDocumentFile(context, root, content, format, chosen, target);

@@ -8,7 +8,7 @@ import { ArcherySession, OpError, type ToolHost } from '../ops/session';
 import { applyLive } from '../live/liveView';
 import { INITIALIZE_TOOL, TOOLS, type ToolDef } from '../ops/tools';
 import { docsListing } from '../ops/docs';
-import { createReader, findArcheryRoots, resolveDoc } from '../workspace';
+import { createReader, findArcheryRoots, resolveDoc, workspaceDisk } from '../workspace';
 import { applyChanges } from '../workspaceEdit';
 import { COPILOT_PREFIX } from './toolManifest';
 
@@ -44,6 +44,7 @@ class SessionTool implements vscode.LanguageModelTool<unknown> {
     try {
       const session = await ArcherySession.load(createReader(root), vscode.workspace.asRelativePath(root));
       session.host = this.hostFor?.(root);
+      session.disk = workspaceDisk(root);
       const result = await this.def.run(session, parsed.data);
       await applyLive(root, session.changes);
       const current = docs.find((d) => d.root.toString() === root.toString());

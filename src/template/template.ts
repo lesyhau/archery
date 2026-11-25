@@ -62,7 +62,8 @@ export const SECTIONS: readonly SectionDef[] = [
 
 Motivation: From the point of view of the end users, a system is created or modified to improve support of a business activity and/or improve the quality.
 
-Form: Short textual description, probably in tabular use-case format. Keep it short; balance readability against redundancy with the requirements documents.`,
+Form: Short textual description, probably in tabular use-case format. Keep it short; balance readability against redundancy with the requirements documents. Edit data/requirements.yaml, or import the requirements from a requirements tool as ReqIF; link them to the building blocks that satisfy them.`,
+        body: `<!-- archery:table data/requirements.yaml -->`,
       },
       {
         title: 'Quality Goals',

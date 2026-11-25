@@ -22,6 +22,7 @@ interface Draft {
   supersedes: string;
   qualityGoals: string[];
   constraints: string[];
+  requirements: string[];
   parts: Record<AdrPart, string>;
 }
 
@@ -45,6 +46,7 @@ function draftOf(d: DocDecision | undefined): Draft {
     supersedes: d?.supersedes ?? '',
     qualityGoals: d?.qualityGoals ?? [],
     constraints: d?.constraints ?? [],
+    requirements: d?.requirements ?? [],
     parts: Object.fromEntries(PARTS.map((p) => [p.key, d?.parts[p.key] ?? ''])) as Record<AdrPart, string>,
   };
 }
@@ -117,11 +119,19 @@ export function DecisionDialog({ data, file, onClose }: { data: DocumentData; fi
     draft.supersedes !== initial.supersedes ||
     !sameList(draft.qualityGoals, initial.qualityGoals) ||
     !sameList(draft.constraints, initial.constraints) ||
+    !sameList(draft.requirements, initial.requirements) ||
     PARTS.some((p) => draft.parts[p.key] !== initial.parts[p.key]);
   const canSave = !!draft.title.trim() && (dirty || !existing) && !saving;
 
   const goals = useMemo(() => (tableFor(data.tables, 'data/quality-goals.yaml')?.rows ?? []).filter((r) => r.id).map((r) => ({ id: r.id!, text: r.goal || r.quality || r.id! })), [data.tables]);
   const constraints = useMemo(() => (tableFor(data.tables, 'data/constraints.yaml')?.rows ?? []).filter((r) => r.id).map((r) => ({ id: r.id!, text: r.constraint || r.id! })), [data.tables]);
+  const requirements = useMemo(
+    () =>
+      (tableFor(data.tables, 'data/requirements.yaml')?.rows ?? [])
+        .filter((r) => r.id && (r.text || r.title))
+        .map((r) => ({ id: r.id!, text: r.title || (r.text!.length > 140 ? `${r.text!.slice(0, 140)}…` : r.text!) })),
+    [data.tables],
+  );
   const others = data.decisions.filter((d) => d.file !== file);
 
   const save = async () => {
@@ -135,6 +145,7 @@ export function DecisionDialog({ data, file, onClose }: { data: DocumentData; fi
       deciders: splitNames(draft.deciders),
       qualityGoals: draft.qualityGoals,
       constraints: draft.constraints,
+      requirements: draft.requirements,
       context: draft.parts.context,
       consequences: draft.parts.consequences,
       drivers: draft.parts.drivers,
@@ -232,6 +243,7 @@ export function DecisionDialog({ data, file, onClose }: { data: DocumentData; fi
           </label>
           <Picks label="Quality goals addressed" items={goals} value={draft.qualityGoals} onChange={(qualityGoals) => set({ qualityGoals })} />
           <Picks label="Constraints addressed" items={constraints} value={draft.constraints} onChange={(c) => set({ constraints: c })} />
+          <Picks label="Requirements addressed" items={requirements} value={draft.requirements} onChange={(r) => set({ requirements: r })} />
           {PARTS.filter((p) => shown.has(p.key)).map((p) => (
             <div key={p.key} className="xd-field wide dd-part">
               <span className="dd-part-head">

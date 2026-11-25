@@ -34,7 +34,7 @@ AI agents work on the documentation the window shows. To work on another one, th
 - **Contents in the Archery sidebar** with numbered chapters and subsections (`1.2`, `5.2.1`), following the chapter you read. Drag a heading onto another to move it there, also into another chapter, and the numbers follow. The arrows on a heading's row move it up or down and promote or demote it (also **Alt+Shift+Arrow** keys); right-click to add headings.
 - **Diagrams anywhere in the text,** with a numbered caption below. Hover one for zoom, edit, maximize and remove. **Edit** (or a double-click) opens it in its own tab, named after the diagram.
 - **Tables:**
-  - Markdown tables in the text and editable data tables for the structured chapters (quality goals, stakeholders, constraints, quality scenarios, risks, glossary), stored as YAML.
+  - Markdown tables in the text and editable data tables for the structured chapters (requirements, quality goals, stakeholders, constraints, quality scenarios, risks, glossary), stored as YAML.
   - Hover a row or column for its grip (drag to move) and delete button. Hover a line between rows or columns for a **+** that inserts one there.
   - In data tables, drag a column line to resize, or double-click it to fit the column to its content. Select cells to merge them.
 - **Numbered captions:** Table N, Diagram N and Figure N, counted through the whole document. Click a caption to edit it.
@@ -42,7 +42,17 @@ AI agents work on the documentation the window shows. To work on another one, th
 - **Export** to PDF or to one self-contained HTML file:
   - The PDF has bookmarks and page numbers in its contents. It is printed by an installed Edge, Chrome, Chromium or Brave.
   - The HTML file shows the header and footer too: each chapter's header stays at the top of the window while you read it.
+  - **Variables** in the text: write `{title}`, `{system}`, `{version}`, `{date}` or `{chapter}`, or a variable of your own such as `{docNumber}` (added under **Variables** in the export dialog), and the export fills in its value: in the text, headings, tables, captions, the header and the footer. In the document they are shaded; point at one for its value. Inside code they stay as written.
   - Choose fonts, page size and margins, header and footer (by default the chapter at the top of each page, the document title and version at the bottom, and "Archery" with its version in the middle of the footer, which the dialog or the setting **Archery > Export: Credit** turns off), page numbers and the contents depth. The choices are saved with the documentation, so the whole team exports the same way.
+
+### Requirements and ReqIF
+
+Chapter 1.1 shows the requirements as a table (`data/requirements.yaml`). Each one can name the building blocks that satisfy it and the quality goals it refines, and a decision can name the requirements it addresses.
+
+Requirements tools exchange requirements as [ReqIF](https://www.omg.org/reqif/) (`.reqif`, or a `.reqifz` archive): DOORS, Polarion, Jama, codebeamer, Capella, ReqIF Studio and others. In the Contents view's **...** menu:
+
+- **Import Requirements (ReqIF)...** reads every requirement of the file's specifications in document order: its id, heading, title, text, type, status, priority, its place in the hierarchy and its other attributes. Import the next version of the file the same way: requirements are updated from it and the ones it no longer has are removed, while your trace links and the requirements you added in Archery stay.
+- **Export Requirements (ReqIF)...** writes the requirements back. After an import, the export is the imported file with only your changes: identifiers, unchanged text with its formatting, the tool's types and its own data stay as they were. Next to the requirements it writes the architecture they trace to, each as a specification of its own (quality goals, quality scenarios, constraints, decisions and the building blocks that satisfy requirements), and the trace links as relations: *Satisfies* (building block to requirement), *Refines* (requirement or scenario to quality goal) and *Addresses* (decision to requirement, quality goal or constraint).
 
 ### UML on a shared model
 
@@ -78,6 +88,7 @@ Both get the same tools, so an agent can do what you do in the document and the 
 - **Chapters:** read, edit and rewrite text; place diagrams, data tables and the decision list, with captions.
 - **Model and diagrams:** elements and relationships, many at once in one call; create, fill, rename and delete diagrams; move, resize, align, route, shape lines and lay out; drill-down links; sequence and timing diagrams. `get_diagram` returns every shape's drawn box and `validate` reports overlaps with coordinates, so an agent can check a layout without looking at it.
 - **Tables and decisions:** rows, columns and merged cells; architecture decision records.
+- **Requirements:** import and export ReqIF files (`import_reqif`, `export_reqif`); link requirements to building blocks, quality goals and decisions.
 - **Versions and export:** list, release and restore versions; export the document or a diagram.
 
 The tools keep ids stable, update references across files, keep YAML comments and validate before they write.
@@ -105,7 +116,7 @@ docs/architecture/
   archery.yaml        project, chapter order, export settings
   model.yaml          the shared model: elements and relationships
   sections/           one Markdown file per chapter
-  data/               the structured chapters as YAML
+  data/               the structured chapters as YAML (and requirements.reqif, the last imported ReqIF file)
   decisions/          architecture decision records
   diagrams/           *.uml.json, *.seq.json, *.timing.json
   images/             pasted and dropped images

@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { parseProject, type WorkspaceReader } from './model/load';
 import { pickDoc, type DocRef } from './ops/docs';
+import { OpError, type DiskAccess } from './ops/session';
 
 export const PROJECT_FILE = 'archery.yaml';
 
@@ -91,4 +92,26 @@ export async function resolveDoc(doc: string | undefined): Promise<{ root?: vsco
   }
   const active = activeRoot && docs.find((d) => d.root.toString() === activeRoot!.toString());
   return { root: (active ?? docs[0])?.root, docs };
+}
+
+// --- files outside the documentation -----------------------------------------------------
+
+/** Paths relative to the workspace folder of the documentation, or absolute. */
+export function workspaceDisk(root: vscode.Uri): DiskAccess {
+  const base = vscode.workspace.getWorkspaceFolder(root)?.uri ?? vscode.Uri.joinPath(root, '..');
+  const at = (path: string) => (/^([A-Za-z]:[\\/]|[\\/])/.test(path) ? vscode.Uri.file(path) : vscode.Uri.joinPath(base, path.replace(/\\/g, '/')));
+  return {
+    async read(path) {
+      try {
+        return await vscode.workspace.fs.readFile(at(path));
+      } catch {
+        throw new OpError(`Cannot read ${path}.`);
+      }
+    },
+    async write(path, name, data) {
+      const target = path ? at(path) : vscode.Uri.joinPath(root, '..', name);
+      await vscode.workspace.fs.writeFile(target, data);
+      return vscode.workspace.asRelativePath(target);
+    },
+  };
 }

@@ -9,7 +9,8 @@ import './document.css';
 import { DecisionDialog } from './DecisionDialog';
 import { ExportDialog } from './ExportDialog';
 import { FindWidget, installFindKeys, type FindWidgetHandle } from './FindWidget';
-import { installHelpPopups } from './editorTools';
+import { installHelpPopups, setVariableHintValues } from './editorTools';
+import { variableValues } from '../../src/doc/variables';
 import { expectEdit, itemFor, showChange } from './follow';
 import { reportUserActivity } from '../shared/activity';
 import { Lightbox } from './Lightbox';
@@ -215,6 +216,12 @@ function App() {
       if (resolveRequest(msg)) return;
       switch (msg.type) {
         case 'load':
+          setVariableHintValues(
+            variableValues(
+              { title: msg.data.title, system: msg.data.system, version: msg.data.version, date: new Date().toISOString().slice(0, 10), generator: msg.data.generator },
+              msg.data.exportSettings.variables,
+            ),
+          );
           setData(msg.data);
           break;
         case 'reveal':

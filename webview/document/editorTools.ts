@@ -9,6 +9,7 @@ import { captionElement } from './Caption';
 import { saveImage } from './context';
 import { tableControls } from './tableControls';
 import { codiconHtml } from '../shared/codicon';
+import { isBuiltinVariable, VARIABLE } from '../../src/doc/variables';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -87,6 +88,45 @@ export const HelpIcons = Extension.create({
               decorations.push(Decoration.widget(offset + node.nodeSize - 1, () => helpWidget(text), { side: 1, ignoreSelection: true, key: `help:${text.length}:${text.slice(0, 40)}` }));
             });
             return DecorationSet.create(doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/** The values of the variables, for the hints (set when the document loads). */
+let variableHintValues: Record<string, string> = {};
+export function setVariableHintValues(values: Record<string, string>): void {
+  variableHintValues = values;
+}
+
+/**
+ * Marks `{title}`, `{version}` and the other variables the export fills in (not in code); pointing at
+ * one shows its value.
+ */
+export const VariableHints = Extension.create({
+  name: 'variableHints',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('variableHints'),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (node.type.name === 'codeBlock') return false;
+              if (!node.isText || !node.text || node.marks.some((m) => m.type.name === 'code')) return true;
+              for (const m of node.text.matchAll(VARIABLE)) {
+                const name = m[1]!;
+                const known = Object.hasOwn(variableHintValues, name);
+                if (!known && !isBuiltinVariable(name)) continue;
+                const value = known ? variableHintValues[name]! : '';
+                decorations.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, { class: 'doc-var', ...(value ? { title: value } : {}) }));
+              }
+              return true;
+            });
+            return DecorationSet.create(state.doc, decorations);
           },
         },
       }),
