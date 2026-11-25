@@ -721,17 +721,17 @@ export interface Route {
   ports?: { from?: number; to?: number };
 }
 
-/** The line shape of an edge: its own (style.line), else the diagram style's (straight / right angles). */
-export function lineShapeOf(style: Record<string, string> | undefined, ds: DiagramStyle = 'classic'): LineShape {
+/** The line shape of an edge: its own (style.line), else straight (in both diagram styles). */
+export function lineShapeOf(style: Record<string, string> | undefined): LineShape {
   const own = style?.line;
-  return (LineShapes as readonly string[]).includes(own ?? '') ? (own as LineShape) : ds === 'modern' ? 'orthogonal' : 'straight';
+  return (LineShapes as readonly string[]).includes(own ?? '') ? (own as LineShape) : 'straight';
 }
 
 const centerOf = (b: Box): Pt => [b.x + b.w / 2, b.y + b.h / 2];
 
 /** The polyline of an edge between two shapes (through waypoints), ending on both outlines. Curves come as many short segments. */
 export function edgePoints(from: Shape, to: Shape, waypoints: { x: number; y: number }[], ds: DiagramStyle = 'classic', route: Route = {}): Pt[] {
-  const line = route.line ?? lineShapeOf(undefined, ds);
+  const line = route.line ?? lineShapeOf(undefined);
   const pts = waypoints.map((p) => [p.x, p.y] as Pt);
   if (line === 'curved') return curvedRoute(from, to, pts, route.offset);
   if (pts.length > 0) {
@@ -1088,7 +1088,7 @@ export interface EdgeDraw extends Route {
 
 /** Corners are rounded in Modern, on lines that have corners. */
 const cornerRadius = (ds: DiagramStyle, line: LineShape | undefined) => {
-  const shape = line ?? lineShapeOf(undefined, ds);
+  const shape = line ?? lineShapeOf(undefined);
   return ds === 'modern' && shape !== 'straight' && shape !== 'curved' ? MODERN_RADIUS : 0;
 };
 
@@ -1197,7 +1197,7 @@ export function relationshipPrims(rel: Relationship, from: Shape, to: Shape, way
 /** Primitives for a local edge (transition, control/object flow, note anchor). */
 export function localEdgePrims(edge: LocalEdge, from: Shape, to: Shape, ds: DiagramStyle = 'classic', opts: EdgeDraw = {}): Prim[] {
   const out: Prim[] = [];
-  const line = opts.line ?? lineShapeOf(edge.style, ds);
+  const line = opts.line ?? lineShapeOf(edge.style);
   let points = edgePoints(from, to, edge.waypoints, ds, { ...opts, line });
   const radius = edge.kind !== 'interrupt' ? cornerRadius(ds, line) : 0;
   if (edge.kind === 'interrupt') {
@@ -1422,7 +1422,7 @@ export function edgeLayouts(diagram: CanvasDiagram, model: Model, nodes: Map<str
   const out = new Map<string, EdgeDraw>();
   const groups = new Map<string, Item[]>();
   for (const it of items) {
-    out.set(it.key, { line: lineShapeOf(it.style, ds), keywords });
+    out.set(it.key, { line: lineShapeOf(it.style), keywords });
     if (it.from === it.to || it.waypoints.length) continue;
     const pair = [it.from, it.to].sort().join(' ');
     groups.set(pair, [...(groups.get(pair) ?? []), it]);

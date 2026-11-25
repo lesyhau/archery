@@ -4,6 +4,7 @@
 import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
 import { forEachMessage } from '../model/checks';
+import { sequenceProblems } from '../model/umlRules';
 import type { WorkspaceReader } from '../model/load';
 import {
   AdrFrontMatterSchema,
@@ -1150,7 +1151,7 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'write_sequence_diagram',
     title: 'Write sequence diagram',
     description:
-      'Create (or with overwrite: true, replace) a sequence diagram for a runtime scenario (section 6). Lifelines are model element ids (actors, components, external systems); elements used in messages are added as lifelines automatically. Steps: {msg: {from, to, label, kind: sync|async|reply|create|destroy|self|lost|found, async?: true for an asynchronous self/lost/found message, gate?: true when the missing end of a lost/found message is a gate on the frame (from / to outside the interaction)}}, {fragment: alt|opt|loop|par|break|critical|neg|strict|seq|ignore|consider|assert, branches: [{guard, steps}], min?, max? (loop iterations: loop(min,max), max "*" = unlimited)}, {fragment: "ref", label, over: [ids]}, {note, over: [ids]}. Embed with <!-- archery:diagram diagrams/<name>.seq.json -->.',
+      'Create (or with overwrite: true, replace) a sequence diagram for a runtime scenario (section 6). Lifelines are model element ids (actors, components, external systems); elements used in messages are added as lifelines automatically. Steps: {msg: {from, to, label, kind: sync|async|reply|create|destroy|self|lost|found, async?: true for an asynchronous self/lost/found message, gate?: true when the missing end of a lost/found message is a gate on the frame (from / to outside the interaction)}}, {fragment: alt|opt|loop|par|break|critical|neg|strict|seq|ignore|consider|assert, branches: [{guard, steps}], min?, max? (loop iterations: loop(min,max), max "*" = unlimited)}, {fragment: "ref", label, over: [ids]}, {note, over: [ids]}. UML 2: answer every sync call with a reply from its receiver to its sender (label: the returned value) once the receiver\'s own calls are answered, in the same fragment operand; the sender sends nothing meanwhile. async, self, create, destroy, lost and found messages get no reply. Broken rules come back as problems. Embed with <!-- archery:diagram diagrams/<name>.seq.json -->.',
     input: z.object({
       title: z.string().min(1),
       name: z.string().describe('File name without extension; default: kebab-case of the title').optional(),
@@ -1190,7 +1191,8 @@ export const TOOLS: ToolDef<any>[] = [
       session.writeJson(path, diagram);
       let messages = 0;
       forEachMessage(diagram.steps, () => messages++);
-      return { file: session.display(path), lifelines, messages, embed: `<!-- archery:diagram ${path} -->` };
+      const problems = sequenceProblems(diagram.steps);
+      return { file: session.display(path), lifelines, messages, embed: `<!-- archery:diagram ${path} -->`, ...(problems.length ? { problems } : {}) };
     },
   }),
 
@@ -1315,7 +1317,7 @@ export const TOOLS: ToolDef<any>[] = [
   tool({
     name: 'validate',
     title: 'Validate architecture documentation',
-    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals, requirements pointing to unknown parents, elements or quality goals), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.',
+    description: 'Check all documentation files: schemas, references between model, diagrams and data (unknown ids, hidden edges, invalid lifelines, scenarios pointing to unknown quality goals, requirements pointing to unknown parents, elements or quality goals), UML 2 rules (sync calls without replies, misused pseudostates and control nodes), chapter directives (missing diagrams or lists, a file with several lists named without #list, tables without rows), the layout of canvas diagrams (overlapping shapes, shapes over a container they are not in, labels covering shapes or labels; with coordinates) and, with a browser installed, the layout of the tables the chapters show (words wider than their column, columns that wrap much more than the rest). Call after making changes.',
     input: z.object({}),
     readOnly: true,
     async run(session) {
@@ -1545,7 +1547,7 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'add_local_edge',
     title: 'Add transition / flow / note link',
     description:
-      'Connect two nodes on a canvas diagram with a diagram-local edge: "transition" (state machines, label "trigger [guard] / effect"), "flow" (activities, label "[guard]"), "interrupt" (an interrupting edge leaving an interruptible region, drawn as a lightning bolt), or "anchor" (dashed line from a note to anything). Ends are local node ids or element refs on the diagram.',
+      'Connect two nodes on a canvas diagram with a diagram-local edge: "transition" (state machines, label "trigger [guard] / effect"), "flow" (activities, label "[guard]"), "interrupt" (an interrupting edge leaving an interruptible region, drawn as a lightning bolt), or "anchor" (dashed line from a note to anything). Ends are local node ids or element refs on the diagram. UML 2: nothing enters an initial node (in a state machine: one per region, one transition out, no trigger or guard); nothing leaves a final; fork: 1 in, 2+ out; join: 2+ in, 1 out; decision: 1 in; merge: 1 out; every edge out of a choice / decision has a [guard] or [else]. validate reports breaks.',
     input: z.object({ diagram: z.string(), kind: LocalEdgeKindSchema, from: IdSchema, to: IdSchema, label: z.string().optional(), id: IdSchema.optional() }),
     readOnly: false,
     confirm: (i) => `Add ${i.kind} ${i.from} → ${i.to}?`,
@@ -2159,7 +2161,7 @@ export const TOOLS: ToolDef<any>[] = [
     name: 'set_line_shape',
     title: 'Set line shape',
     description:
-      'How lines are drawn on a canvas diagram: straight, orthogonal (right angles), curved, horizontalFirst / verticalFirst (one corner: across first, or up / down first), or auto (the diagram style decides: straight in Classic, right angles in Modern). `ids`: relationship refs or local edge ids; omit them for every line of the diagram.',
+      'How lines are drawn on a canvas diagram: straight, orthogonal (right angles), curved, horizontalFirst / verticalFirst (one corner: across first, or up / down first), or auto (the default: straight). `ids`: relationship refs or local edge ids; omit them for every line of the diagram.',
     input: z.object({ diagram: z.string(), ids: z.array(IdSchema).optional(), line: z.enum([...LineShapes, 'auto']) }),
     readOnly: false,
     confirm: (i) => `Draw ${i.ids?.length ? i.ids.join(', ') : 'all lines'} on ${i.diagram} ${i.line === 'auto' ? 'in the diagram style' : i.line}?`,

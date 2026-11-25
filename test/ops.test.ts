@@ -149,6 +149,11 @@ describe('model operations', () => {
     await call('add_element', { name: 'Shop', kind: 'component' });
     const result = await call('write_sequence_diagram', { title: 'Place order', steps: [{ msg: { from: 'customer', to: 'shop', label: 'order()' } }] });
     expect(result.lifelines).toEqual(['customer', 'shop']);
+    // The call has no reply: the result says so at once, and validate keeps reporting it.
+    expect(result.problems).toEqual(['Synchronous message "order()" from customer to shop has no reply from shop']);
+    expect((await call('validate', {})).problems).toContainEqual(expect.objectContaining({ severity: 'warning', message: result.problems[0] }));
+    const answered = await call('write_sequence_diagram', { title: 'Place order', overwrite: true, steps: [{ msg: { from: 'customer', to: 'shop', label: 'order()' } }, { msg: { from: 'shop', to: 'customer', label: 'confirmation', kind: 'reply' } }] });
+    expect(answered.problems).toBeUndefined();
     await expect(call('write_sequence_diagram', { title: 'Place order', steps: [] })).rejects.toThrow(/overwrite/);
     await expect(call('write_sequence_diagram', { title: 'X', steps: [{ msg: { from: 'ghost', to: 'shop' } }] })).rejects.toThrow(/Unknown element "ghost"/);
   });

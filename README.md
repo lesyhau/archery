@@ -79,7 +79,7 @@ In the editors:
 - **Right-click menus.** On a shape: add the elements related to it, show an interface as a ball or a box, change its lines. On the canvas: arrange, all lines, show tagged values or line keywords, add missing relationships.
 - **One diagram tab.** Diagrams open in one tab that switches between them.
 - **Drill-down.** Set **Detailed in** on an element to the diagram that shows its inside. Every other diagram marks its box with the UML rake; click it to open that diagram, or, in the document, to jump to the chapter that shows it.
-- **Two styles.** **Classic** and **Modern** (rounded corners, light fills, right-angle lines unless a line has its own shape, muted labels), used by the editors, the document and every export.
+- **Two styles.** **Classic** and **Modern** (rounded corners, light fills, muted labels), used by the editors, the document and every export.
 
 ## Claude Code and GitHub Copilot
 

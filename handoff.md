@@ -699,7 +699,7 @@ signals), place-order sequence (activations, constraint, lost message). It must 
   - Modern uses one corner radius (`MODERN_CORNER` = 6, a quarter of the short side on small shapes) for every
     box, whatever the classic radius; polygons marked `round` (send signal, accept event, decision) get the same
     via `roundedPolygonD`. Object nodes are `sharp` (UML tells them from actions by the square corners).
-  - Modern lines use only the four side ports of a shape (`portOf`, `portToward`): no bend points -> right-angle
+  - (Lines are now straight by default in both styles; this applies to lines set to right angles or one corner.) Modern lines use only the four side ports of a shape (`portOf`, `portToward`): no bend points -> right-angle
     route between facing ports (`orthoRoute`; straight when the ports are within 6px); with bend points -> the
     port facing the nearest bend point.
   - Modern fills element bodies with the `node` paint (`fillShapes`); containers stay open; external systems,

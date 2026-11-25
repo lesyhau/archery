@@ -41,9 +41,9 @@ export interface Scene {
 }
 
 /**
- * Diagram styles. Classic: the original look. Modern: the same diagram with rounded corners,
- * rounded right-angle lines, smaller rounded arrowheads, muted line labels, solid activation
- * bars and thinner outlines. The UML notation is the same in both.
+ * Diagram styles. Classic: the original look. Modern: the same diagram with rounded corners (also on
+ * lines that have corners), smaller rounded arrowheads, muted line labels, solid activation bars and
+ * thinner outlines. The UML notation and the line shapes are the same in both.
  */
 export type DiagramStyle = 'classic' | 'modern';
 export const DIAGRAM_STYLES: readonly DiagramStyle[] = ['classic', 'modern'];

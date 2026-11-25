@@ -207,7 +207,7 @@ export function UmlEdge({ id, source, target, data, selected }: EdgeProps<UmlFlo
   const label = useLabelDrag(data?.labelOffset, (o) => data?.onLabelOffset(data.rel?.id ?? data.local!.id, o));
   if (!s || !t || !data) return null;
   const waypoints = live ?? data.waypoints;
-  const draw: EdgeDraw = { ...data.draw, line: data.draw?.line ?? lineShapeOf((data.rel ? undefined : data.local?.style) ?? undefined, data.style) };
+  const draw: EdgeDraw = { ...data.draw, line: data.draw?.line ?? lineShapeOf((data.rel ? undefined : data.local?.style) ?? undefined) };
   const prims = data.rel ? relationshipPrims(data.rel, s, t, waypoints, data.style, label.offset, draw) : localEdgePrims({ ...data.local!, waypoints, labelOffset: label.offset }, s, t, data.style, draw);
   // Right-angled lines are edited by dragging their segments; the others by their bend points.
   const rightAngled = draw.line === 'orthogonal' || draw.line === 'horizontalFirst' || draw.line === 'verticalFirst';

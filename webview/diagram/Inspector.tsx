@@ -70,8 +70,6 @@ export interface QuickAdd {
 
 interface Props {
   selection: Selection;
-  /** Modern style: lines are routed automatically (bend points reset to that, not to a straight line). */
-  modern?: boolean;
   diagram: CanvasDiagram;
   model: Model;
   diagrams: DiagramUsage[];
@@ -135,12 +133,12 @@ export function Field({ label, children, wide }: { label: string; children: Reac
   );
 }
 
-/** How a line is drawn (style.line); empty: as the diagram style draws it. */
-function LineField({ value, modern, disabled, onChange }: { value?: string; modern: boolean; disabled?: boolean; onChange(line: string): void }) {
+/** How a line is drawn (style.line); empty: straight. */
+function LineField({ value, disabled, onChange }: { value?: string; disabled?: boolean; onChange(line: string): void }) {
   return (
     <Field label="Line">
       <select value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value || 'auto')}>
-        <option value="">{modern ? 'Diagram style (right angles)' : 'Diagram style (straight)'}</option>
+        <option value="">Default (straight)</option>
         <option value="straight">Straight</option>
         <option value="orthogonal">Right angles</option>
         <option value="curved">Curved</option>
@@ -1081,7 +1079,7 @@ export function Inspector(p: Props) {
             </Field>
           </Section>
         )}
-        <LineField value={diagram.edges.find((e) => e.ref === r.id)?.style?.line} modern={!!p.modern} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [r.id], line })} />
+        <LineField value={diagram.edges.find((e) => e.ref === r.id)?.style?.line} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [r.id], line })} />
         {selection.waypoints > 0 && !ro && (
           <button type="button" className="btn secondary" onClick={() => p.op('set_edge_waypoints', { id: r.id, waypoints: [] })}>
             Remove bend points
@@ -1123,7 +1121,7 @@ export function Inspector(p: Props) {
           <Text value={ed.label ?? ''} disabled={ro} placeholder={ed.kind === 'transition' ? 'paid [amount > 0] / ship' : '[in stock]'} onCommit={(v) => p.op('update_local_edge', { id: ed.id, label: orNull(v) })} />
         </Field>
       )}
-      <LineField value={ed.style?.line} modern={!!p.modern} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [ed.id], line })} />
+      <LineField value={ed.style?.line} disabled={ro} onChange={(line) => p.op('set_line_shape', { ids: [ed.id], line })} />
       {ed.waypoints.length > 0 && !ro && (
         <button type="button" className="btn secondary" onClick={() => p.op('set_edge_waypoints', { id: ed.id, waypoints: [] })}>
           Remove bend points

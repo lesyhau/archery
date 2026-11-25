@@ -267,8 +267,7 @@ export type DiagramNode = z.infer<typeof DiagramNodeSchema>;
 
 /**
  * How an edge's line is drawn (its `style.line`): straight, with right angles, curved, or with one
- * corner (horizontal first / vertical first). Without it the diagram style decides: straight in
- * Classic, right angles in Modern.
+ * corner (horizontal first / vertical first). Without it: straight, in both diagram styles.
  */
 export const LineShapes = ['straight', 'orthogonal', 'curved', 'horizontalFirst', 'verticalFirst'] as const;
 export const LineShapeSchema = z.enum(LineShapes);

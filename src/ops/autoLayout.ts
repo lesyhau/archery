@@ -5,7 +5,7 @@
 //  - flow follows the relationships: clients above (or left of) what they use, superclasses and
 //    implemented interfaces above their specializations, base use cases before their extensions,
 //    initial nodes first and final nodes last;
-//  - edges are drawn straight (or with Modern's right angles), so nodes are placed to keep edges short
+//  - edges are drawn straight unless a line has its own shape, so nodes are placed to keep edges short
 //    and straight, with few crossings, and with room between layers for the edge labels;
 //  - containers fit their children below their own name / keyword / property header;
 //  - orthogonal regions stack inside their state; ports stay where they were on their component;
@@ -270,7 +270,7 @@ function laneRoutes(a: Box, b: Box, s: Box, x: number): Waypoints[] {
 }
 
 /**
- * Lines drawn straight (Classic) or with right angles (Modern) between their shapes may run through a
+ * Lines drawn straight (or with their own shape) between their shapes may run through a
  * shape in between (N-7 of the agent report). Such a line gets the route that runs through the fewest
  * shapes (its own ends included), then runs along the border of the fewest (N-10), then has the fewest
  * bends: ELK's route, one corner, or a lane beside a shape in the way. (ELK has no usable route for a

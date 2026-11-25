@@ -2,6 +2,7 @@
 // Schema validation of single files lives in load.ts.
 import type { Issue } from './load';
 import type { CanvasDiagram, Message, Model, QualityGoals, QualityRequirements, Requirements, SequenceDiagram, SequenceStep, TimingDiagram } from './schema';
+import { behaviorProblems, sequenceProblems } from './umlRules';
 
 export interface CheckInput {
   model: Model;
@@ -81,6 +82,7 @@ export function checkReferences(input: CheckInput): Issue[] {
         if (!localIds.has(end) && !onDiagram.has(end)) error(file, `Edge "${e.id}" refers to "${end}", which is not on the diagram`);
       }
     }
+    for (const message of behaviorProblems(diagram)) warn(file, message);
   }
 
   for (const { file, diagram } of input.sequenceDiagrams) {
@@ -97,6 +99,7 @@ export function checkReferences(input: CheckInput): Issue[] {
         if (end && !lifelines.has(end)) error(file, `Message "${msg.label}" uses "${end}", which is not a lifeline`);
       }
     });
+    for (const message of sequenceProblems(diagram.steps)) warn(file, message);
   }
 
   for (const { file, diagram } of input.timingDiagrams ?? []) {

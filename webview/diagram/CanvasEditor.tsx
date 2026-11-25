@@ -777,7 +777,7 @@ export function CanvasEditor() {
   const lineOf = (edgeId: string): LineShape => {
     const { source, ref } = splitId(edgeId);
     const style = source === 'model' ? diagram?.edges.find((x) => x.ref === ref)?.style : diagram?.local.edges.find((x) => x.id === ref)?.style;
-    return lineShapeOf(style, settings.diagramStyle);
+    return lineShapeOf(style);
   };
   /** "Line" choices for some edges (flow ids; all lines when undefined); checked when they all have it. */
   const lineItems = (edgeIds: string[] | undefined): MenuItem[] => {
@@ -790,7 +790,7 @@ export function CanvasEditor() {
     const all = (line: LineShape) => ids.length > 0 && ids.every((id) => own(id) === line);
     const auto = ids.length > 0 && ids.every((id) => !own(id));
     return [
-      { label: settings.diagramStyle === 'modern' ? 'Diagram style (right angles)' : 'Diagram style (straight)', checked: auto, run: () => set('auto') },
+      { label: 'Default (straight)', checked: auto, run: () => set('auto') },
       ...LINE_CHOICES.map((c, i) => ({ sep: i === 0, label: c.label, icon: c.icon, checked: all(c.line), run: () => set(c.line) })),
     ];
   };
@@ -943,7 +943,6 @@ export function CanvasEditor() {
   });
   const inspectorProps = (d: NonNullable<typeof diagram>): ComponentProps<typeof Inspector> => ({
     selection: selected,
-    modern: settings.diagramStyle === 'modern',
     diagram: d,
     model,
     diagrams: host.diagrams,

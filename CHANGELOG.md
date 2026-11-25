@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Straight lines in the Modern style.** Lines in Modern diagrams are now straight by default, as in Classic; right angles, curves and one-corner lines stay available per line (Line in the inspector and the context menu, or `set_line_shape`). Right-angle lines keep their rounded corners in Modern.
+- **UML 2 checks.** `validate` and the Problems view now report sequence diagrams whose synchronous calls get no reply, replies that answer no call or skip a pending one, callers that send while they wait for a reply, and messages to a destroyed lifeline. State machines and activities get the UML constraints on their pseudostates and control nodes: nothing enters an initial node (one per region, one transition out without trigger or guard, in a state machine), nothing leaves a final node, forks and joins have one end on one side and several on the other, decisions have one way in and merges one way out, every edge out of a choice or decision has a guard, and state machines use transitions while activities use flows.
+- **Agents draw UML 2 diagrams correctly.** `write_sequence_diagram` returns the broken rules of the diagram it wrote as `problems`, and the sequence and state / activity tools describe the rules in brief.
+
 ## 0.2.12
 
 - **Requirements in chapter 1.1.** A new requirements table (`data/requirements.yaml`): id, heading, title, text, type, status, priority, the requirement it is under, the building blocks that satisfy it and the quality goals it refines. New documentations show it under Requirements Overview. Decisions can address requirements too (in the decision dialog and in `create_decision` / `update_decision`), and `validate` reports requirements that point to unknown requirements, elements or quality goals.

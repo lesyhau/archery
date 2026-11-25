@@ -146,7 +146,7 @@ describe('line shapes (modern lines need not be right-angled)', () => {
     const a = shape(0, 0);
     const b = shape(300, 200);
     expect(edgePoints(a, b, [], 'modern', { line: 'straight' })).toHaveLength(2);
-    expect(edgePoints(a, b, [], 'modern')).toEqual([[100, 25], [200, 25], [200, 225], [300, 225]]);
+    expect(edgePoints(a, b, [], 'modern')).toHaveLength(2); // straight by default in both styles
     expect(edgePoints(a, b, [], 'classic', { line: 'orthogonal' })).toEqual([[100, 25], [200, 25], [200, 225], [300, 225]]);
     expect(edgePoints(a, b, [], 'modern', { line: 'horizontalFirst' })).toEqual([[100, 25], [350, 25], [350, 200]]);
     expect(edgePoints(a, b, [], 'modern', { line: 'verticalFirst' })).toEqual([[50, 50], [50, 225], [300, 225]]);

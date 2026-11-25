@@ -18,7 +18,7 @@ const model: Model = {
 const canvas: CanvasDiagram = { version: 1, type: 'component', title: 'C', nodes: [{ ref: 'a', x: 0, y: 0 }, { ref: 'b', x: 400, y: 260 }], edges: [{ ref: 'r', waypoints: [] }], local: { nodes: [], edges: [] } };
 
 describe('diagram styles', () => {
-  it('Modern: rounded boxes, rounded right-angle lines, small heads, muted labels, thin outlines', () => {
+  it('Modern: rounded boxes, straight lines (rounded corners on right-angle ones), small heads, muted labels, thin outlines', () => {
     const classic = layoutCanvas(canvas, model);
     const modern = layoutCanvas(canvas, model, 'modern');
     expect(classic.style).toBeUndefined();
@@ -27,10 +27,13 @@ describe('diagram styles', () => {
     const rects = (s: typeof modern) => s.prims.filter((p) => p.t === 'rect' && p.w >= 40 && p.h >= 30) as { rx?: number }[];
     expect(rects(modern).every((p) => (p.rx ?? 0) >= 4)).toBe(true);
     expect(rects(classic).some((p) => (p.rx ?? 0) < 4)).toBe(true);
-    // The line turns once, with a rounded corner (Q); the classic one is a straight diagonal.
+    // Lines are straight diagonals in both styles; a right-angle line gets rounded corners (Q) in Modern only.
     const linePath = (s: typeof modern) => (s.prims.find((p) => p.t === 'path' && p.dashed) as { d: string }).d;
-    expect(linePath(modern)).toMatch(/Q/);
+    expect(linePath(modern)).not.toMatch(/Q/);
     expect(linePath(classic)).not.toMatch(/Q/);
+    const ortho: CanvasDiagram = { ...canvas, edges: [{ ref: 'r', waypoints: [], style: { line: 'orthogonal' } }] };
+    expect(linePath(layoutCanvas(ortho, model, 'modern'))).toMatch(/Q/);
+    expect(linePath(layoutCanvas(ortho, model))).not.toMatch(/Q/);
     const label = modern.prims.find((p) => p.t === 'text' && p.text === 'place()') as { fill?: string; italic?: boolean };
     expect(label).toMatchObject({ fill: 'muted', italic: true });
     expect(strokeWidthOf('modern')).toBeLessThan(strokeWidthOf('classic'));
@@ -70,17 +73,18 @@ describe('diagram styles', () => {
 
   it('orthogonal routes between the four side ports; straight when the ports line up; bend points use the facing port', () => {
     const shape = (x: number, y: number) => ({ box: { x, y, w: 100, h: 50 }, outline: 'rect' as const });
-    expect(edgePoints(shape(0, 0), shape(0, 200), [], 'modern')).toEqual([[50, 50], [50, 200]]);
-    expect(edgePoints(shape(0, 0), shape(40, 200), [], 'modern')).toEqual([[50, 50], [50, 125], [90, 125], [90, 200]]);
-    expect(edgePoints(shape(0, 0), shape(300, 20), [], 'modern')).toEqual([[100, 25], [200, 25], [200, 45], [300, 45]]);
+    const O = { line: 'orthogonal' as const };
+    expect(edgePoints(shape(0, 0), shape(0, 200), [], 'modern', O)).toEqual([[50, 50], [50, 200]]);
+    expect(edgePoints(shape(0, 0), shape(40, 200), [], 'modern', O)).toEqual([[50, 50], [50, 125], [90, 125], [90, 200]]);
+    expect(edgePoints(shape(0, 0), shape(300, 20), [], 'modern', O)).toEqual([[100, 25], [200, 25], [200, 45], [300, 45]]);
     // Side by side with a small vertical gap: a short Z between bottom and top ports, not through the source.
-    expect(edgePoints(shape(0, 0), shape(60, 58), [], 'modern')).toEqual([[50, 50], [50, 54], [110, 54], [110, 58]]);
-    expect(edgePoints(shape(0, 0), shape(300, 200), [{ x: 150, y: 25 }, { x: 150, y: 300 }], 'modern')).toEqual([[100, 25], [150, 25], [150, 300], [300, 225]]);
-    expect(edgePoints(shape(0, 0), shape(300, 200), [], 'modern')).toEqual([[100, 25], [200, 25], [200, 225], [300, 225]]);
-    expect(edgePoints(shape(0, 0), shape(150, 300), [], 'modern')).toEqual([[50, 50], [50, 175], [200, 175], [200, 300]]);
+    expect(edgePoints(shape(0, 0), shape(60, 58), [], 'modern', O)).toEqual([[50, 50], [50, 54], [110, 54], [110, 58]]);
+    expect(edgePoints(shape(0, 0), shape(300, 200), [{ x: 150, y: 25 }, { x: 150, y: 300 }], 'modern', O)).toEqual([[100, 25], [150, 25], [150, 300], [300, 225]]);
+    expect(edgePoints(shape(0, 0), shape(300, 200), [], 'modern', O)).toEqual([[100, 25], [200, 25], [200, 225], [300, 225]]);
+    expect(edgePoints(shape(0, 0), shape(150, 300), [], 'modern', O)).toEqual([[50, 50], [50, 175], [200, 175], [200, 300]]);
     // Nearly touching corners: no room for a Z, one turn instead (never doubling back).
-    expect(edgePoints(shape(0, 0), shape(108, 60), [], 'modern')).toEqual([[100, 25], [158, 25], [158, 60]]);
-    expect(edgePoints(shape(0, 0), shape(300, 200), [{ x: 150, y: 100 }], 'modern')).toHaveLength(3);
+    expect(edgePoints(shape(0, 0), shape(108, 60), [], 'modern', O)).toEqual([[100, 25], [158, 25], [158, 60]]);
+    expect(edgePoints(shape(0, 0), shape(300, 200), [{ x: 150, y: 100 }], 'modern', O)).toHaveLength(3);
     expect(polylineD([[0, 0], [100, 0], [100, 100]], 8)).toBe('M0 0 L92 0 Q100 0 100 8 L100 100');
   });
 
@@ -96,16 +100,16 @@ describe('diagram styles', () => {
     expect(moveSegment(z, 1, 200)).toEqual([{ x: 200, y: 25 }, { x: 200, y: 45 }]);
     // The bend points route back through the same ports.
     const shape = (x: number, y: number) => ({ box: { x, y, w: 100, h: 50 }, outline: 'rect' as const });
-    const pts = edgePoints(shape(0, 0), shape(300, 20), moveSegment(z, 1, 150), 'modern');
+    const pts = edgePoints(shape(0, 0), shape(300, 20), moveSegment(z, 1, 150), 'modern', { line: 'orthogonal' });
     expect(pts).toEqual([[100, 25], [150, 25], [150, 45], [300, 45]]);
   });
 
   it('a moved label is tied to its line by a dotted line; at its default place it is not', () => {
-    const d: CanvasDiagram = { ...canvas, edges: [{ ref: 'r', waypoints: [] }] };
+    const d: CanvasDiagram = { ...canvas, edges: [{ ref: 'r', waypoints: [], style: { line: 'orthogonal' } }] };
     const at = layoutCanvas(d, model, 'modern');
     expect(at.prims.some((p) => p.t === 'line' && p.dotted)).toBe(false);
     expect(at.prims.find((p) => p.t === 'text' && p.text === 'place()')).toMatchObject({ movable: true });
-    const moved = layoutCanvas({ ...d, edges: [{ ref: 'r', waypoints: [], labelOffset: { x: 80, y: -60 } }] }, model, 'modern');
+    const moved = layoutCanvas({ ...d, edges: [{ ref: 'r', waypoints: [], style: { line: 'orthogonal' }, labelOffset: { x: 80, y: -60 } }] }, model, 'modern');
     const leader = moved.prims.find((p) => p.t === 'line' && p.dotted) as { x2: number; y2: number } | undefined;
     expect(leader).toBeDefined();
     // The leader ends on the (right-angle) line: level with one of its points on x or y.
